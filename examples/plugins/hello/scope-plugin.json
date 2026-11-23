@@ -1,0 +1,13 @@
+{
+  "protocolVersion": 1,
+  "id": "hello-scope",
+  "name": "Hello SCOPE",
+  "version": "1.0.0",
+  "description": "验证插件导入、配置和操作，不连接任何外部服务。",
+  "entry": "index.mjs",
+  "files": ["index.mjs"],
+  "capabilities": [],
+  "permissions": ["在 SCOPE 服务进程内运行"],
+  "settings": [{"key":"greeting","type":"text","label":"问候语","default":"Hello SCOPE"}],
+  "actions": [{"id":"hello","label":"测试插件","result":"json/v1"}]
+}

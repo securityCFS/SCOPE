@@ -1,0 +1,250 @@
+.monitor-shell[data-ui-theme] .research-assistant-launcher {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--overlay-shadow);
+  font-weight: 550;
+}
+.monitor-shell[data-ui-theme] .research-assistant-launcher:hover,
+.monitor-shell[data-ui-theme] .research-assistant-launcher:focus-visible,
+.monitor-shell[data-ui-theme] .research-assistant-launcher.is-open {
+  border-color: var(--muted);
+  background: var(--hover);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-panel,
+.monitor-shell[data-ui-theme="light"] .research-assistant-panel,
+.monitor-shell[data-ui-theme="dark"] .research-assistant-panel {
+  width: min(420px, calc(100vw - 24px));
+  height: min(600px, calc(100dvh - 92px));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--overlay-shadow);
+}
+.monitor-shell[data-ui-theme] .research-assistant-head {
+  min-height: 56px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 10px;
+}
+.monitor-shell[data-ui-theme] .research-assistant-head strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.monitor-shell[data-ui-theme] .research-assistant-head div > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .research-assistant-head > button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+.monitor-shell[data-ui-theme] .research-assistant-head > button:hover,
+.monitor-shell[data-ui-theme] .research-assistant-head > button:focus-visible {
+  background: var(--hover);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-messages {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--panel);
+  scrollbar-color: var(--line) transparent;
+}
+.monitor-shell[data-ui-theme] .research-assistant-message {
+  margin-bottom: 0;
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-message.assistant {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 1.7;
+}
+.monitor-shell[data-ui-theme] .research-assistant-message.user {
+  border: 0;
+  border-radius: 14px;
+  padding: 9px 13px;
+  background: var(--hover);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-model {
+  border: 0;
+  padding: 0;
+  margin-top: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .research-assistant-warning {
+  color: var(--amber, var(--muted));
+  font-size: 11px;
+  line-height: 1.5;
+}
+.monitor-shell[data-ui-theme] .research-assistant-candidates {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.monitor-shell[data-ui-theme] .research-assistant-candidates > button {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  align-items: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.monitor-shell[data-ui-theme] .research-assistant-candidates > button:hover,
+.monitor-shell[data-ui-theme] .research-assistant-candidates > button:focus-visible {
+  border-color: var(--muted);
+  background: var(--hover);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-candidate-rank {
+  color: var(--muted);
+  font-size: 11px;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+.monitor-shell[data-ui-theme] .research-candidate-main > strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.monitor-shell[data-ui-theme] .research-candidate-main > code,
+.monitor-shell[data-ui-theme] .research-candidate-main > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .research-candidate-main > em {
+  color: var(--muted);
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .research-candidate-main > p {
+  color: var(--text);
+  opacity: 0.85;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.monitor-shell[data-ui-theme] .research-assistant-thinking {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0;
+}
+.monitor-shell[data-ui-theme] .research-assistant-suggestions {
+  padding: 0 16px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--panel);
+}
+.monitor-shell[data-ui-theme] .research-assistant-suggestions button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 11px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.monitor-shell[data-ui-theme] .research-assistant-suggestions button:hover,
+.monitor-shell[data-ui-theme] .research-assistant-suggestions button:focus-visible {
+  border-color: var(--muted);
+  background: var(--hover);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .research-assistant-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-2);
+}
+.monitor-shell[data-ui-theme] .research-assistant-form:focus-within {
+  border-color: var(--muted);
+  background: var(--panel);
+}
+.monitor-shell[data-ui-theme] .research-assistant-form textarea,
+.monitor-shell[data-ui-theme="light"] .research-assistant-form textarea,
+.monitor-shell[data-ui-theme="dark"] .research-assistant-form textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  max-height: 88px;
+  height: auto;
+  padding: 3px 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: none;
+}
+.monitor-shell[data-ui-theme] .research-assistant-form > button {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text);
+  color: var(--panel);
+  cursor: pointer;
+}
+.monitor-shell[data-ui-theme] .research-assistant-form > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.monitor-shell[data-ui-theme] .research-assistant-footnote {
+  margin: 0;
+  padding: 8px 16px 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+.research-search-coverage {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.research-search-coverage summary {
+  cursor: pointer;
+}
+.research-search-coverage p {
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+}

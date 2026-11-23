@@ -1,0 +1,590 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Bot, KeyRound, LoaderCircle, Square } from "lucide-react";
+import { visibleSpoolTurns } from "@/lib/native-history";
+import { useNativeHistory, type NativeSubagent } from "./use-native-history";
+import { NativeHistoryView } from "./NativeHistoryView";
+import { useNativeScroll } from "./use-native-scroll";
+import { NativeModelControl } from "./NativeModelControl";
+import { NativeElicitation } from "./NativeElicitation";
+import { useSlashCommands } from "./use-slash-commands";
+import {
+  ComposerAttachmentButton,
+  ComposerAttachmentInput,
+  ComposerAttachmentList,
+  useComposerAttachments,
+} from "./use-composer-attachments";
+import { useLocale } from "@/lib/i18n";
+import {
+  NativePermissionControl,
+  type NativePermission,
+} from "./NativePermissionControl";
+import { AgentLogo } from "@/components/agent-logo";
+import { QuotaInlineBadge } from "@/components/quota-meter";
+import { bridgeUrl, MarkdownBody } from "@/features/workspace/shared";
+import type {
+  AccountQuota,
+  ProviderAuthStatusesResponse,
+} from "@/features/workspace/types";
+import { LOCAL_HOST, hostLabel } from "@/lib/execution-host";
+import { conversationRequest, type CatalogEntry } from "./use-session-catalog";
+
+import { NativeLiveEvents, NativePermissionRequest, type LiveEvent, type PermissionRequest } from "./NativeLiveEvents";
+
+const ACTIVE = ["launching", "running", "unknown", "waiting_permission", "stopping", "finishing"];
+type Turn = {
+  events?: LiveEvent[];
+  subagents?: NativeSubagent[];
+  partial?: string;
+  truncated?: boolean;
+  createdAt?: number;
+  id: string;
+  prompt: string;
+  text: string;
+  error?: string;
+  errorCode?: string;
+  status: string;
+};
+type Conversation = CatalogEntry & {
+  commands?: {name:string;description?:string}[];
+  turns: Turn[];
+  subagents?: NativeSubagent[];
+  interactive?: boolean;
+  permissions?: PermissionRequest[];
+  controlResults?: { id: string; status: string; error?: string }[];
+  status: string;
+  permissionMode?: NativePermission;
+  effort?: string;
+};
+
+function mergeNativeSubagents(
+  historySubs: NativeSubagent[] = [],
+  liveSubs: NativeSubagent[] = [],
+  preferLive: boolean,
+): NativeSubagent[] {
+  const byId = new Map<string, NativeSubagent>();
+  const ordered = preferLive
+    ? [...historySubs, ...liveSubs]
+    : [...liveSubs, ...historySubs];
+  for (const item of ordered) {
+    if (!item?.id) continue;
+    const prev = byId.get(item.id);
+    if (!prev) {
+      byId.set(item.id, item);
+      continue;
+    }
+    const prevAt = prev.updatedAt || 0;
+    const nextAt = item.updatedAt || 0;
+    const prevWorking = prev.status === "working";
+    const nextWorking = item.status === "working";
+    if (nextAt > prevAt || (nextAt === prevAt && prevWorking && !nextWorking)) {
+      byId.set(item.id, { ...prev, ...item });
+    }
+  }
+  return Array.from(byId.values());
+}
+
+const subagentStatusLabel: Record<string, string> = {
+  working: "工作中",
+  completed: "已完成",
+  failed: "失败",
+  stopped: "已停止",
+};
+
+function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
+  if (!subagents.length) return null;
+  const workingList = subagents.filter((item) => item.status === "working");
+  const finishedCount = subagents.length - workingList.length;
+  const body = (
+    <div className="native-subagents-list">
+      {subagents.map((item) => (
+        <div className="native-subagent-row" key={item.id}>
+          <div className="native-subagent-meta">
+            <span className={`native-subagent-badge is-${item.status || "working"}`}>
+              {item.status === "working" ? (
+                <LoaderCircle size={11} className="is-spinning" />
+              ) : (
+                <Bot size={11} />
+              )}
+              {subagentStatusLabel[item.status] || item.status}
+            </span>
+            <strong title={item.role}>{item.role}</strong>
+            {item.typeName && <small>{item.typeName}</small>}
+          </div>
+          {item.lastAction && (
+            <span className="native-subagent-action" title={item.lastAction}>
+              {item.lastAction}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (workingList.length > 0) {
+    return (
+      <section
+        className="native-subagents-card is-working"
+        aria-label="后台子代理状态"
+      >
+        <div className="native-subagents-head">
+          <LoaderCircle size={13} className="is-spinning" />
+          <strong>后台子代理工作中 · {workingList.length} 个运行中</strong>
+          {finishedCount > 0 && <span> · {finishedCount} 个已完成</span>}
+        </div>
+        {body}
+      </section>
+    );
+  }
+  return (
+    <details className="native-subagents-card">
+      <summary className="native-subagents-head">
+        <Bot size={13} />
+        <span>子代理记录 · {subagents.length} 个已完成</span>
+      </summary>
+      {body}
+    </details>
+  );
+}
+
+export function NativeConversation({
+  entry,
+  onChanged,
+  onAccounts,
+}: {
+  entry: CatalogEntry;
+  onChanged: () => void;
+  onAccounts?: () => void;
+}) {
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+
+  const [pendingControl, setPendingControl] = useState<{ id: string; prompt?: string } | null>(null);
+  const pendingControlRef = useRef<{ id: string; prompt?: string } | null>(null);
+  const [readError, setReadError] = useState("");
+  const [controlBusy, setControlBusy] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [model, setModel] = useState(entry.model || "");
+  const [effort, setEffort] = useState("");
+  const [autoSupported, setAutoSupported] = useState<boolean | null>(null);
+  const [permissionMode, setPermissionMode] =
+    useState<NativePermission>(entry.provider === "claude" ? "auto" : "default");
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(Boolean(entry.managed));
+  const composer = useRef<HTMLFormElement>(null);
+  const { tr } = useLocale();
+  const attach = useComposerAttachments({
+    host: entry.host,
+    scope: entry.key,
+    onError: setError,
+  });
+  const slash = useSlashCommands({provider:entry.provider,host:entry.host,cwd:entry.cwd,sessionId:entry.sessionId,
+    draft,setDraft,disabled:entry.host === LOCAL_HOST,liveCommands:conversation?.commands,
+    onLocal: name => {
+      if (name === "stop") { void control("stop"); return; }
+      const button = composer.current?.querySelector<HTMLButtonElement>(name === "permissions" ? '.native-permission-control button' : '.native-model-trigger');
+      if (button?.disabled) setError("本轮结束后可调整下一轮的模型、强度和权限。");
+      else button?.click();
+    }});
+  const working =
+    sending ||
+    ACTIVE.includes(conversation?.status || "");
+  function reconcileControl(value: Conversation) {
+    const pendingControl = pendingControlRef.current;
+    if (!pendingControl) return;
+    const receipt = value.controlResults?.find(item => item.id === pendingControl.id);
+    if (receipt) {
+      if (receipt.status === "rejected") { setError(receipt.error || "操作未接收"); if (pendingControl.prompt) setDraft(pendingControl.prompt); }
+      pendingControlRef.current = null; setPendingControl(null);
+    } else if (!ACTIVE.includes(value.status)) {
+      setError("本轮已结束，控制请求未确认，请核对后重试");
+      if (pendingControl.prompt) setDraft(pendingControl.prompt);
+      pendingControlRef.current = null; setPendingControl(null);
+    }
+  }
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function read() {
+      try {
+        const value = await conversationRequest<Conversation>(
+          `/api/cli-conversations?key=${encodeURIComponent(entry.key)}`,
+        );
+        if (active) {
+          setConversation(value);
+          if (!conversation) {
+            setPermissionMode(value.permissionMode || (entry.provider === "claude" ? "auto" : "default"));
+            setModel(value.model || "");
+            setEffort(value.effort || "");
+          }
+          setReadError("");
+          reconcileControl(value);
+          if (ACTIVE.includes(value.status))
+            timer = setTimeout(read, 3000);
+          else onChanged();
+        }
+      } catch (cause) {
+        if (active && (entry.managed || conversation)) {
+          setReadError((cause as Error).message);
+          timer = setTimeout(read, 5000);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    if (entry.managed || conversation) void read();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // A new submitted turn starts polling. Parent refresh callbacks need not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.key, entry.managed, conversation?.turns.length]);
+  const nativeHistory = useNativeHistory(
+    entry,
+    conversation?.sessionId,
+    conversation?.status,
+  );
+  const subagents = useMemo(
+    () =>
+      mergeNativeSubagents(
+        nativeHistory.history?.subagents || [],
+        conversation?.subagents || conversation?.turns.at(-1)?.subagents || [],
+        working,
+      ),
+    [
+      nativeHistory.history?.subagents,
+      conversation?.subagents,
+      conversation?.turns,
+      working,
+    ],
+  );
+  const workingSubagentsCount = useMemo(
+    () => subagents.filter((item) => item.status === "working").length,
+    [subagents],
+  );
+  const refreshNativeHistory = nativeHistory.refresh;
+  useEffect(() => {
+    if (working || workingSubagentsCount === 0 || !nativeHistory.available) {
+      return;
+    }
+    const timer = setInterval(() => {
+      if (!document.hidden) void refreshNativeHistory();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [working, workingSubagentsCount, nativeHistory.available, refreshNativeHistory]);
+  const { scroll, content, onScroll, toBottom, older, atBottom } = useNativeScroll({
+    history: nativeHistory.history,
+    turns: conversation?.turns,
+    ready:
+      !loading &&
+      (!nativeHistory.available ||
+        Boolean(nativeHistory.history || nativeHistory.error)),
+    working,
+  });
+  async function control(action: string, values: Record<string, unknown> = {}) {
+    if (controlBusy || pendingControl) return false;
+    setControlBusy(true); setError("");
+    const id = crypto.randomUUID();
+    try {
+      await conversationRequest("/api/cli-conversations/control", { key: entry.key, id, action, ...values });
+      pendingControlRef.current = { id, prompt: action === "message" ? String(values.prompt) : undefined };
+      setPendingControl(pendingControlRef.current);
+      return true;
+    } catch (cause) { setError((cause as Error).message); return false; }
+    finally { setControlBusy(false); }
+  }
+  const canControl = conversation?.interactive && ["running", "waiting_permission"].includes(conversation.status);
+  async function send() {
+    if (slash.handleLocal()) return;
+    const hasContent = Boolean(draft.trim() || attach.readyTokens.length > 0);
+    if (!hasContent || attach.hasUnready || controlBusy || pendingControl || (working && !canControl) || entry.host === LOCAL_HOST || !entry.cwd)
+      return;
+    if (working && canControl) {
+      if (await control("message", { prompt: draft, attachments: attach.readyTokens })) {
+        setDraft("");
+        attach.clear();
+      }
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      const result = await conversationRequest<Conversation>(
+        "/api/cli-conversations/send",
+        {
+          key: entry.key,
+          prompt: draft,
+          attachments: attach.readyTokens,
+          model,
+          effort,
+          permissionMode,
+        },
+      );
+      setConversation(result);
+      toBottom();
+      setDraft("");
+      attach.clear();
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+  const isLocalReadOnly = entry.host === LOCAL_HOST;
+  const [providerQuotaState, setProviderQuotaState] = useState<{
+    key: string;
+    quota: AccountQuota | null;
+  } | null>(null);
+  const quotaScopeKey = !isLocalReadOnly ? `${entry.host}:${entry.provider}` : "";
+  useEffect(() => {
+    if (!quotaScopeKey) return;
+    const controller = new AbortController();
+    fetch(
+      bridgeUrl(`/api/auth/providers?host=${encodeURIComponent(entry.host)}`),
+      { signal: controller.signal, cache: "no-store" },
+    )
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as ProviderAuthStatusesResponse;
+        if (controller.signal.aborted) return;
+        const nextQuota =
+          entry.provider === "claude"
+            ? data.claude?.quota || null
+            : data.antigravity?.quota || null;
+        setProviderQuotaState({ key: quotaScopeKey, quota: nextQuota });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [entry.host, entry.provider, quotaScopeKey]);
+  const providerQuota =
+    providerQuotaState?.key === quotaScopeKey ? providerQuotaState.quota : null;
+  const providerName = entry.provider === "claude" ? "Claude" : "Antigravity";
+  return (
+    <section className="session-conversation native-conversation">
+      <header className="conversation-header">
+        <div>
+          <strong title={entry.title}>
+            <AgentLogo provider={entry.provider} />
+            <span>{entry.title || `${providerName} 会话`}</span>
+          </strong>
+          <small
+            title={`${hostLabel(entry.host)} · ${entry.cwd || "未记录工作目录"}`}
+          >
+            {hostLabel(entry.host)} · {entry.cwd || "未记录工作目录"}
+            {isLocalReadOnly ? " · 本机只读" : ""}
+          </small>
+        </div>
+        {onAccounts && !isLocalReadOnly && (
+          <div className="conversation-header-actions">
+            <button
+              type="button"
+              className="session-info-trigger"
+              onClick={onAccounts}
+            >
+              <KeyRound size={14} />
+              <span>{tr("账号管理", "Accounts")}</span>
+              <QuotaInlineBadge quota={providerQuota} />
+            </button>
+          </div>
+        )}
+      </header>
+      <div className="native-messages-wrap">
+        <div
+          className="native-messages"
+          ref={scroll}
+          onScroll={onScroll}
+          aria-label="会话消息"
+        >
+        <div ref={content}>
+          {loading && <p className="native-note">正在读取会话…</p>}
+          <NativeHistoryView
+            value={{
+              ...nativeHistory,
+              earlier: () => older(nativeHistory.earlier),
+            }}
+          />
+          {(entry.provider === "antigravity"
+            ? visibleSpoolTurns(
+                nativeHistory.history?.messages || [],
+                conversation?.turns || [],
+              )
+            : conversation?.turns || []
+          ).map((turn) => (
+              <div className="native-turn" key={turn.id}>
+                <div className="native-message user">
+                  <MarkdownBody value={turn.prompt} />
+                </div>
+                {turn.truncated && <p className="native-note">过程记录较长，仅显示最近部分；完整记录保留在原生会话中。</p>}
+                <NativeLiveEvents events={turn.events || []} partial={turn.partial} />
+                {turn.status === "stopped" && <p className="native-note">已停止，保留已产生的消息和操作记录。</p>}
+                {turn.text && !turn.events?.some(event => event.kind === "assistant") && (
+                  <div className="native-message assistant">
+                    <MarkdownBody value={turn.text} />
+                  </div>
+                )}
+                {turn.error && (
+                  <div className="form-error native-error" role="alert">
+                    {turn.error}
+                    {(turn.errorCode === "permission_required" ||
+                      turn.error.includes("操作需要权限")) && (
+                      <div className="native-permission-help">
+                        <p>
+                          上轮已结束。可在下方调整下一轮权限，再发送继续请求；不会自动重跑上一轮。
+                        </p>
+                        <button
+                          type="button"
+                          disabled={working || isLocalReadOnly}
+                          onClick={() =>
+                            setDraft(
+                              "请继续上一轮未完成的工作，先确认已完成的步骤，避免重复操作。",
+                            )
+                          }
+                        >
+                          填入继续请求
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          {conversation?.permissions?.map(request => request.kind === "acp-form"
+            ? <NativeElicitation key={request.id} fields={request.fields || []} message={request.description} disabled={controlBusy || Boolean(pendingControl) || !canControl}
+              respond={(decision, content) => void control("permission", { requestId: request.id, decision, content })} />
+            : <NativePermissionRequest key={request.id} request={request} provider={providerName} disabled={controlBusy || Boolean(pendingControl) || !canControl}
+              respond={(decision, answers, optionId) => void control("permission", { requestId: request.id, decision, answers, optionId })} />)}
+          <NativeSubagentsPanel subagents={subagents} />
+          {working && (
+            <details className="native-thinking">
+              <summary>
+                <LoaderCircle size={14} className="is-spinning" />
+                <span>
+                  {conversation?.status === "unknown"
+                    ? "正在确认远端状态…"
+                    : conversation?.status === "waiting_permission" ? "等待你的审批或回答…" : conversation?.status === "stopping" ? "正在停止…" : "正在执行本轮任务…"}
+                </span>
+                <small>{conversation?.interactive ? "过程消息持续更新" : "完成后返回"}</small>
+              </summary>
+              <p>
+                {conversation?.interactive ? "可追加消息，当前一轮结束后接着处理；权限请求会在这里等待你的决定。离开页面不会自动批准或停止任务。" : "此任务完成后返回完整回复；离开页面不会中断远端任务。"}
+              </p>
+            </details>
+          )}
+          {(error || readError) && (
+            <p className="form-error native-error" role="alert">
+              {error || readError}
+            </p>
+          )}
+        </div>
+      </div>
+      {!atBottom && (
+        <button type="button" className="conversation-jump" onClick={toBottom}>
+          <ArrowDown size={14} />
+          {tr("回到最新消息", "Jump to latest")}
+        </button>
+      )}
+    </div>
+    <div className="native-compose-wrap">
+        <form
+          ref={composer}
+          className="native-composer"
+          onDragOver={attach.onDragOver}
+          onDrop={attach.onDrop}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send();
+          }}
+        >
+          <ComposerAttachmentList
+            attachments={attach.attachments}
+            onRemove={attach.remove}
+          />
+          <ComposerAttachmentInput
+            inputRef={attach.inputRef}
+            onFiles={attach.uploadFiles}
+          />
+          {slash.panel}
+          <textarea
+            {...slash.inputProps}
+            aria-label={tr("发送消息", "Send message")}
+            placeholder={
+              isLocalReadOnly
+                ? tr("本机历史记录仅支持只读查看", "Local history is read-only")
+                : !entry.cwd
+                  ? tr("缺少工作目录，暂无法继续发送", "Working directory is required")
+                  : tr("继续对话…（支持拖拽或粘贴附件）", "Continue conversation… (drop or paste files)")
+            }
+            rows={2}
+            disabled={isLocalReadOnly || !entry.cwd}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onPaste={attach.onPaste}
+            onKeyDown={(event) => {
+              if (slash.onKeyDown(event)) return;
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                void send();
+              }
+            }}
+          />
+          <footer>
+            <span className="native-provider-badge" title={providerName}>
+              <AgentLogo provider={entry.provider} />
+              <span>{providerName}</span>
+            </span>
+            <ComposerAttachmentButton
+              compact
+              uploading={attach.uploading}
+              disabled={isLocalReadOnly || !entry.cwd || (working && !canControl)}
+              onClick={attach.openPicker}
+            />
+            <NativePermissionControl autoSupported={autoSupported}
+              provider={entry.provider}
+              compact
+              value={permissionMode}
+              onChange={setPermissionMode}
+              disabled={working || isLocalReadOnly}
+            />
+            <NativeModelControl onAutoSupportChange={setAutoSupported}
+              effort={effort}
+              onEffortChange={setEffort}
+              compact
+              host={entry.host}
+              provider={entry.provider}
+              value={model}
+              onChange={setModel}
+              disabled={working || isLocalReadOnly}
+            />
+            {canControl && <button className="native-stop" type="button" aria-label={`停止 ${providerName}`} title="停止当前 SCOPE 任务" disabled={controlBusy || Boolean(pendingControl)} onClick={() => void control("stop")}><Square size={14} /></button>}
+            <button
+              type="submit"
+              aria-label={tr("发送消息", "Send message")}
+              disabled={
+                (working && !canControl) ||
+                controlBusy ||
+                Boolean(pendingControl) ||
+                (!draft.trim() && attach.attachments.length === 0) ||
+                attach.hasUnready ||
+                isLocalReadOnly ||
+                !entry.cwd
+              }
+            >
+              <ArrowUp size={16} />
+            </button>
+          </footer>
+        </form>
+        <p className="native-note">
+          {isLocalReadOnly
+            ? "本机历史只读 · 新建 Claude / Antigravity 会话请选择远程设备"
+            : `${permissionMode === "full" ? "完全访问 · 跳过权限审批 · " : ""}Enter 发送 · Shift + Enter 换行${working && !conversation?.interactive ? " · 回复在本轮结束后显示" : ""}`}
+        </p>
+      </div>
+    </section>
+  );
+}

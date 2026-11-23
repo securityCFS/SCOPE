@@ -1,0 +1,527 @@
+/* Conversation settings use the workspace theme, never legacy monitor colors. */
+.monitor-shell[data-ui-theme] .project-nav-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.monitor-shell[data-ui-theme] .project-nav-heading select {
+  margin-left: auto;
+  width: 145px;
+  height: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .chat-compose-surface .session-reply-actions {
+  gap: 8px;
+}
+.composer-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.monitor-shell[data-ui-theme] .composer-controls > button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.monitor-shell[data-ui-theme] .composer-controls > button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .composer-controls .composer-model {
+  margin-left: auto;
+  min-width: 0;
+}
+.composer-model > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-model small {
+  color: var(--muted-2);
+  font-size: 11px;
+}
+.monitor-shell[data-ui-theme] .composer-controls .full-access {
+  color: var(--orange, #b56725);
+}
+.composer-popover {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  right: 0;
+  z-index: 45;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  max-height: min(520px, 65dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px #0002;
+  padding: 8px;
+  font-size: 13px;
+}
+.composer-popover.panel-permission {
+  left: 0;
+  right: auto;
+}
+.composer-popover header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 10px;
+}
+.monitor-shell[data-ui-theme] .composer-controls .composer-popover button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  min-height: 34px;
+  height: auto;
+  white-space: normal;
+}
+.monitor-shell[data-ui-theme] .composer-popover button:hover {
+  background: var(--panel-2);
+}
+.monitor-shell[data-ui-theme] .composer-popover button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.composer-popover header button {
+  justify-content: center;
+}
+.composer-model-list {
+  max-height: 230px;
+  overflow: auto;
+}
+.monitor-shell[data-ui-theme] .composer-model-list button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
+.monitor-shell[data-ui-theme] .composer-popover [aria-pressed="true"] {
+  background: var(--selection);
+}
+.composer-efforts {
+  border-top: 1px solid var(--line-soft);
+  padding: 12px 8px;
+  margin-top: 8px;
+}
+.composer-efforts > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.composer-efforts > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.monitor-shell[data-ui-theme] .composer-efforts button {
+  min-width: 42px;
+  justify-content: center;
+}
+.composer-popover footer {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 5px;
+}
+.composer-menu-note {
+  padding: 8px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 12px;
+}
+.composer-menu-error,
+.form-error {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px;
+}
+.monitor-shell[data-ui-theme] .composer-permission-list button {
+  width: 100%;
+  justify-content: space-between;
+  padding: 12px;
+  text-align: left;
+}
+.composer-permission-list strong,
+.composer-permission-list small {
+  display: block;
+}
+.composer-permission-list small {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.session-settings-inline {
+  padding: 10px 0;
+}
+.session-settings-inline .composer-popover {
+  top: 100%;
+  bottom: auto;
+}
+.monitor-shell[data-ui-theme] .session-profile-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 8px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.session-profile-control > div,
+.session-profile-control > label,
+.session-profile-control > p {
+  width: 100%;
+}
+.monitor-shell[data-ui-theme] .session-profile-control p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 4px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.monitor-shell[data-ui-theme] .session-profile-control select {
+  width: 100%;
+  margin-top: 6px;
+  height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 7px;
+  font: inherit;
+}
+.monitor-shell[data-ui-theme] .session-profile-control button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+.new-conversation-dialog {
+  margin: auto;
+  width: min(560px, calc(100vw - 28px));
+  max-height: calc(100dvh - 36px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 16px 70px #0002;
+}
+.new-conversation-dialog::backdrop {
+  background: #0005;
+}
+.new-conversation-dialog form {
+  display: flex;
+  flex-direction: column;
+}
+.new-conversation-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+}
+.new-conversation-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.new-conversation-fields {
+  border: 0;
+  margin: 0;
+  padding: 8px 24px 20px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.new-session-settings,
+.new-session-cli-settings {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.new-session-cli-settings .native-note {
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.new-conversation-fields label,
+.new-conversation-directory > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text);
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog input,
+.monitor-shell[data-ui-theme] .new-conversation-dialog select,
+.monitor-shell[data-ui-theme] .new-conversation-dialog textarea,
+.monitor-shell[data-ui-theme="light"] .new-conversation-dialog input,
+.monitor-shell[data-ui-theme="light"] .new-conversation-dialog select,
+.monitor-shell[data-ui-theme="light"] .new-conversation-dialog textarea,
+.monitor-shell[data-ui-theme="dark"] .new-conversation-dialog input,
+.monitor-shell[data-ui-theme="dark"] .new-conversation-dialog select,
+.monitor-shell[data-ui-theme="dark"] .new-conversation-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog textarea,
+.monitor-shell[data-ui-theme="light"] .new-conversation-dialog textarea,
+.monitor-shell[data-ui-theme="dark"] .new-conversation-dialog textarea {
+  height: auto;
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.65;
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 7px 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.new-conversation-dialog header button {
+  border: 0 !important;
+  background: transparent !important;
+  min-height: 32px;
+  width: 32px;
+  padding: 0;
+}
+.new-conversation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.directory-input-row,
+.directory-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.monitor-shell[data-ui-theme] .new-conversation-dialog .directory-input-row button,
+.monitor-shell[data-ui-theme] .new-conversation-dialog .directory-create button {
+  height: 38px;
+  min-height: 38px;
+  flex-shrink: 0;
+}
+.new-conversation-advanced {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+.new-conversation-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+.new-conversation-advanced label {
+  margin-top: 12px;
+}
+.new-conversation-advanced small {
+  display: block;
+  margin: 8px 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.new-conversation-dialog footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line-soft);
+  position: sticky;
+  bottom: 0;
+  background: var(--panel);
+}
+.monitor-shell[data-ui-theme]
+  .new-conversation-dialog
+  .new-conversation-submit {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+}
+.directory-picker {
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.directory-picker header {
+  padding: 0 0 8px;
+  font-size: 12px;
+  gap: 10px;
+}
+.directory-picker header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.directory-picker-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.directory-picker-list {
+  max-height: 160px;
+  overflow: auto;
+  display: grid;
+  margin: 8px 0;
+}
+.monitor-shell[data-ui-theme] .directory-picker-list button {
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+}
+.directory-picker-list button:hover {
+  background: var(--panel-2) !important;
+}
+.directory-picker small,
+.directory-picker p {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.directory-picker [role="alert"] {
+  color: var(--red);
+}
+@media (max-width: 720px) {
+  .composer-controls {
+    gap: 2px;
+    position: static;
+  }
+  .session-reply-actions {
+    position: relative;
+    flex-wrap: wrap;
+  }
+  .monitor-shell[data-ui-theme] .composer-controls > button {
+    font-size: 11px;
+    padding: 4px;
+  }
+  .composer-model > span {
+    max-width: 115px;
+  }
+  .composer-permission span {
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .composer-popover {
+    bottom: calc(100% + 12px);
+    right: 0;
+    max-width: calc(100vw - 56px);
+  }
+  .composer-popover.panel-permission {
+    left: 0;
+  }
+  .monitor-shell[data-ui-theme] .chat-compose-surface .attachment-picker {
+    font-size: 0;
+    width: 24px;
+    min-width: 24px;
+    padding: 4px;
+  }
+  .monitor-shell[data-ui-theme] .chat-compose-surface .primary-action {
+    padding: 6px;
+    min-width: 34px;
+    width: 34px;
+    gap: 0;
+    font-size: 0;
+  }
+  .new-conversation-fields {
+    padding: 8px 16px 16px;
+  }
+  .new-conversation-dialog header,
+  .new-conversation-dialog footer {
+    padding: 14px 16px;
+  }
+}
+.monitor-shell[data-ui-theme] .composer-controls .composer-quota.is-ok {
+  color: var(--success, #2a8f6c);
+}
+.monitor-shell[data-ui-theme] .composer-controls .composer-quota.is-warn {
+  color: var(--orange, #b56725);
+}
+.monitor-shell[data-ui-theme] .composer-controls .composer-quota.is-danger {
+  color: var(--red, #e5484d);
+}
+.composer-account-panel {
+  display: grid;
+  gap: 8px;
+  padding: 4px;
+}
+.composer-account-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.monitor-shell[data-ui-theme] .composer-account-actions button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+

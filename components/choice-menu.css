@@ -1,0 +1,220 @@
+.choice-menu {
+  min-width: 0;
+}
+.choice-field-label {
+  display: block;
+  height: 20px;
+  line-height: 20px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.monitor-shell[data-ui-theme] .choice-menu button.choice-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 450;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.choice-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.choice-trigger > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.choice-chevron {
+  transition: transform 0.15s ease;
+}
+.choice-trigger[aria-expanded="true"] .choice-chevron {
+  transform: rotate(180deg);
+}
+.monitor-shell[data-ui-theme] .choice-trigger:hover:not(:disabled),
+.monitor-shell[data-ui-theme] .choice-trigger[aria-expanded="true"] {
+  background: var(--hover);
+}
+.monitor-shell[data-ui-theme] .choice-trigger:focus-visible,
+.monitor-shell[data-ui-theme] .choice-panel button:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+.monitor-shell[data-ui-theme] .choice-trigger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.monitor-shell[data-ui-theme] .choice-menu.is-compact > .choice-trigger {
+  height: auto;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+}
+.monitor-shell[data-ui-theme]
+  .choice-menu.is-compact
+  > .choice-trigger:hover:not(:disabled),
+.monitor-shell[data-ui-theme]
+  .choice-menu.is-compact
+  > .choice-trigger[aria-expanded="true"] {
+  background: var(--hover);
+}
+.monitor-shell[data-ui-theme] .choice-panel {
+  position: fixed;
+  inset: auto;
+  z-index: 2000;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow:
+    0 14px 38px rgba(0, 0, 0, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  font-size: 13px;
+  text-align: left;
+}
+.choice-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+.choice-panel::backdrop {
+  background: transparent;
+}
+.choice-title {
+  padding: 7px 9px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.choice-options {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.monitor-shell[data-ui-theme] .choice-panel .choice-options > button[role="option"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 38px;
+  margin: 2px 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  box-shadow: none;
+}
+.monitor-shell[data-ui-theme] .choice-panel .choice-options > button:hover,
+.monitor-shell[data-ui-theme]
+  .choice-panel
+  .choice-options
+  > button:focus-visible {
+  background: var(--hover);
+}
+.monitor-shell[data-ui-theme]
+  .choice-panel
+  .choice-options
+  > button[aria-selected="true"] {
+  background: var(--selection);
+  font-weight: 500;
+}
+.choice-option-label {
+  display: block;
+}
+.choice-options button small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.choice-options button > svg,
+.choice-check-space {
+  flex-shrink: 0;
+  width: 15px;
+}
+.monitor-shell[data-ui-theme] .choice-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.choice-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 4px 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.monitor-shell[data-ui-theme] .choice-panel .choice-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+  outline: none;
+  font-size: 12px;
+}
+.choice-empty {
+  margin: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.project-filter-bar .choice-menu {
+  flex: 1;
+  width: 0;
+}
+.project-nav-heading .choice-menu {
+  max-width: 150px;
+}
+.native-model-control > .choice-menu {
+  flex: 1;
+}
+.native-composer .native-model-control > .choice-menu {
+  max-width: 240px;
+}
+.native-permission-control > .choice-menu {
+  width: 100%;
+}
+.native-composer .native-permission-control {
+  width: auto;
+}

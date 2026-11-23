@@ -1,0 +1,8 @@
+.markdown-body .formula-code-block { margin: 1em 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: inherit; }
+.markdown-body .formula-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font: 12px/1.5 var(--font-sans, sans-serif); }
+.markdown-body .formula-toolbar button { border: 0; background: transparent; color: inherit; padding: 4px 6px; cursor: pointer; font: inherit; }
+.markdown-body .formula-toolbar button:hover { color: var(--text); background: var(--panel-2); border-radius: 5px; }
+.markdown-body .formula-preview { overflow-x: auto; }
+.markdown-body .formula-code-block pre { margin: 8px 0; }
+.markdown-body .formula-note { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }
+.markdown-body .inline-formula-code { color: inherit; }

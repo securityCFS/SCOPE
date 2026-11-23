@@ -1,0 +1,23 @@
+.connection-page { height: 100dvh; display: flex; flex-direction: column; overflow: auto; color: var(--text); }
+.connection-page .gate-topbar { flex-shrink: 0; }
+.connection-page-body { flex: 1; display: grid; place-items: center; padding: 40px 24px 80px; }
+.connection-card { width: min(100%, 440px); }
+.connection-symbol { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 24px; border: 1px solid var(--line-soft); border-radius: 18px; background: var(--panel-2); color: var(--text); }
+.connection-card h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; }
+.connection-card > p { margin: 14px 0 22px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.connection-progress { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.connection-retry { display: inline-flex; align-items: center; gap: 8px; height: 38px; margin-top: 20px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.connection-help { margin-top: 32px; padding-top: 22px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 13px; }
+.connection-help summary { cursor: pointer; }
+.connection-help p { margin: 14px 0; line-height: 1.7; }
+.connection-command { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); }
+.connection-command code { font-size: 13px; }
+.connection-command button { display: grid; place-items: center; padding: 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.connection-command button:hover, .connection-retry:hover { background: var(--hover); }
+.connection-reconnect-notice { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 12px; }
+.connection-reconnect-notice button { border: 0; background: transparent; color: var(--text); cursor: pointer; font: inherit; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 600px) {
+  .connection-page-body { padding: 32px 24px; }
+  .connection-page .scope-wordmark em { display: none; }
+  .connection-card h1 { font-size: 23px; }
+}

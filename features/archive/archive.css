@@ -1,0 +1,120 @@
+.project-session-row,
+.sidebar-history-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.project-session-row .project-nav-session {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-archive-action {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sidebar-archive-action:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sidebar-archive-action:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.project-session-row .sidebar-archive-action {
+  opacity: 0;
+}
+.project-session-row:hover .sidebar-archive-action,
+.project-session-row:focus-within .sidebar-archive-action {
+  opacity: 1;
+}
+.archive-sidebar {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.archive-sidebar summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  cursor: pointer;
+  color: var(--muted);
+}
+.archive-sidebar summary span {
+  margin-left: auto;
+}
+.archive-sidebar details {
+  margin-bottom: 4px;
+}
+.sidebar-history-title {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+button.sidebar-history-title {
+  cursor: pointer;
+}
+.sidebar-history-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-history-title small,
+.archive-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+.archive-error {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+.host-sidebar.collapsed .archive-sidebar {
+  display: none;
+}
+@media (hover: none) {
+  .project-session-row .sidebar-archive-action {
+    opacity: 1;
+  }
+}
+
+/* Give projects their own scroll area so the archive entry stays within reach. */
+.monitor-shell .host-sidebar:not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+}
+.monitor-shell .host-sidebar-head,
+.workspace-primary-nav,
+.archive-sidebar,
+.workspace-hosts {
+  flex-shrink: 0;
+}
+.monitor-shell .project-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  flex: 1 1 auto;
+}
+.monitor-shell .project-nav-list {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.archive-sidebar {
+  max-height: 30vh;
+  overflow-y: auto;
+}

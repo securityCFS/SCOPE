@@ -1,0 +1,16 @@
+.native-tool-event { margin: 8px 0 16px; color: var(--muted); font-size: 12px; }
+.native-tool-event summary { cursor: pointer; padding: 6px 0; }
+.native-tool-event pre, .native-approval pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; padding: 12px; background: var(--hover); border-radius: 8px; font-size: 12px; }
+.native-approval { margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+.native-approval strong { font-size: 14px; }
+.native-approval p, .native-approval label { font-size: 13px; overflow-wrap: anywhere; }
+.native-approval label { display: grid; gap: 8px; margin: 12px 0; }
+.native-approval small { color: var(--muted); }
+.native-approval input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); color: var(--text); background: var(--bg); }
+.native-approval > header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.native-approval > header small { font-size:11px; }
+.native-approval-details { margin:12px 0; font-size:12px; }
+.native-approval-details summary { cursor:pointer; color:var(--muted); }
+.monitor-shell[data-ui-theme] .native-approval footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; padding:12px 0 0; margin:12px 0 0; border-top:1px solid var(--line); background:transparent; }
+.monitor-shell[data-ui-theme] .native-approval footer button { display:inline-flex; align-items:center; justify-content:center; flex:0 1 auto; width:auto; min-width:0; height:auto; min-height:32px; border:1px solid var(--line); border-radius:8px; padding:6px 12px; background:var(--hover); color:var(--text); font:inherit; font-size:12px; line-height:1.5; box-shadow:none; cursor:pointer; }
+.native-approval button:disabled { opacity: .5; cursor: default; }

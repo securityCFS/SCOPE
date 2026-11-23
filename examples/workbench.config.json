@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "manager": {
+    "host": "",
+    "cwd": "",
+    "model": "",
+    "effort": ""
+  },
+  "scheduler": {
+    "paused": false,
+    "maxRunning": 3,
+    "maxPerHost": 2,
+    "maxPerProject": 1,
+    "inventoryMaxAgeSeconds": 60,
+    "residentSessionsPerHost": 5,
+    "sessionIdleGraceMinutes": 15
+  },
+  "providers": {
+    "codex": {
+      "enabled": true,
+      "executable": "codex",
+      "preLaunchCommand": "",
+      "model": ""
+    },
+    "claude": {
+      "enabled": false,
+      "executable": "claude",
+      "preLaunchCommand": "",
+      "model": ""
+    },
+    "dsh": {
+      "enabled": false,
+      "executable": "dsh",
+      "preLaunchCommand": "",
+      "model": ""
+    },
+    "antigravity": {
+      "enabled": false,
+      "executable": "agy",
+      "preLaunchCommand": "",
+      "model": ""
+    }
+  }
+}

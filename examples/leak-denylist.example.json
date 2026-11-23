@@ -1,0 +1,10 @@
+{
+  "literals": [
+    "10.0.0.10",
+    "internal-gpu-host",
+    "private-project-codename"
+  ],
+  "patterns": [
+    "\\bmy_internal_proxy\\b"
+  ]
+}

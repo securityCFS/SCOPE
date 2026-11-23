@@ -1,0 +1,14 @@
+.native-composer,.session-reply-composer { position:relative; }
+.monitor-shell[data-ui-theme] .scope-commands { position:absolute; bottom:calc(100% + 8px); left:0; width:min(440px,100%); z-index:35; border:1px solid var(--line); border-radius:13px; background:var(--panel); color:var(--text); box-shadow:0 10px 32px #0002; overflow:hidden; }
+.monitor-shell[data-ui-theme] .scope-commands header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; font-size:12px; color:var(--muted); }
+.scope-commands [role=listbox] { max-height:260px; overflow:auto; padding:4px 6px; }
+.monitor-shell[data-ui-theme] .scope-commands button { width:auto; min-width:0; min-height:0; height:auto; border:0; border-radius:7px; background:transparent; color:var(--text); box-shadow:none; font:inherit; padding:4px 8px; cursor:pointer; }
+.monitor-shell[data-ui-theme] .scope-commands button[role=option] { display:block; width:100%; text-align:left; padding:8px 10px; }
+.scope-commands button[role=option] > span { display:flex; justify-content:space-between; gap:10px; }
+.scope-commands button strong { font-size:13px; font-weight:500; }
+.scope-commands button small { font-size:10px; color:var(--muted); }
+.monitor-shell[data-ui-theme] .scope-commands button[aria-selected=true] { background:var(--hover); }
+.scope-commands button p { font-size:11px; color:var(--muted); margin:3px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.monitor-shell[data-ui-theme] .scope-commands footer { display:block; margin:0; padding:7px 12px; border-top:1px solid var(--line); font-size:10px; color:var(--muted); }
+.scope-command-note { margin:6px 12px; font-size:12px; color:var(--muted); }
+.monitor-shell[data-ui-theme] .scope-form-field input { min-height:34px; font:inherit; font-size:13px; width:100%; background:var(--panel); }

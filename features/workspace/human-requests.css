@@ -1,0 +1,8 @@
+.monitor-shell[data-ui-theme] .plan-input-card { border:1px solid var(--line); border-radius:12px; padding:16px; background:var(--panel); color:var(--text); }
+.monitor-shell[data-ui-theme] .plan-input-meta { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.monitor-shell[data-ui-theme] .human-request-action,
+.monitor-shell[data-ui-theme] .plan-input-submit { display:inline-flex; align-items:center; justify-content:center; width:auto; min-height:32px; height:auto; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--hover); color:var(--text); font:inherit; font-size:12px; box-shadow:none; }
+.monitor-shell[data-ui-theme] .human-request-action.danger { color:var(--danger, #ba5147); background:transparent; }
+.monitor-shell[data-ui-theme] .human-request-command,
+.monitor-shell[data-ui-theme] .human-request-json,
+.monitor-shell[data-ui-theme] .human-request-change pre { border:1px solid var(--line); background:var(--hover); color:var(--text); font-size:12px; }

@@ -1,0 +1,90 @@
+.manager-model-picker {
+  position: relative;
+  margin-left: auto;
+}
+.manager-model-picker .composer-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.manager-model-picker .composer-model:hover {
+  background: var(--hover);
+}
+.manager-model-picker .manager-model-menu {
+  bottom: calc(100% + 12px);
+  right: 0;
+  left: auto;
+  width: min(320px, calc(100vw - 60px));
+}
+.manager-model-picker .manager-model-menu header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.manager-model-picker .manager-model-menu header button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.manager-model-picker .manager-model-menu label {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.manager-model-picker .manager-model-menu select {
+  width: 100%;
+}
+.manager-model-options {
+  max-height: min(240px, 32dvh);
+  overflow-y: auto;
+  display: grid;
+  gap: 3px;
+}
+.manager-effort-label {
+  color: var(--muted);
+}
+.manager-model-picker .manager-effort-control {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.manager-model-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.manager-model-options button:hover,
+.manager-model-options button[aria-pressed="true"] {
+  background: var(--hover);
+}
+.manager-model-options button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Keep the model menu inside a narrow composer, including its send-button gutter. */
+.manager-model-picker .manager-model-menu {
+  box-sizing: border-box;
+}
+@media (max-width: 600px) {
+  .manager-model-picker .manager-model-menu {
+    right: -38px;
+    width: 320px;
+    max-width: calc(100vw - 40px);
+  }
+}

@@ -1,0 +1,17 @@
+.scope-plugin-settings { margin-top: 24px; }
+.scope-plugin-heading, .scope-plugin-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.scope-plugin-heading h2 { display: flex; align-items: center; gap: 8px; }
+.scope-plugin-card { padding: 20px; border: 1px solid var(--line); border-radius: 14px; margin-top: 16px; background: var(--surface); }
+.scope-plugin-card h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; font-size: 15px; }
+.scope-plugin-card h3 small, .scope-plugin-state { color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.scope-plugin-card header p, .scope-plugin-permissions { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.scope-plugin-state { border: 1px solid var(--line); padding: 3px 8px; border-radius: 6px; }
+.scope-plugin-card .center-form-grid { margin-top: 14px; }
+.scope-plugin-import { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13px; }
+.scope-plugin-import summary { display: flex; align-items: center; gap: 8px; padding: 13px 16px; cursor: pointer; }
+.scope-plugin-import summary span { margin-left: auto; color: var(--muted); font-size: 12px; }
+.scope-plugin-import > div { padding: 0 16px 14px; color: var(--muted); line-height: 1.7; }
+.scope-plugin-import pre, .scope-plugin-result { padding: 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); overflow: auto; font-size: 12px; max-height: 280px; }
+.scope-plugin-import [role="status"] { margin-left: 10px; font-size: 12px; }
+.scope-plugin-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+@media (max-width: 600px) { .scope-plugin-card { padding: 14px; } .scope-plugin-card > header { gap: 8px; } }
