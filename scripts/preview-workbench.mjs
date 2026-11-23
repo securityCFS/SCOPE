@@ -33,7 +33,12 @@ const snapshot = {
   summary: { hosts: 2, online: 2, codex: 0, tmux: 0, attention: 0 },
   management: {
     operatorName: "预览",
-    sessions: {},
+    sessions: {
+      "lab-gpu:vision-plan": {
+        reserved: true,
+        reservedUpdatedAt: new Date().toISOString(),
+      },
+    },
     projects,
     hostRuntimeConfigs: {},
     resourcePolicy: { prompt: "", version: 0, updatedAt: null },
@@ -58,41 +63,93 @@ const snapshot = {
   },
   gpuUsage: { updatedAt: null, retentionHours: 168, episodes: [] },
   notifications: { email: { enabled: false, configured: false, to: [] } },
-  hosts: ["lab-gpu", "build-node"].map((alias) => ({
-    alias,
-    hostname: alias,
-    reachable: true,
-    latencyMs: 18,
-    inventoryUpdatedAt: new Date().toISOString(),
-    error: null,
-    processes: [],
-    panes: [],
-    sessions: [],
-    agents: [],
-    workloads: [],
-    gpus:
-      alias === "lab-gpu"
-        ? [
-            {
-              index: 0,
-              name: "NVIDIA A100",
-              utilization: 12,
-              memoryUsed: 10240,
-              memoryTotal: 81920,
-            },
-            {
-              index: 1,
-              name: "NVIDIA A100",
-              utilization: 0,
-              memoryUsed: 200,
-              memoryTotal: 81920,
-            },
-          ]
-        : [],
-  })),
+  hosts: [
+    ...["lab-gpu", "build-node"].map((alias) => ({
+      alias,
+      hostname: alias === "lab-gpu" ? "gpu-cluster-a01" : "build-node-02",
+      reachable: true,
+      latencyMs: alias === "lab-gpu" ? 14 : 9,
+      inventoryUpdatedAt: new Date().toISOString(),
+      error: null,
+      processes: [],
+      panes: [],
+      sessions: [],
+      agents: [],
+      workloads: [],
+      gpus:
+        alias === "lab-gpu"
+          ? [
+              {
+                index: 0,
+                name: "NVIDIA A100-SXM4-80GB",
+                utilization: 94,
+                memoryUsed: 68420,
+                memoryTotal: 81920,
+              },
+              {
+                index: 1,
+                name: "NVIDIA A100-SXM4-80GB",
+                utilization: 88,
+                memoryUsed: 64110,
+                memoryTotal: 81920,
+              },
+              {
+                index: 2,
+                name: "NVIDIA A100-SXM4-80GB",
+                utilization: 12,
+                memoryUsed: 10240,
+                memoryTotal: 81920,
+              },
+              {
+                index: 3,
+                name: "NVIDIA A100-SXM4-80GB",
+                utilization: 0,
+                memoryUsed: 480,
+                memoryTotal: 81920,
+              },
+            ]
+          : [
+              {
+                index: 0,
+                name: "NVIDIA GeForce RTX 4090",
+                utilization: 36,
+                memoryUsed: 9840,
+                memoryTotal: 24564,
+              },
+            ],
+    })),
+    {
+      alias: "archive-node",
+      hostname: "archive-node",
+      reachable: false,
+      latencyMs: null,
+      inventoryUpdatedAt: null,
+      error: "Connection timed out",
+      processes: [],
+      panes: [],
+      sessions: [],
+      agents: [],
+      workloads: [],
+      gpus: [],
+    },
+    {
+      alias: "eval-rack-2",
+      hostname: "eval-rack-2",
+      reachable: false,
+      latencyMs: null,
+      inventoryUpdatedAt: null,
+      error: "Host offline (maintenance)",
+      processes: [],
+      panes: [],
+      sessions: [],
+      agents: [],
+      workloads: [],
+      gpus: [],
+    },
+  ],
 };
-snapshot.hosts.unshift({alias: "@local", hostname: "preview-pc", reachable: true, defaultCwd: "C:/projects", kind: "local", latencyMs: 0, error: null, processes: [], panes: [], sessions: [], agents: [], workloads: [], gpus: []});
-snapshot.summary.hosts = 3; snapshot.summary.online = 3;
+snapshot.hosts.unshift({alias: "@local", hostname: "workstation", reachable: true, defaultCwd: "/workspace", kind: "local", latencyMs: 0, error: null, processes: [], panes: [], sessions: [], agents: [], workloads: [], gpus: []});
+snapshot.summary.hosts = 5; snapshot.summary.online = 3;
 const maintenanceFixture = new Map();
 const emailFixture = {
   enabled: false,
@@ -368,6 +425,145 @@ const preview = createServer(async (request, response) => {
           },
           tunnel: { enabled: false, remotePort: 4922, status: "disabled", connectedAt: null, lastError: null },
           relay: { relayListening: false, relayPort: 4822, relayTokenReady: false },
+        });
+      }
+      if (url.pathname === "/api/auth/profiles") {
+        const host = url.searchParams.get("host") || "lab-gpu";
+        const isLocal = host === "@local";
+        return jsonResponse(response, 200, {
+          host,
+          local: isLocal,
+          defaultAuthPresent: true,
+          activeProfile: isLocal ? null : "lab-pro",
+          currentAccount: {
+            type: "chatgpt",
+            email: "researcher@example.com",
+            planType: "pro",
+          },
+          runningSessions: isLocal ? 0 : 3,
+          profiles: isLocal
+            ? []
+            : [
+                {
+                  slug: "lab-pro",
+                  name: "Lab Pro",
+                  createdAt: new Date(Date.now() - 86400_000 * 14).toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  account: { type: "chatgpt", email: "researcher@example.com", planType: "pro" },
+                  ready: true,
+                  active: true,
+                },
+                {
+                  slug: "backup-plus",
+                  name: "Backup Plus",
+                  createdAt: new Date(Date.now() - 86400_000 * 7).toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  account: { type: "chatgpt", email: "backup-team@example.com", planType: "plus" },
+                  ready: true,
+                  active: false,
+                },
+              ],
+          restartJob: null,
+          automaticFailover: null,
+        });
+      }
+      if (url.pathname === "/api/auth/quota") {
+        const host = url.searchParams.get("host") || "lab-gpu";
+        const nowSec = Math.floor(Date.now() / 1000);
+        const currentQuota = {
+          planType: "pro",
+          primary: { usedPercent: 9, remainingPercent: 91, windowMinutes: 300, resetsAt: nowSec + 11_400, expired: false },
+          secondary: { usedPercent: 26, remainingPercent: 74, windowMinutes: 10080, resetsAt: nowSec + 410_000, expired: false },
+          credits: null,
+        };
+        if (url.searchParams.get("all") === "1") {
+          return jsonResponse(response, 200, {
+            host,
+            local: host === "@local",
+            fetchedAt: new Date().toISOString(),
+            currentAccount: { type: "chatgpt", email: "researcher@example.com", planType: "pro" },
+            currentQuota,
+            profileQuotas:
+              host === "@local"
+                ? {}
+                : {
+                    "lab-pro": { quota: currentQuota, error: null },
+                    "backup-plus": {
+                      quota: {
+                        planType: "plus",
+                        primary: { usedPercent: 18, remainingPercent: 82, windowMinutes: 300, resetsAt: nowSec + 14_200, expired: false },
+                        secondary: { usedPercent: 12, remainingPercent: 88, windowMinutes: 10080, resetsAt: nowSec + 500_000, expired: false },
+                        credits: null,
+                      },
+                      error: null,
+                    },
+                  },
+            error: null,
+          });
+        }
+        return jsonResponse(response, 200, {
+          host,
+          connectionKey: url.searchParams.get("connectionKey") || "active",
+          quota: currentQuota,
+          source: "app-server",
+          error: null,
+        });
+      }
+      if (url.pathname === "/api/auth/providers") {
+        const host = url.searchParams.get("host") || "lab-gpu";
+        const nowSec = Math.floor(Date.now() / 1000);
+        return jsonResponse(response, 200, {
+          host,
+          local: host === "@local",
+          fetchedAt: new Date().toISOString(),
+          claude: {
+            installed: true,
+            executable: "/usr/local/bin/claude",
+            loggedIn: true,
+            email: "researcher@example.com",
+            authMethod: "claude.ai",
+            subscriptionType: "max",
+            planTier: "max_20x",
+            orgName: "Vision Research Lab",
+            loginExpiresAt: new Date(Date.now() + 86400_000 * 30).toISOString(),
+            quota: {
+              planType: "max_20x",
+              primary: { usedPercent: 11, remainingPercent: 89, windowMinutes: 300, resetsAt: nowSec + 9_600, expired: false },
+              secondary: { usedPercent: 5, remainingPercent: 95, windowMinutes: 10080, resetsAt: nowSec + 518_400, expired: false },
+              credits: null,
+            },
+            quotaError: null,
+            error: null,
+          },
+          antigravity: {
+            installed: true,
+            executable: "/usr/local/bin/agy",
+            loggedIn: true,
+            email: "researcher@example.com",
+            authMethod: "consumer",
+            defaultModel: "Gemini 2.5 Pro (High)",
+            useG1Credits: true,
+            quota: {
+              planType: null,
+              primary: { usedPercent: 4, remainingPercent: 96, windowMinutes: 300, resetsAt: nowSec + 12_600, expired: false },
+              secondary: { usedPercent: 16, remainingPercent: 84, windowMinutes: 10080, resetsAt: nowSec + 432_000, expired: false },
+              credits: { hasCredits: true, unlimited: false, balance: "G1 Credits 已启用" },
+              groups: [
+                {
+                  name: "Gemini Models",
+                  primary: { usedPercent: 4, remainingPercent: 96, windowMinutes: 300, resetsAt: nowSec + 12_600, expired: false },
+                  secondary: { usedPercent: 16, remainingPercent: 84, windowMinutes: 10080, resetsAt: nowSec + 432_000, expired: false },
+                },
+                {
+                  name: "Claude and GPT models",
+                  primary: { usedPercent: 0, remainingPercent: 100, windowMinutes: 300, resetsAt: nowSec + 16_200, expired: false },
+                  secondary: { usedPercent: 7, remainingPercent: 93, windowMinutes: 10080, resetsAt: nowSec + 360_000, expired: false },
+                },
+              ],
+            },
+            quotaError: null,
+            error: null,
+          },
         });
       }
       if (url.pathname === "/api/models")

@@ -1,23 +1,52 @@
-# SCOPE
+<p align="center">
+  <img src="./docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
+</p>
 
-**English** | [简体中文](./README.zh-CN.md)
+<h1 align="center">SCOPE</h1>
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg)](https://nodejs.org/)
+<p align="center">
+  <strong>One monitor for all agent sessions.</strong><br/>
+  Unify <b>Codex</b>, <b>Claude Code</b>, and <b>Antigravity (<code>agy</code>)</b> across your workstation and Linux SSH GPU servers in one local-first web workbench.
+</p>
 
-### **One monitor for all agent sessions.**
+<p align="center">
+  <b>English</b> · <a href="./README.zh-CN.md">简体中文</a> ·
+  <a href="./docs/deployment.md">Deployment Guide</a> ·
+  <a href="./docs/plugin-protocol.md">Plugin Guide</a>
+</p>
 
-Run **Codex**, **Claude Code**, and **Antigravity (`agy`)** across your laptop and dozens of Linux SSH / GPU servers—without losing track of `tmux` panes, pending approval prompts, background subagents, or subscription quotas. **SCOPE** discovers your native agent sessions in place and brings live streaming, approvals, files, GPUs, and quotas into a single loopback web workbench (`127.0.0.1`).
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
+  <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
+  <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="Local-first Loopback" />
+</p>
+
+---
+
+## Live Interactive Walkthrough
+
+<p align="center">
+  <img src="./docs/assets/scope-demo.gif" alt="SCOPE interactive demo walkthrough (synthetic fixture data)" width="100%" />
+</p>
+
+<p align="center">
+  <sub>Recorded from <code>npm run preview:fixture</code> (100% synthetic data): Multi-agent sessions &amp; KaTeX math → Claude live background subagents &amp; approval cards → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
+</p>
+
+| Light Mode (KaTeX · Concurrency Pool · Quota) | Dark Mode (Live Background Subagents · Approvals) |
+| :---: | :---: |
+| <img src="./docs/assets/scope-preview-light.png" alt="SCOPE Light Mode preview" width="100%" /> | <img src="./docs/assets/scope-preview-dark.png" alt="SCOPE Dark Mode preview" width="100%" /> |
 
 ---
 
 ## Why SCOPE?
 
-- **One monitor for all agent sessions**: Automatically discovers sessions you already started in VS Code, terminals, or `tmux` (`~/.codex/sessions`, `~/.claude/projects`, `~/.gemini/antigravity-cli`) and resumes them by native session ID—zero vendor lock-in, zero broken CLI history.
+- **One monitor for all agent sessions**: Automatically discovers native sessions you already started in VS Code, terminals, or `tmux` (`~/.codex/sessions`, `~/.claude/projects`, `~/.gemini/antigravity-cli`) and resumes them by native session ID—zero lock-in, zero broken CLI history.
 - **Live streaming, approvals & background subagents**: Approve file edits and shell commands, answer interactive forms (`requestUserInput`, `AskUserQuestion`, ACP forms), queue follow-up messages, switch models/reasoning effort, interrupt turns safely, and watch live **background subagents** (`Claude Code` & `Antigravity`) working in real time.
-- **Multi-agent account hub & live `/usage` quotas**: Inspect login status and live remaining subscription quotas across **Codex** (`app-server` rate limits + multi-profile auto-failover), **Claude Code** (5h / 7d OAuth usage), and **Antigravity** (grouped 5h / weekly quota via `agy -p /usage --output-format json`), plus one-click built-in Web SSH Terminal login.
-- **GPU ownership & session concurrency pool**: Live `nvidia-smi` telemetry and training/evaluation process trees are matched to the agent sessions owning each GPU. Manage long-running Codex sessions with a per-host resident session pool and explicit session pinning (**Reserve**).
-- **Cross-project Coordinator**: A read-only coordinator chat with access to your cross-host session and GPU snapshot to compare runs, locate stuck jobs, or draft tasks in one place.
+- **Multi-agent account hub & live `/usage` quotas**: Inspect login state and live remaining subscription quotas across **Codex** (`app-server` rate limits + multi-profile failover), **Claude Code** (5h / 7d OAuth usage), and **Antigravity** (grouped 5h / weekly quota via `agy -p /usage --output-format json`), plus one-click built-in Web SSH Terminal login.
+- **GPU ownership & session concurrency pool**: Live `nvidia-smi` telemetry and training/evaluation process trees are matched to the sessions owning each GPU. Manage long-running Codex sessions with per-host resident pools and explicit session pinning (**Reserve**).
+- **Cross-project Coordinator**: A read-only coordinator chat with access to your cross-host session and GPU snapshot so you can compare runs, locate stuck jobs, or draft tasks in one place.
 - **Local-first & zero baked-in secrets**: Every SSH host, outbound proxy (`preLaunchCommand`), SMTP credential, gateway token, and local leak denylist stays in your git-ignored `.scope/` directory.
 
 ```mermaid
@@ -28,6 +57,25 @@ flowchart LR
   Bridge -->|OpenSSH| Remote2["GPU Host B (Linux)\nCodex · Claude · AGY · GPUs"]
   Remote1 -.->|"Loopback SSH -R tunnel\n(scope-notify MCP)"| Bridge
 ```
+
+---
+
+## Multi-Agent Support Matrix
+
+<p align="center">
+  <img src="./docs/assets/scope-agents-anime.jpg" alt="SCOPE orchestrating Codex, Claude Code, and Antigravity across GPU clusters" width="92%" />
+</p>
+
+| Capability | Codex | Claude Code | Antigravity (`agy`) | DSH |
+| --- | --- | --- | --- | --- |
+| Live streaming & native session resume | Yes (`app-server` & local) | Yes (`stream-json`) | Yes (`ACP`) | Headless single-turn |
+| Interactive approvals & question forms | Yes | Yes | Yes | — |
+| Model & reasoning effort switching | Yes | Yes | Yes | Profile-based |
+| Live subscription remaining quota (`/usage`) | Yes (5h / 7d + multi-profile) | Yes (5h / 7d OAuth usage) | Yes (grouped 5h / weekly) | — |
+| Background subagents live status | Rollout subagent tree | Yes (live + `subagents/`) | Yes (ACP + child transcripts) | — |
+| Slash commands & project skills | Yes (`skills/list` + `/compact`) | Yes (live CLI commands) | Yes (ACP session commands) | — |
+| External terminal / VS Code observation | Yes (read-only watch) | History scan | History scan | — |
+| Remote CLI check / install / upgrade | Yes (safe hot-switch) | Yes | Version check | Yes |
 
 ---
 
@@ -50,24 +98,7 @@ npm run scope
 
 Open **http://localhost:3000/**. Both the Web UI (`3000`) and Bridge (`4815`) bind strictly to `127.0.0.1`.
 
-1. Toggle UI language anytime via **`EN / 中`** in the top bar.
-2. Open **Settings → Hosts & Remote Deploy** to configure optional per-host pre-launch commands (such as outbound proxies or Conda init) and deploy `scope-notify` with one click.
-3. Open **Accounts** from the topbar (or inside any Claude/AGY session) to inspect Codex, Claude Code, and Antigravity login states and live remaining quotas.
-
----
-
-## Agent & Feature Support
-
-| Capability | Codex | Claude Code | Antigravity (`agy`) | DSH |
-| --- | --- | --- | --- | --- |
-| Live streaming & native session resume | Yes (`app-server` & local) | Yes (`stream-json`) | Yes (`ACP`) | Headless single-turn |
-| Interactive approvals & question forms | Yes | Yes | Yes | — |
-| Model & reasoning effort switching | Yes | Yes | Yes | Profile-based |
-| Live subscription remaining quota (`/usage`) | Yes (5h / 7d + multi-profile) | Yes (5h / 7d OAuth usage) | Yes (grouped 5h / weekly) | — |
-| Background subagents live status | Rollout subagent tree | Yes (live + `subagents/`) | Yes (ACP + child transcripts) | — |
-| Slash commands & project skills | Yes (`skills/list` + `/compact`) | Yes (live CLI commands) | Yes (ACP session commands) | — |
-| External terminal / VS Code observation | Yes (read-only watch) | History scan | History scan | — |
-| Remote CLI check / install / upgrade | Yes (safe hot-switch) | Yes | Version check | Yes |
+> Want to preview the full UI locally without connecting any SSH hosts? Run `npm run preview:fixture` and open `http://127.0.0.2:3001/`.
 
 ---
 
@@ -101,8 +132,6 @@ npm run test:unit
 npm run lint
 npm run export:opensource -- --check
 ```
-
-> Optional local leak denylist: copy `examples/leak-denylist.example.json` to `.scope/leak-denylist.json` (git-ignored) to block organization-specific hostnames, IPs, or codenames during `export:opensource -- --check`.
 
 ## License
 

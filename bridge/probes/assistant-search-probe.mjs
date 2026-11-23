@@ -8,6 +8,12 @@ import re
 import subprocess
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 config = json.loads(base64.urlsafe_b64decode(sys.argv[1] + "==").decode("utf-8"))
 question = str(config.get("question") or "").strip()
 result_limit = max(3, min(20, int(config.get("limit") or 10)))
@@ -58,19 +64,33 @@ all_paths.sort(key=lambda item: os.path.getmtime(item), reverse=True)
 
 matching_paths = []
 if all_paths:
-    pattern = "|".join(re.escape(term) for term in terms if term)
-    try:
-        grep = subprocess.run(
-            ["grep", "-RIlE", pattern, sessions_root],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=15,
-        )
-        matching = set(line for line in grep.stdout.splitlines() if line.endswith(".jsonl"))
-        matching_paths = [path for path in all_paths if path in matching][:max_files]
-    except Exception:
+    if os.name == "nt":
         matching_paths = all_paths[:max_files]
+    else:
+        pattern = "|".join(re.escape(term) for term in terms if term)
+        try:
+            grep = subprocess.run(
+                ["grep", "-RIilE", pattern, sessions_root],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=15,
+            )
+            if grep.returncode in (0, 1):
+                matching = {
+                    os.path.normcase(os.path.normpath(line))
+                    for line in grep.stdout.splitlines()
+                    if line.endswith(".jsonl")
+                }
+                matching_paths = [
+                    item
+                    for item in all_paths
+                    if os.path.normcase(os.path.normpath(item)) in matching
+                ][:max_files]
+            else:
+                matching_paths = all_paths[:max_files]
+        except Exception:
+            matching_paths = all_paths[:max_files]
 
 def text_from_content(content):
     if isinstance(content, str):

@@ -29,6 +29,7 @@ const BINARY_EXTENSIONS = new Set([
   ".png",
   ".jpg",
   ".jpeg",
+  ".gif",
   ".webp",
   ".ico",
   ".woff",

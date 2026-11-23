@@ -115,6 +115,7 @@ test("assistant search ranks direct multi-term rollout evidence", async (t) => {
       ...process.env,
       HOME: home,
       USERPROFILE: home,
+      PYTHONIOENCODING: "utf-8",
     },
     timeout: 20_000,
   });
