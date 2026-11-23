@@ -1,6 +1,7 @@
 "use client";
 import { Check, KeyRound, LoaderCircle, Trash2 } from "lucide-react";
 import { QuotaInlineBadge } from "@/components/quota-meter";
+import { useLocale } from "@/lib/i18n";
 import { relativeTime } from "../workspace/shared";
 import type { HostProfileQuotaEntry } from "../workspace/types";
 import type { WorkspaceController } from "../workspace/use-workspace-controller";
@@ -23,16 +24,17 @@ export function AccountProfileList({
   profileQuotas?: Record<string, HostProfileQuotaEntry>;
   quotasLoading?: boolean;
 }) {
+  const { tr } = useLocale();
   return (
     <div className="auth-profile-list">
       <div className="auth-profile-list-head">
-        <strong>已保存账号</strong>
-        <span>{accountProfiles?.profiles.length || 0} 个</span>
+        <strong>{tr("已保存账号", "Saved profiles")}</strong>
+        <span>{tr(`${accountProfiles?.profiles.length || 0} 个`, `${accountProfiles?.profiles.length || 0}`)}</span>
       </div>
       {accountProfilesLoading && !accountProfiles ? (
         <div className="submission-empty">
           <LoaderCircle size={17} className="is-spinning" />
-          正在读取账号…
+          {tr("正在读取账号…", "Loading profiles…")}
         </div>
       ) : accountProfiles?.profiles.length ? (
         accountProfiles.profiles.map((profile) => (
@@ -41,7 +43,7 @@ export function AccountProfileList({
             key={profile.slug}
             title={
               profile.updatedAt
-                ? `更新 ${relativeTime(profile.updatedAt)}`
+                ? tr(`更新 ${relativeTime(profile.updatedAt)}`, `Updated ${relativeTime(profile.updatedAt)}`)
                 : profile.slug
             }
           >
@@ -65,7 +67,7 @@ export function AccountProfileList({
               </div>
               <span title={profile.account?.email || undefined}>
                 {profile.account?.email ||
-                  (profile.ready ? "未识别账号信息" : "尚未登录")}
+                  (profile.ready ? tr("未识别账号信息", "Unknown account") : tr("尚未登录", "Signed out"))}
               </span>
             </div>
             <div className="auth-profile-actions">
@@ -87,16 +89,16 @@ export function AccountProfileList({
                 ) : (
                   <KeyRound size={14} />
                 )}
-                {profile.active ? "已选配置" : "切换"}
+                {profile.active ? tr("已选配置", "Active") : tr("切换", "Switch")}
               </button>
               <button
                 type="button"
                 className="profile-delete-action"
-                aria-label={`删除 Profile ${profile.name}`}
+                aria-label={tr(`删除 Profile ${profile.name}`, `Delete profile ${profile.name}`)}
                 title={
                   profile.active
-                    ? "当前 Profile 不能删除，请先切换账号"
-                    : `删除 ${profile.name}`
+                    ? tr("当前 Profile 不能删除，请先切换账号", "Switch away before deleting the active profile")
+                    : tr(`删除 ${profile.name}`, `Delete ${profile.name}`)
                 }
                 disabled={
                   profile.active ||
@@ -116,7 +118,10 @@ export function AccountProfileList({
         ))
       ) : (
         <div className="submission-empty">
-          暂无已保存账号。展开“添加账号”保存当前登录，或登录其他账号。
+          {tr(
+            "暂无已保存账号。展开“添加账号”保存当前登录，或登录其他账号。",
+            'No saved profiles yet. Expand "Add account" to save the active login or sign in to another.',
+          )}
         </div>
       )}
     </div>

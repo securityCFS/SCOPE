@@ -19,12 +19,13 @@ import { fileURLToPath } from "node:url";
 import { installPackage } from "../bridge/plugins/package.mjs";
 import { loadExternalPlugins } from "../bridge/plugins/external.mjs";
 
+const isEn = process.env.SCOPE_PREVIEW_LOCALE === "en";
 const dir = await mkdtemp(path.join(tmpdir(), "scope-ui-preview-"));
 const store = await new WorkbenchStore(path.join(dir, "workbench.json")).load();
 const projects = [
   { host: "lab-gpu", cwd: "/workspace/vision", name: "Vision Lab" },
   { host: "build-node", cwd: "/workspace/scope", name: "SCOPE" },
-  { host: "lab-gpu", cwd: "/workspace/research", name: "研究笔记" },
+  { host: "lab-gpu", cwd: "/workspace/research", name: isEn ? "Research Notes" : "研究笔记" },
 ];
 const snapshot = {
   generatedAt: new Date().toISOString(),
@@ -32,7 +33,7 @@ const snapshot = {
   sshConfig: "Preview fixture — no SSH",
   summary: { hosts: 2, online: 2, codex: 0, tmux: 0, attention: 0 },
   management: {
-    operatorName: "预览",
+    operatorName: isEn ? "Preview" : "预览",
     sessions: {
       "lab-gpu:vision-plan": {
         reserved: true,
@@ -194,7 +195,7 @@ await store.update((state) => {
     host: "build-node",
     cwd: "/workspace/scope",
     provider: "codex",
-    prompt: "整理后端模块与接口",
+    prompt: isEn ? "Refactor backend modules & API routes" : "整理后端模块与接口",
     status: "completed",
     gpuIndices: [],
     gpuCount: 0,
@@ -547,7 +548,7 @@ const preview = createServer(async (request, response) => {
               planType: null,
               primary: { usedPercent: 4, remainingPercent: 96, windowMinutes: 300, resetsAt: nowSec + 12_600, expired: false },
               secondary: { usedPercent: 16, remainingPercent: 84, windowMinutes: 10080, resetsAt: nowSec + 432_000, expired: false },
-              credits: { hasCredits: true, unlimited: false, balance: "G1 Credits 已启用" },
+              credits: { hasCredits: true, unlimited: false, balance: isEn ? "G1 Credits enabled" : "G1 Credits 已启用" },
               groups: [
                 {
                   name: "Gemini Models",

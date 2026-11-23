@@ -76,7 +76,7 @@ export function ProjectSidebar({
   onRescan?: () => void;
   scanning?: boolean;
 }) {
-  const { tr } = useLocale();
+  const { locale, tr } = useLocale();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useProjectFilters();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -124,11 +124,11 @@ export function ProjectSidebar({
               key={host.alias}
               type="button"
               className={`sidebar-host-pill ${active ? "active" : ""}`}
-              title={`${hostLabel(host.alias)} · ${host.reachable ? tr("在线", "Online") : tr("离线", "Offline")}`}
+              title={`${hostLabel(host.alias, locale)} · ${host.reachable ? tr("在线", "Online") : tr("离线", "Offline")}`}
               onClick={() => onHostChange(active ? "all" : host.alias)}
             >
               <span className={`dot ${host.reachable ? "online" : ""}`} />
-              <span>{hostLabel(host.alias)}</span>
+              <span>{hostLabel(host.alias, locale)}</span>
             </button>
           );
         })}
@@ -313,7 +313,7 @@ export function ProjectSidebar({
                                 : undefined
                             }
                           >
-                            {activityLabel(session.lastActivityAt)}
+                            {activityLabel(session.lastActivityAt, undefined, locale)}
                           </time>
                         </button>
                         {(!session.provider ||
@@ -346,8 +346,8 @@ export function ProjectSidebar({
                         }))
                       }
                     >
-                      显示更多会话（+
-                      {sessions.length - (limits[project.key] || 8)}）
+                      {tr("显示更多会话", "Show more")} (+
+                      {sessions.length - (limits[project.key] || 8)})
                     </button>
                   )}
                   {selected && (
@@ -356,10 +356,10 @@ export function ProjectSidebar({
                       className="project-history-link"
                       onClick={() => onHistory(project)}
                     >
-                      加载历史会话
+                      {tr("加载历史会话", "Load history")}
                     </button>
                   )}
-                  {!sessions.length && <p>还没有会话</p>}
+                  {!sessions.length && <p>{tr("还没有会话", "No sessions yet")}</p>}
                 </div>
               )}
             </div>

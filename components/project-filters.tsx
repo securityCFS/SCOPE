@@ -2,11 +2,39 @@
 import { useState, useSyncExternalStore } from "react";
 import { SlidersHorizontal, RotateCcw } from "lucide-react";
 import { ChoiceMenu } from "./choice-menu";
+import { useLocale } from "@/lib/i18n";
 import {
   DEFAULT_PROJECT_FILTERS,
   normalizeProjectFilters,
   PROJECT_FILTER_OPTIONS,
 } from "@/lib/project-view";
+
+const PROJECT_FILTER_OPTIONS_EN: Record<
+  keyof typeof PROJECT_FILTER_OPTIONS,
+  Record<string, string>
+> = {
+  order: { recent: "Recent", oldest: "Oldest" },
+  category: {
+    all: "All tasks",
+    research: "Research",
+    training: "Training",
+    evaluation: "Eval",
+    engineering: "Engineering",
+    other: "Uncategorized",
+  },
+  provider: {
+    all: "All agents",
+    codex: "Codex",
+    claude: "Claude",
+    antigravity: "Antigravity",
+  },
+  status: {
+    all: "All statuses",
+    working: "Running",
+    attention: "Attention",
+    idle: "Idle / Done",
+  },
+};
 export type ProjectFilters = typeof DEFAULT_PROJECT_FILTERS;
 const storageKey = "scope.project-filters.v1";
 const preferenceEvent = "scope:project-filters";
@@ -54,6 +82,7 @@ export function ProjectFilterBar({
   value: ProjectFilters;
   onChange: (value: ProjectFilters) => void;
 }) {
+  const { locale, tr } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const changed = Object.keys(value).some(
     (key) =>
@@ -68,7 +97,13 @@ export function ProjectFilterBar({
         compact
         onChange={(next) => onChange({ ...value, [key]: next })}
         options={Object.entries(PROJECT_FILTER_OPTIONS[key]).map(
-          ([id, title]) => ({ value: id, label: title as string }),
+          ([id, title]) => ({
+            value: id,
+            label:
+              locale === "en"
+                ? PROJECT_FILTER_OPTIONS_EN[key]?.[id] || (title as string)
+                : (title as string),
+          }),
         )}
       />
     );
@@ -76,14 +111,14 @@ export function ProjectFilterBar({
   return (
     <div className="project-filter-bar">
       <div>
-        {select("order", "会话时间排序")}
-        {select("category", "任务类型")}
+        {select("order", tr("会话时间排序", "Sort by activity"))}
+        {select("category", tr("任务类型", "Category"))}
         <button
           type="button"
           className={
             value.provider !== "all" || value.status !== "all" ? "active" : ""
           }
-          aria-label="更多会话筛选"
+          aria-label={tr("更多会话筛选", "More filters")}
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
@@ -92,8 +127,8 @@ export function ProjectFilterBar({
       </div>
       {expanded && (
         <div>
-          {select("provider", "Agent 类型")}
-          {select("status", "会话状态")}
+          {select("provider", tr("Agent 类型", "Agent"))}
+          {select("status", tr("会话状态", "Status"))}
         </div>
       )}
       {changed && (
@@ -103,7 +138,7 @@ export function ProjectFilterBar({
           onClick={() => onChange({ ...DEFAULT_PROJECT_FILTERS })}
         >
           <RotateCcw size={11} />
-          重置筛选
+          {tr("重置筛选", "Reset")}
         </button>
       )}
     </div>

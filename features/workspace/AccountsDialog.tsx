@@ -5,6 +5,7 @@ import { AgentLogo } from "@/components/agent-logo";
 import { ChoiceMenu } from "@/components/choice-menu";
 import { QuotaMeterCard } from "@/components/quota-meter";
 import { quotaHeadline } from "@/lib/account-quota";
+import { useLocale } from "@/lib/i18n";
 import { AccountProfileList } from "../accounts/AccountProfileList";
 import { DeviceLoginCard } from "../accounts/DeviceLoginCard";
 import "../accounts/accounts.css";
@@ -103,6 +104,7 @@ export function AccountsDialog({
 > & {
   defaultProvider?: AccountProviderTab;
 }) {
+  const { locale, tr } = useLocale();
   const dialog = useRef<HTMLDialogElement>(null);
   const [tabOverride, setTabOverride] = useState<{
     sessionKey: string;
@@ -256,12 +258,17 @@ export function AccountsDialog({
         >
           <div className="account-dialog-head">
             <div>
-              <h2 id="account-dialog-title">账号管理</h2>
-              <p>查看所选设备的 Codex、Claude Code 与 Antigravity 登录状态；凭据保留在对应设备上。</p>
+              <h2 id="account-dialog-title">{tr("账号管理", "Accounts & Quotas")}</h2>
+              <p>
+                {tr(
+                  "查看所选设备的 Codex、Claude Code 与 Antigravity 登录状态；凭据保留在对应设备上。",
+                  "Inspect Codex, Claude Code, and Antigravity logins and live quotas; credentials stay on each host.",
+                )}
+              </p>
             </div>
             <button
               type="button"
-              aria-label="关闭账号管理"
+              aria-label={tr("关闭账号管理", "Close accounts")}
               onClick={() => setAccountProfilesOpen(false)}
             >
               <X size={17} />
@@ -269,7 +276,7 @@ export function AccountsDialog({
           </div>
           <div className="account-profile-toolbar">
             <ChoiceMenu
-              label="账号所在设备"
+              label={tr("账号所在设备", "Target host")}
               value={accountHost}
               onChange={(host) => {
                 accountHostRef.current = host;
@@ -283,8 +290,8 @@ export function AccountsDialog({
                 .filter((host) => host.reachable)
                 .map((host) => ({
                   value: host.alias,
-                  label: hostLabel(host.alias),
-                  description: `${host.agents.length} 个 Codex 会话`,
+                  label: hostLabel(host.alias, locale),
+                  description: tr(`${host.agents.length} 个 Codex 会话`, `${host.agents.length} Codex sessions`),
                 }))}
             />
             <button
@@ -300,11 +307,11 @@ export function AccountsDialog({
                 size={14}
                 className={refreshingAny ? "is-spinning" : ""}
               />
-              刷新
+              {tr("刷新", "Refresh")}
             </button>
           </div>
           <div className="account-provider-tabs">
-            <div className="new-agent-choice" role="group" aria-label="选择 Agent 账号类型">
+            <div className="new-agent-choice" role="group" aria-label={tr("选择 Agent 账号类型", "Choose agent provider")}>
               {(
                 [
                   {
@@ -315,9 +322,12 @@ export function AccountsDialog({
                         ? "…"
                         : accountProfiles?.defaultAuthPresent
                           ? quotaHeadline(activeHostQuotas?.currentQuota)
-                            ? `剩 ${quotaHeadline(activeHostQuotas?.currentQuota)!.remainingPercent}%`
-                            : "已登录"
-                          : "未登录",
+                            ? tr(
+                                `剩 ${quotaHeadline(activeHostQuotas?.currentQuota)!.remainingPercent}%`,
+                                `${quotaHeadline(activeHostQuotas?.currentQuota)!.remainingPercent}% left`,
+                              )
+                            : tr("已登录", "Signed in")
+                          : tr("未登录", "Signed out"),
                   },
                   {
                     id: "claude",
@@ -327,11 +337,14 @@ export function AccountsDialog({
                         ? "…"
                         : claudeAuth?.loggedIn
                           ? quotaHeadline(claudeAuth.quota)
-                            ? `剩 ${quotaHeadline(claudeAuth.quota)!.remainingPercent}%`
-                            : "已登录"
+                            ? tr(
+                                `剩 ${quotaHeadline(claudeAuth.quota)!.remainingPercent}%`,
+                                `${quotaHeadline(claudeAuth.quota)!.remainingPercent}% left`,
+                              )
+                            : tr("已登录", "Signed in")
                           : claudeAuth?.installed
-                            ? "未登录"
-                            : "未安装",
+                            ? tr("未登录", "Signed out")
+                            : tr("未安装", "Not installed"),
                   },
                   {
                     id: "antigravity",
@@ -341,11 +354,14 @@ export function AccountsDialog({
                         ? "…"
                         : agyAuth?.loggedIn
                           ? quotaHeadline(agyAuth.quota)
-                            ? `剩 ${quotaHeadline(agyAuth.quota)!.remainingPercent}%`
-                            : "已登录"
+                            ? tr(
+                                `剩 ${quotaHeadline(agyAuth.quota)!.remainingPercent}%`,
+                                `${quotaHeadline(agyAuth.quota)!.remainingPercent}% left`,
+                              )
+                            : tr("已登录", "Signed in")
                           : agyAuth?.installed
-                            ? "未登录"
-                            : "未安装",
+                            ? tr("未登录", "Signed out")
+                            : tr("未安装", "Not installed"),
                   },
                 ] as const
               ).map((item) => (
@@ -368,15 +384,20 @@ export function AccountsDialog({
             {activeTab === "claude" && (
               <>
                 <div className="current-account-card">
-                  <span>Claude Code 当前登录（{hostLabel(accountHost)}）</span>
+                  <span>
+                    {tr(
+                      `Claude Code 当前登录（${hostLabel(accountHost, locale)}）`,
+                      `Claude Code Active Login (${hostLabel(accountHost, locale)})`,
+                    )}
+                  </span>
                   <strong>
                     {providersLoading && !claudeAuth
-                      ? "正在读取…"
+                      ? tr("正在读取…", "Loading…")
                       : claudeAuth?.loggedIn
-                        ? claudeAuth.email || "已登录 Claude Code"
+                        ? claudeAuth.email || tr("已登录 Claude Code", "Signed in to Claude Code")
                         : claudeAuth?.installed
-                          ? "尚未登录"
-                          : "未检测到 claude CLI"}
+                          ? tr("尚未登录", "Signed out")
+                          : tr("未检测到 claude CLI", "claude CLI not detected")}
                   </strong>
                   <small>
                     {claudeAuth?.loggedIn
@@ -384,22 +405,25 @@ export function AccountsDialog({
                           formatClaudePlan(
                             claudeAuth.planTier,
                             claudeAuth.subscriptionType,
-                          ) || "未返回套餐类型",
+                          ) || tr("未返回套餐类型", "Unknown plan"),
                           claudeAuth.authMethod && claudeAuth.authMethod !== "none"
                             ? claudeAuth.authMethod
                             : "",
                           claudeAuth.orgName,
                           claudeAuth.loginExpiresAt
-                            ? `授权到期 ${formatLoginExpiry(claudeAuth.loginExpiresAt)}`
+                            ? tr(
+                                `授权到期 ${formatLoginExpiry(claudeAuth.loginExpiresAt)}`,
+                                `Expires ${formatLoginExpiry(claudeAuth.loginExpiresAt)}`,
+                              )
                             : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")
                       : providersLoading && !claudeAuth
-                        ? "正在检测本机或远端登录态…"
+                        ? tr("正在检测本机或远端登录态…", "Checking local or remote login…")
                         : claudeAuth?.installed
-                          ? "尚未登录 · 请通过下方终端执行 claude auth login"
-                          : "未在目标主机检测到 claude 命令"}
+                          ? tr("尚未登录 · 请通过下方终端执行 claude auth login", "Signed out · run claude auth login via terminal below")
+                          : tr("未在目标主机检测到 claude 命令", "claude CLI not found on target host")}
                   </small>
                   {(activeProvidersError || claudeAuth?.error) && (
                     <small className="account-mismatch">
@@ -414,19 +438,33 @@ export function AccountsDialog({
                     onRefresh={() => setQuotaRefreshSeq((value) => value + 1)}
                     emptyNote={
                       claudeAuth?.loggedIn
-                        ? "暂未读取到 Claude 订阅用量窗口（API Key 模式或网络未连通时不返回 OAuth 配额）"
-                        : "登录 Claude Code 后可查看 5 小时与 7 天订阅剩余额度"
+                        ? tr(
+                            "暂未读取到 Claude 订阅用量窗口（API Key 模式或网络未连通时不返回 OAuth 配额）",
+                            "No Claude subscription quota returned (API key mode or offline host).",
+                          )
+                        : tr(
+                            "登录 Claude Code 后可查看 5 小时与 7 天订阅剩余额度",
+                            "Sign in to Claude Code to view 5-hour and 7-day subscription quotas.",
+                          )
                     }
                   />
                 </div>
 
                 <div className="provider-auth-guide">
-                  <strong>登录 / 切换 Claude Code 账号</strong>
+                  <strong>{tr("登录 / 切换 Claude Code 账号", "Sign in / switch Claude Code account")}</strong>
                   <p>
-                    Claude Code 通过交互式终端执行{" "}
-                    <code>claude auth login</code> 完成浏览器 OAuth 授权（凭据保存在目标主机{" "}
-                    <code>~/.claude</code>）。SCOPE 会在目标主机本地直接查询 Claude OAuth 用量接口（不回传令牌），也可以在 CLI 中运行{" "}
-                    <code>/usage</code> 核对。
+                    {locale === "en" ? (
+                      <>
+                        Run <code>claude auth login</code> in an interactive terminal to authorize via OAuth (credentials stay in <code>~/.claude</code> on the host). SCOPE queries Claude&apos;s OAuth usage endpoint directly on the host without exporting tokens; run <code>/usage</code> in CLI to cross-check.
+                      </>
+                    ) : (
+                      <>
+                        Claude Code 通过交互式终端执行{" "}
+                        <code>claude auth login</code> 完成浏览器 OAuth 授权（凭据保存在目标主机{" "}
+                        <code>~/.claude</code>）。SCOPE 会在目标主机本地直接查询 Claude OAuth 用量接口（不回传令牌），也可以在 CLI 中运行{" "}
+                        <code>/usage</code> 核对。
+                      </>
+                    )}
                   </p>
                   <div className="provider-auth-actions">
                     {!isLocalHost && (
@@ -438,7 +476,7 @@ export function AccountsDialog({
                         }
                       >
                         <SquareTerminal size={14} />
-                        打开 SSH 终端登录 / 切换
+                        {tr("打开 SSH 终端登录 / 切换", "Open SSH terminal to sign in")}
                       </button>
                     )}
                     <button
@@ -446,14 +484,18 @@ export function AccountsDialog({
                       onClick={() => void copy("claude auth login", "claude-login")}
                     >
                       {copied === "claude-login" ? <Check size={14} /> : <Copy size={14} />}
-                      {copied === "claude-login" ? "已复制命令" : "复制 claude auth login"}
+                      {copied === "claude-login"
+                        ? tr("已复制命令", "Copied")
+                        : tr("复制 claude auth login", "Copy claude auth login")}
                     </button>
                     <button
                       type="button"
                       onClick={() => void copy("claude auth logout", "claude-logout")}
                     >
                       {copied === "claude-logout" ? <Check size={14} /> : <Copy size={14} />}
-                      {copied === "claude-logout" ? "已复制命令" : "复制退出命令"}
+                      {copied === "claude-logout"
+                        ? tr("已复制命令", "Copied")
+                        : tr("复制退出命令", "Copy logout command")}
                     </button>
                   </div>
                 </div>
@@ -463,21 +505,28 @@ export function AccountsDialog({
             {activeTab === "antigravity" && (
               <>
                 <div className="current-account-card">
-                  <span>Antigravity (AGY) 当前登录（{hostLabel(accountHost)}）</span>
+                  <span>
+                    {tr(
+                      `Antigravity (AGY) 当前登录（${hostLabel(accountHost, locale)}）`,
+                      `Antigravity (AGY) Active Login (${hostLabel(accountHost, locale)})`,
+                    )}
+                  </span>
                   <strong>
                     {providersLoading && !agyAuth
-                      ? "正在读取…"
+                      ? tr("正在读取…", "Loading…")
                       : agyAuth?.loggedIn
-                        ? agyAuth.email || "已登录 Antigravity"
+                        ? agyAuth.email || tr("已登录 Antigravity", "Signed in to Antigravity")
                         : agyAuth?.installed
-                          ? "尚未登录"
-                          : "未检测到 agy CLI"}
+                          ? tr("尚未登录", "Signed out")
+                          : tr("未检测到 agy CLI", "agy CLI not detected")}
                   </strong>
                   <small>
                     {[
                       agyAuth?.authMethod || "Google OAuth",
-                      agyAuth?.defaultModel ? `默认模型 ${agyAuth.defaultModel}` : "",
-                      agyAuth?.useG1Credits ? "已启用 G1 Credits" : "",
+                      agyAuth?.defaultModel
+                        ? tr(`默认模型 ${agyAuth.defaultModel}`, `Default ${agyAuth.defaultModel}`)
+                        : "",
+                      agyAuth?.useG1Credits ? tr("已启用 G1 Credits", "G1 Credits enabled") : "",
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -495,19 +544,33 @@ export function AccountsDialog({
                     onRefresh={() => setQuotaRefreshSeq((value) => value + 1)}
                     emptyNote={
                       agyAuth?.loggedIn
-                        ? "暂未读取到 Antigravity 额度（请确认目标主机已配置代理/网络且 agy CLI 支持 /usage）"
-                        : "登录 Antigravity 后可查看各模型分组的 5 小时与周剩余额度"
+                        ? tr(
+                            "暂未读取到 Antigravity 额度（请确认目标主机已配置代理/网络且 agy CLI 支持 /usage）",
+                            "No Antigravity quota returned (verify network/proxy and agy /usage support).",
+                          )
+                        : tr(
+                            "登录 Antigravity 后可查看各模型分组的 5 小时与周剩余额度",
+                            "Sign in to Antigravity to view per-model-group 5-hour and weekly quotas.",
+                          )
                     }
                   />
                 </div>
 
                 <div className="provider-auth-guide">
-                  <strong>登录 / 切换 Antigravity 账号</strong>
+                  <strong>{tr("登录 / 切换 Antigravity 账号", "Sign in / switch Antigravity account")}</strong>
                   <p>
-                    Antigravity CLI 通过交互式启动 <code>agy</code>（首次启动或会话内执行{" "}
-                    <code>/login</code>）完成 Google OAuth 授权，凭据保存在目标主机{" "}
-                    <code>~/.gemini/antigravity-cli/antigravity-oauth-token</code>。剩余额度通过目标主机官方{" "}
-                    <code>agy -p /usage --output-format json</code>（零 Token 消耗）实时读取。
+                    {locale === "en" ? (
+                      <>
+                        Launch <code>agy</code> interactively (or run <code>/login</code>) to complete Google OAuth. Credentials stay in <code>~/.gemini/antigravity-cli/antigravity-oauth-token</code>, and quotas are read via <code>agy -p /usage --output-format json</code> with zero token cost.
+                      </>
+                    ) : (
+                      <>
+                        Antigravity CLI 通过交互式启动 <code>agy</code>（首次启动或会话内执行{" "}
+                        <code>/login</code>）完成 Google OAuth 授权，凭据保存在目标主机{" "}
+                        <code>~/.gemini/antigravity-cli/antigravity-oauth-token</code>。剩余额度通过目标主机官方{" "}
+                        <code>agy -p /usage --output-format json</code>（零 Token 消耗）实时读取。
+                      </>
+                    )}
                   </p>
                   <div className="provider-auth-actions">
                     {!isLocalHost && (
@@ -517,7 +580,7 @@ export function AccountsDialog({
                         onClick={() => openProviderLoginTerminal("Antigravity", "agy")}
                       >
                         <SquareTerminal size={14} />
-                        打开 SSH 终端登录 / 管理 AGY
+                        {tr("打开 SSH 终端登录 / 管理 AGY", "Open SSH terminal for AGY")}
                       </button>
                     )}
                     <button
@@ -525,7 +588,9 @@ export function AccountsDialog({
                       onClick={() => void copy("agy", "agy-login")}
                     >
                       {copied === "agy-login" ? <Check size={14} /> : <Copy size={14} />}
-                      {copied === "agy-login" ? "已复制命令" : "复制启动命令 agy"}
+                      {copied === "agy-login"
+                        ? tr("已复制命令", "Copied")
+                        : tr("复制启动命令 agy", "Copy agy command")}
                     </button>
                   </div>
                 </div>
@@ -535,26 +600,29 @@ export function AccountsDialog({
             {activeTab === "codex" && (
               <>
                 <div className="current-account-card">
-              <span>当前登录</span>
+              <span>{tr("当前登录", "Active login")}</span>
               <strong>
                 {!accountProfiles && accountProfilesLoading
-                  ? "正在读取…"
+                  ? tr("正在读取…", "Loading…")
                   : accountProfiles?.currentAccount?.email ||
                     (accountProfiles?.defaultAuthPresent
-                      ? "已登录（未读取邮箱）"
-                      : "未登录")}
+                      ? tr("已登录（未读取邮箱）", "Signed in")
+                      : tr("未登录", "Signed out"))}
               </strong>
               <small>
                 {accountProfiles?.currentAccount?.planType &&
                 accountProfiles.currentAccount.planType !== "unknown"
                   ? accountProfiles.currentAccount.planType
-                  : "套餐未识别"}{" "}
+                  : tr("套餐未识别", "Unknown plan")}{" "}
                 ·{" "}
                 {isLocalHost
-                  ? "本机当前登录"
+                  ? tr("本机当前登录", "Local active login")
                   : accountProfiles?.activeProfile
-                    ? `已选配置 ${savedActive?.name || accountProfiles.activeProfile}`
-                    : "尚未保存为账号配置"}
+                    ? tr(
+                        `已选配置 ${savedActive?.name || accountProfiles.activeProfile}`,
+                        `Active profile ${savedActive?.name || accountProfiles.activeProfile}`,
+                      )
+                    : tr("尚未保存为账号配置", "Unsaved profile")}
               </small>
               {accountMismatch && (
                 <small className="account-mismatch">
@@ -600,14 +668,14 @@ export function AccountsDialog({
             ) : (
               <>
                 <details className="account-add-section">
-                  <summary>添加账号</summary>
+                  <summary>{tr("添加账号", "Add account")}</summary>
                   <div className="profile-create-row">
                     <label>
-                      <span>账号名称</span>
+                      <span>{tr("账号名称", "Profile name")}</span>
                       <input
                         value={profileNameDraft}
                         maxLength={48}
-                        placeholder="例如 work / personal"
+                        placeholder={tr("例如 work / personal", "e.g. work / personal")}
                         onChange={(event) =>
                           setProfileNameDraft(event.target.value)
                         }
@@ -628,7 +696,7 @@ export function AccountsDialog({
                       ) : (
                         <Save size={14} />
                       )}
-                      保存当前登录
+                      {tr("保存当前登录", "Save active login")}
                     </button>
                     <button
                       type="button"
@@ -648,7 +716,7 @@ export function AccountsDialog({
                       ) : (
                         <KeyRound size={14} />
                       )}
-                      登录其他账号
+                      {tr("登录其他账号", "Sign in another")}
                     </button>
                   </div>
                 </details>
@@ -674,7 +742,10 @@ export function AccountsDialog({
                 {(accountProfiles?.runningSessions || 0) > 0 && (
                   <details className="account-recovery-section">
                     <summary>
-                      会话恢复 · {accountProfiles?.runningSessions} 个会话
+                      {tr(
+                        `会话恢复 · ${accountProfiles?.runningSessions} 个会话`,
+                        `Session recovery · ${accountProfiles?.runningSessions} sessions`,
+                      )}
                     </summary>
                     <div className="profile-restart-card">
                       <div>

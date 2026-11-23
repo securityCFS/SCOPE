@@ -84,15 +84,15 @@ function mergeNativeSubagents(
   return Array.from(byId.values());
 }
 
-const subagentStatusLabel: Record<string, string> = {
-  working: "工作中",
-  completed: "已完成",
-  failed: "失败",
-  stopped: "已停止",
-};
-
 function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
+  const { tr } = useLocale();
   if (!subagents.length) return null;
+  const statusLabels: Record<string, string> = {
+    working: tr("工作中", "Working"),
+    completed: tr("已完成", "Done"),
+    failed: tr("失败", "Failed"),
+    stopped: tr("已停止", "Stopped"),
+  };
   const workingList = subagents.filter((item) => item.status === "working");
   const finishedCount = subagents.length - workingList.length;
   const body = (
@@ -106,7 +106,7 @@ function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
               ) : (
                 <Bot size={11} />
               )}
-              {subagentStatusLabel[item.status] || item.status}
+              {statusLabels[item.status] || item.status}
             </span>
             <strong title={item.role}>{item.role}</strong>
             {item.typeName && <small>{item.typeName}</small>}
@@ -125,12 +125,21 @@ function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
     return (
       <section
         className="native-subagents-card is-working"
-        aria-label="后台子代理状态"
+        aria-label={tr("后台子代理状态", "Background subagents")}
       >
         <div className="native-subagents-head">
           <LoaderCircle size={13} className="is-spinning" />
-          <strong>后台子代理工作中 · {workingList.length} 个运行中</strong>
-          {finishedCount > 0 && <span> · {finishedCount} 个已完成</span>}
+          <strong>
+            {tr(
+              `后台子代理工作中 · ${workingList.length} 个运行中`,
+              `Background subagents working · ${workingList.length} active`,
+            )}
+          </strong>
+          {finishedCount > 0 && (
+            <span>
+              {tr(` · ${finishedCount} 个已完成`, ` · ${finishedCount} done`)}
+            </span>
+          )}
         </div>
         {body}
       </section>
@@ -140,7 +149,12 @@ function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
     <details className="native-subagents-card">
       <summary className="native-subagents-head">
         <Bot size={13} />
-        <span>子代理记录 · {subagents.length} 个已完成</span>
+        <span>
+          {tr(
+            `子代理记录 · ${subagents.length} 个已完成`,
+            `Subagent history · ${subagents.length} completed`,
+          )}
+        </span>
       </summary>
       {body}
     </details>
@@ -462,10 +476,18 @@ export function NativeConversation({
                 <LoaderCircle size={14} className="is-spinning" />
                 <span>
                   {conversation?.status === "unknown"
-                    ? "正在确认远端状态…"
-                    : conversation?.status === "waiting_permission" ? "等待你的审批或回答…" : conversation?.status === "stopping" ? "正在停止…" : "正在执行本轮任务…"}
+                    ? tr("正在确认远端状态…", "Checking remote status…")
+                    : conversation?.status === "waiting_permission"
+                      ? tr("等待你的审批或回答…", "Waiting for your approval or reply…")
+                      : conversation?.status === "stopping"
+                        ? tr("正在停止…", "Stopping…")
+                        : tr("正在执行本轮任务…", "Running current turn…")}
                 </span>
-                <small>{conversation?.interactive ? "过程消息持续更新" : "完成后返回"}</small>
+                <small>
+                  {conversation?.interactive
+                    ? tr("过程消息持续更新", "Live streaming updates")
+                    : tr("完成后返回", "Returns on completion")}
+                </small>
               </summary>
               <p>
                 {conversation?.interactive ? "可追加消息，当前一轮结束后接着处理；权限请求会在这里等待你的决定。离开页面不会自动批准或停止任务。" : "此任务完成后返回完整回复；离开页面不会中断远端任务。"}
@@ -581,8 +603,14 @@ export function NativeConversation({
         </form>
         <p className="native-note">
           {isLocalReadOnly
-            ? "本机历史只读 · 新建 Claude / Antigravity 会话请选择远程设备"
-            : `${permissionMode === "full" ? "完全访问 · 跳过权限审批 · " : ""}Enter 发送 · Shift + Enter 换行${working && !conversation?.interactive ? " · 回复在本轮结束后显示" : ""}`}
+            ? tr(
+                "本机历史只读 · 新建 Claude / Antigravity 会话请选择远程设备",
+                "Local history is read-only · Choose a remote host for new Claude / Antigravity sessions",
+              )
+            : tr(
+                `${permissionMode === "full" ? "完全访问 · 跳过权限审批 · " : ""}Enter 发送 · Shift + Enter 换行${working && !conversation?.interactive ? " · 回复在本轮结束后显示" : ""}`,
+                `${permissionMode === "full" ? "Full access · Skipping approvals · " : ""}Enter to send · Shift + Enter for newline${working && !conversation?.interactive ? " · Reply displays after turn finishes" : ""}`,
+              )}
         </p>
       </div>
     </section>

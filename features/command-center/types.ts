@@ -63,3 +63,15 @@ export const taskStatus: Record<string, string> = {
   cancelled: "已取消",
   released: "占用已释放",
 };
+
+export const taskStatusEn: Record<string, string> = {
+  queued: "Queued",
+  starting: "Starting",
+  running: "Running",
+  waiting: "Waiting",
+  unknown: "Verify",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  released: "Released",
+};

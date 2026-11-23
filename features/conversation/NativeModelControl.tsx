@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { ChoiceMenu } from "@/components/choice-menu";
+import { useLocale } from "@/lib/i18n";
 import { conversationRequest } from "./use-session-catalog";
 import { NativeModelMenu } from "./NativeModelMenu";
 export function NativeModelControl({
@@ -56,35 +57,42 @@ export function NativeModelControl({
       active = false;
     };
   }, [host, provider, canRead, revision, requestKey]);
+  const { tr } = useLocale();
   const selected = models.find(m => m.id === (value || "default") || m.resolvedModel === value);
   const autoSupport = provider === "antigravity" ? models[0]?.supportsAutoMode : selected?.supportsAutoMode;
   useEffect(() => { onAutoSupportChange?.(autoSupport ?? null); }, [autoSupport, onAutoSupportChange]);
   const efforts = selected?.efforts || [];
-  const effortLabels: Record<string, string> = { low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高" };
+  const effortLabels: Record<string, string> = {
+    low: tr("低", "Low"),
+    medium: tr("中", "Med"),
+    high: tr("高", "High"),
+    xhigh: tr("极高", "XHigh"),
+    max: tr("最高", "Max"),
+  };
   const controls = (
     <div className="native-model-control">
       {["antigravity", "claude"].includes(provider) ? (
         <ChoiceMenu
-          label="下一轮模型"
-          fieldLabel="模型"
+          label={tr("下一轮模型", "Next turn model")}
+          fieldLabel={tr("模型", "Model")}
           value={value}
           onChange={(next) => { onChange(next); onEffortChange?.(""); }}
           disabled={disabled || loading}
           searchable
           options={[
-            { value: "", label: loading ? "读取模型…" : "主机默认" },
+            { value: "", label: loading ? tr("读取模型…", "Loading models…") : tr("主机默认", "Host default") },
             ...(value && !models.some((model) => model.id === value)
-              ? [{ value, label: `${value}（待核验）` }]
+              ? [{ value, label: tr(`${value}（待核验）`, `${value} (unverified)`) }]
               : []),
             ...models.filter(model => model.id !== "default").map((model) => ({ value: model.id, label: model.label })),
           ]}
         />
       ) : (
         <label className="native-model-field">
-          <span>模型</span>
+          <span>{tr("模型", "Model")}</span>
           <input
-            aria-label="下一轮模型"
-            placeholder="默认"
+            aria-label={tr("下一轮模型", "Next turn model")}
+            placeholder={tr("默认", "Default")}
             value={value}
             disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
@@ -92,16 +100,16 @@ export function NativeModelControl({
         </label>
       )}
       {["claude", "antigravity"].includes(provider) && onEffortChange && (
-        <ChoiceMenu label="推理强度" fieldLabel="推理强度" value={provider === "antigravity" ? effort || selected?.currentEffort || "" : effort}
+        <ChoiceMenu label={tr("推理强度", "Reasoning effort")} fieldLabel={tr("推理强度", "Effort")} value={provider === "antigravity" ? effort || selected?.currentEffort || "" : effort}
           onChange={(level) => { onEffortChange(level); if (provider === "antigravity" && selected?.effortModels?.[level]) onChange(selected.effortModels[level]); }} disabled={disabled || loading || !efforts.length}
-          options={[{ value: "", label: !loading && selected && !efforts.length ? "不支持强度" : provider === "antigravity" && !value ? "先选择模型" : "默认强度" },
+          options={[{ value: "", label: !loading && selected && !efforts.length ? tr("不支持强度", "Not supported") : provider === "antigravity" && !value ? tr("先选择模型", "Select model first") : tr("默认强度", "Default effort") },
             ...efforts.map(level => ({ value: level, label: effortLabels[level] || level }))]} />
       )}
       {["antigravity", "claude"].includes(provider) && (
         <button
           type="button"
           className="native-model-refresh"
-          aria-label="刷新模型能力"
+          aria-label={tr("刷新模型能力", "Refresh models")}
           disabled={loading || disabled || !host || host === "@local"}
           onClick={() => setRevision((value) => value + 1)}
         >
@@ -115,5 +123,5 @@ export function NativeModelControl({
       )}
     </div>
   );
-  return compact ? <NativeModelMenu label={loading ? "读取模型…" : selected?.label || value || "主机默认"} effort={effortLabels[effort || selected?.currentEffort || ""] || "默认"} disabled={disabled}>{controls}</NativeModelMenu> : controls;
+  return compact ? <NativeModelMenu label={loading ? tr("读取模型…", "Loading…") : selected?.label || value || tr("主机默认", "Host default")} effort={effortLabels[effort || selected?.currentEffort || ""] || tr("默认", "Default")} disabled={disabled}>{controls}</NativeModelMenu> : controls;
 }

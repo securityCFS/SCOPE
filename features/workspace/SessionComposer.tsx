@@ -185,14 +185,14 @@ export function SessionComposer({
           {slash.panel}
           <textarea
             {...slash.inputProps}
-            aria-label="发送消息"
+            aria-label={tr("发送消息", "Send message")}
             maxLength={20000}
             rows={3}
             value={instructionDraft}
             placeholder={
               selectedAppServerSession
-                ? "继续聊聊，或者交给我一个任务…"
-                : "发送消息到当前会话…"
+                ? tr("继续聊聊，或者交给我一个任务…", "Continue chatting or assign a task…")
+                : tr("发送消息到当前会话…", "Send a message to this session…")
             }
             onChange={(event) => setInstructionDraft(event.target.value)}
             onPaste={(event) => {

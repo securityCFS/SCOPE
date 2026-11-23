@@ -27,16 +27,16 @@
 ## Live Interactive Walkthrough
 
 <p align="center">
-  <img src="./docs/assets/scope-demo.gif" alt="SCOPE interactive demo walkthrough (synthetic fixture data)" width="100%" />
+  <img src="./docs/assets/scope-demo-en.gif" alt="SCOPE interactive demo walkthrough (English UI, synthetic fixture data)" width="100%" />
 </p>
 
 <p align="center">
-  <sub>Recorded from <code>npm run preview:fixture</code> (100% synthetic data): Multi-agent sessions &amp; KaTeX math → Claude live background subagents &amp; approval cards → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
+  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Multi-agent sessions &amp; KaTeX math → Claude live background subagents &amp; approval cards → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
 </p>
 
 | Light Mode (KaTeX · Concurrency Pool · Quota) | Dark Mode (Live Background Subagents · Approvals) |
 | :---: | :---: |
-| <img src="./docs/assets/scope-preview-light.png" alt="SCOPE Light Mode preview" width="100%" /> | <img src="./docs/assets/scope-preview-dark.png" alt="SCOPE Dark Mode preview" width="100%" /> |
+| <img src="./docs/assets/scope-preview-light-en.png" alt="SCOPE Light Mode preview (English UI)" width="100%" /> | <img src="./docs/assets/scope-preview-dark-en.png" alt="SCOPE Dark Mode preview (English UI)" width="100%" /> |
 
 ---
 

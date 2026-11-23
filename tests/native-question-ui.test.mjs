@@ -5,12 +5,14 @@ import {registerHooks} from "node:module";
 import ts from "typescript";
 import {JSDOM} from "jsdom";
 const base = new URL('../features/conversation/',import.meta.url);
+const i18nUrl = new URL('../lib/i18n.tsx',import.meta.url).href;
 const hooks=registerHooks({resolve(specifier,context,next){
+  if (specifier === '@/lib/i18n') return {url:i18nUrl,shortCircuit:true};
   if (context.parentURL?.startsWith(base.href) && specifier.startsWith('./') && !specifier.endsWith('.css')) return {url:new URL(`${specifier}.tsx`,context.parentURL).href,shortCircuit:true};
   return next(specifier,context);
 },load(url,context,next){
   if(url.startsWith(base.href)&&url.endsWith('.css'))return {format:'module',shortCircuit:true,source:''};
-  if(url.startsWith(base.href)&&url.endsWith('.tsx'))return {format:'module',shortCircuit:true,source:ts.transpileModule(readFileSync(new URL(url),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText};
+  if((url.startsWith(base.href)&&url.endsWith('.tsx'))||url===i18nUrl)return {format:'module',shortCircuit:true,source:ts.transpileModule(readFileSync(new URL(url),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText};
   return next(url,context);
 }});
 const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost'});

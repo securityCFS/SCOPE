@@ -29,7 +29,7 @@ export function ResourceOverview({
   tasks: TaskRecord[];
   onSelectHost?: (alias: string) => void;
 }) {
-  const { tr } = useLocale();
+  const { locale, tr } = useLocale();
   const onlineHosts = hosts
     .filter((host) => host.reachable)
     .sort(
@@ -90,7 +90,7 @@ export function ResourceOverview({
               <article className="resource-card center-card" key={host.alias}>
                 <header>
                   <Server size={18} />
-                  <strong>{hostLabel(host.alias)}</strong>
+                  <strong>{hostLabel(host.alias, locale)}</strong>
                   <span className="resource-status online">
                     {tr("在线", "Online")}
                   </span>
@@ -194,7 +194,7 @@ export function ResourceOverview({
                 <div className="resource-offline-item" key={host.alias}>
                   <div>
                     <span className="dot" />
-                    <strong>{hostLabel(host.alias)}</strong>
+                    <strong>{hostLabel(host.alias, locale)}</strong>
                   </div>
                   <p title={host.error || host.inventoryError || ""}>
                     {reason}

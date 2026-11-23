@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChevronDown, LoaderCircle, Terminal, Wrench, Brain, List } from "lucide-react";
 import { MarkdownBody } from "@/features/workspace/shared";
 import type { DialogueEvent } from "@/features/workspace/types";
+import { useLocale } from "@/lib/i18n";
 
 export function ActivityDisclosure({
   events,
@@ -15,6 +16,7 @@ export function ActivityDisclosure({
   host?: string;
   cwd?: string;
 }) {
+  const { tr } = useLocale();
   const [open, setOpen] = useState(false);
   const last = events.at(-1);
   const commands = events.some(event => event.kind === "command");
@@ -23,11 +25,17 @@ export function ActivityDisclosure({
   const Icon = commands ? Terminal : tools ? Wrench : reasoning ? Brain : List;
   const label = active
     ? last?.kind === "command"
-      ? "正在执行命令"
+      ? tr("正在执行命令", "Running command")
       : last?.kind === "tool"
-        ? "正在使用工具"
-        : "正在思考"
-    : commands ? "运行了命令" : tools ? "使用了工具" : reasoning ? "思考过程" : "执行记录";
+        ? tr("正在使用工具", "Using tools")
+        : tr("正在思考", "Thinking")
+    : commands
+      ? tr("运行了命令", "Ran commands")
+      : tools
+        ? tr("使用了工具", "Used tools")
+        : reasoning
+          ? tr("思考过程", "Reasoning")
+          : tr("执行记录", "Activity");
   return (
     <details
       className="conversation-activity"
@@ -43,14 +51,14 @@ export function ActivityDisclosure({
         <div className="conversation-activity-content">
           {events.map((event) => (
             <div key={event.id} className="conversation-tool">
-              <strong>{event.title || event.toolName || "执行记录"}</strong>
+              <strong>{event.title || event.toolName || tr("执行记录", "Activity")}</strong>
               {event.command && (
                 <pre>
                   <code>{event.command}</code>
                 </pre>
               )}
               <MarkdownBody
-                value={event.output || event.text || "暂无输出"}
+                value={event.output || event.text || tr("暂无输出", "No output")}
                 remoteHost={host}
                 remoteCwd={cwd}
               />

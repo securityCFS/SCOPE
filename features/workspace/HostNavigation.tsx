@@ -72,7 +72,7 @@ export function HostNavigation({
     >
       <div className="host-sidebar-head">
         <div>
-          <span>工作区</span>
+          <span>{tr("工作区", "Workspace")}</span>
           <strong>
             {snapshot.summary.online} / {snapshot.summary.hosts}
           </strong>

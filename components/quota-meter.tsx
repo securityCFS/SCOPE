@@ -3,6 +3,7 @@
 import { Gauge, LoaderCircle, RefreshCw } from "lucide-react";
 import "./quota-meter.css";
 import { formatQuotaWindowLabel, quotaHeadline } from "@/lib/account-quota";
+import { useLocale } from "@/lib/i18n";
 import type { AccountQuota, AccountQuotaWindow } from "@/features/workspace/types";
 
 export function quotaTone(
@@ -29,33 +30,37 @@ export function QuotaInlineBadge({
   quota?: AccountQuota | null;
   loading?: boolean;
 }) {
+  const { locale, tr } = useLocale();
   if (loading && !quota) {
     return (
       <span className="quota-inline-badge is-muted">
         <LoaderCircle size={11} className="is-spinning" />
-        测算中
+        {tr("测算中", "Checking")}
       </span>
     );
   }
   const headline = quotaHeadline(quota);
   if (headline) {
-    const label = formatQuotaWindowLabel(headline.windowMinutes);
+    const label = formatQuotaWindowLabel(headline.windowMinutes, locale);
     return (
       <span
         className={`quota-inline-badge is-${quotaTone(headline)}`}
-        title={`${label}剩余 ${headline.remainingPercent}%`}
+        title={tr(
+          `${label}剩余 ${headline.remainingPercent}%`,
+          `${label}: ${headline.remainingPercent}% left`,
+        )}
       >
-        剩余 {headline.remainingPercent}%
+        {tr(`剩余 ${headline.remainingPercent}%`, `${headline.remainingPercent}% left`)}
       </span>
     );
   }
   if (quota?.credits?.unlimited) {
-    return <span className="quota-inline-badge is-ok">无限点数</span>;
+    return <span className="quota-inline-badge is-ok">{tr("无限点数", "Unlimited")}</span>;
   }
   if (quota?.credits?.balance) {
     return (
       <span className="quota-inline-badge is-ok">
-        点数 {quota.credits.balance}
+        {tr(`点数 ${quota.credits.balance}`, `Credits ${quota.credits.balance}`)}
       </span>
     );
   }
@@ -63,20 +68,21 @@ export function QuotaInlineBadge({
 }
 
 function QuotaWindowRow({ win }: { win: AccountQuotaWindow }) {
+  const { locale, tr } = useLocale();
   const tone = quotaTone(win);
-  const label = formatQuotaWindowLabel(win.windowMinutes);
+  const label = formatQuotaWindowLabel(win.windowMinutes, locale);
   const resetStr = formatResetAt(win.resetsAt);
   const detail = win.expired
-    ? "窗口已重置"
+    ? tr("窗口已重置", "Window reset")
     : resetStr
-      ? `重置 ${resetStr}`
-      : `已用 ${win.usedPercent}%`;
+      ? tr(`重置 ${resetStr}`, `Resets ${resetStr}`)
+      : tr(`已用 ${win.usedPercent}%`, `${win.usedPercent}% used`);
   return (
     <div className="quota-window-row">
       <div className="quota-window-top">
         <span>{label}</span>
         <strong className={`quota-value is-${tone}`}>
-          剩余 {win.remainingPercent}%
+          {tr(`剩余 ${win.remainingPercent}%`, `${win.remainingPercent}% left`)}
         </strong>
       </div>
       <div className="quota-progress-track" aria-hidden="true">
@@ -107,6 +113,7 @@ export function QuotaMeterCard({
   emptyNote?: string;
   onRefresh?: () => void;
 }) {
+  const { tr } = useLocale();
   const groups = (quota?.groups || []).filter((group) =>
     Boolean(group && (group.primary || group.secondary)),
   );
@@ -123,7 +130,7 @@ export function QuotaMeterCard({
       <div className="quota-meter-head">
         <span className="quota-meter-title">
           <Gauge size={13} />
-          订阅剩余额度
+          {tr("订阅剩余额度", "Subscription Quota")}
         </span>
         <div className="quota-meter-meta">
           {quota?.planType && quota.planType !== "unknown" && (
@@ -133,13 +140,13 @@ export function QuotaMeterCard({
             <button
               type="button"
               className="quota-refresh-btn"
-              title="刷新订阅额度"
-              aria-label="刷新订阅额度"
+              title={tr("刷新订阅额度", "Refresh quota")}
+              aria-label={tr("刷新订阅额度", "Refresh quota")}
               disabled={loading}
               onClick={onRefresh}
             >
               <RefreshCw size={12} className={loading ? "is-spinning" : ""} />
-              刷新额度
+              {tr("刷新额度", "Refresh")}
             </button>
           )}
         </div>
@@ -180,22 +187,25 @@ export function QuotaMeterCard({
       ) : (
         <p className="quota-empty-note">
           {loading
-            ? "正在读取订阅额度…"
+            ? tr("正在读取订阅额度…", "Loading subscription quota…")
             : error ||
               emptyNote ||
-              "当前未读取到订阅额度窗口（API Key 或离线会话不返回订阅配额）"}
+              tr(
+                "当前未读取到订阅额度窗口（API Key 或离线会话不返回订阅配额）",
+                "No subscription quota windows returned (API key or offline sessions do not expose plan quotas).",
+              )}
         </p>
       )}
 
       {hasCredits && (
         <div className="quota-credits-row">
-          <span>附加点数</span>
+          <span>{tr("附加点数", "Extra Credits")}</span>
           <strong>
             {credits?.unlimited
-              ? "无上限"
+              ? tr("无上限", "Unlimited")
               : credits?.balance
                 ? credits.balance
-                : "可用"}
+                : tr("可用", "Available")}
           </strong>
         </div>
       )}

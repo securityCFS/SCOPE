@@ -167,12 +167,12 @@ export function SessionConversation({
         />
         <p className="conversation-caption">
           {session
-            ? "Enter 发送 · Shift + Enter 换行"
+            ? tr("Enter 发送 · Shift + Enter 换行", "Enter to send · Shift + Enter for newline")
             : agent.pane
-              ? "消息发送到当前终端 · Enter 发送"
+              ? tr("消息发送到当前终端 · Enter 发送", "Send to active terminal · Enter to send")
               : workspace.selectedAgentIsExternalTerminal
-                ? "正在监控原终端会话 · 请在原终端输入"
-                : "恢复会话后即可继续对话"}
+                ? tr("正在监控原终端会话 · 请在原终端输入", "Watching external terminal · Reply in original terminal")
+                : tr("恢复会话后即可继续对话", "Resume session to continue chatting")}
         </p>
       </div>
     </section>

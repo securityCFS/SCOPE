@@ -3,7 +3,7 @@ import "./archive.css";
 import { Archive, ArchiveRestore, RotateCw, Trash2 } from "lucide-react";
 import type { ArchiveClient, ArchiveRecord } from "./use-session-archives";
 import type { WorkbenchClient } from "@/features/command-center/use-workbench";
-import { taskStatus } from "@/features/command-center/types";
+import { taskStatus, taskStatusEn } from "@/features/command-center/types";
 import { AgentLogo } from "@/components/agent-logo";
 import type { CatalogEntry } from "@/features/conversation/use-session-catalog";
 import { useLocale } from "@/lib/i18n";
@@ -27,7 +27,7 @@ export function ArchiveSidebar({
   nativeBusy?: boolean;
   onNativeChange?: (key: string, action: string) => Promise<void>;
 }) {
-  const { tr } = useLocale();
+  const { locale, tr } = useLocale();
   const tasks = (client.state?.tasks || []).filter(
     (t) => t.kind !== "manager" && (host === "all" || t.host === host),
   );
@@ -64,7 +64,7 @@ export function ArchiveSidebar({
                 >
                   <span>{task.prompt}</span>
                   <small>
-                    {taskStatus[task.status]} · {task.host}
+                    {locale === "en" ? taskStatusEn[task.status] || task.status : taskStatus[task.status]} · {task.host}
                   </small>
                 </button>
                 <button

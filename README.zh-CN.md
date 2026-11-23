@@ -27,7 +27,7 @@
 ## 实机交互体验演示
 
 <p align="center">
-  <img src="./docs/assets/scope-demo.gif" alt="SCOPE 实机交互演示（全程脱敏虚拟数据）" width="100%" />
+  <img src="./docs/assets/scope-demo-zh.gif" alt="SCOPE 实机交互演示（中文界面，全程脱敏虚拟数据）" width="100%" />
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@
 
 | 浅色模式（公式渲染 · 常驻并发池 · 额度条） | 深色模式（后台子代理实时追踪 · 交互审批） |
 | :---: | :---: |
-| <img src="./docs/assets/scope-preview-light.png" alt="SCOPE 浅色模式预览" width="100%" /> | <img src="./docs/assets/scope-preview-dark.png" alt="SCOPE 深色模式预览" width="100%" /> |
+| <img src="./docs/assets/scope-preview-light-zh.png" alt="SCOPE 浅色模式预览（中文界面）" width="100%" /> | <img src="./docs/assets/scope-preview-dark-zh.png" alt="SCOPE 深色模式预览（中文界面）" width="100%" /> |
 
 ---
 

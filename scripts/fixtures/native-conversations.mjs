@@ -1,4 +1,5 @@
 /** Native composer fixture: no remote hosts, credentials, or model calls. */
+const isEn = process.env.SCOPE_PREVIEW_LOCALE === "en";
 const now = Date.now();
 const claudeSubagents = [
   {
@@ -27,7 +28,7 @@ const agySubagents = [
     typeName: "research",
     background: true,
     status: "completed",
-    lastAction: "已完成",
+    lastAction: isEn ? "Done" : "已完成",
     updatedAt: now - 45000,
   },
 ];
@@ -39,7 +40,7 @@ const entries = [
     provider: "claude",
     sessionId: "preview-claude",
     cwd: "/workspace/research",
-    title: "Claude 论文修改与审稿核对",
+    title: isEn ? "Claude Paper Revision & Audit" : "Claude 论文修改与审稿核对",
     model: "claude-opus",
     updatedAt: now - 12000,
     managed: true,
@@ -51,7 +52,7 @@ const entries = [
     provider: "antigravity",
     sessionId: "preview-antigravity",
     cwd: "/workspace/research",
-    title: "AGY 多卡消融实验追踪",
+    title: isEn ? "AGY Multi-GPU Ablation Tracker" : "AGY 多卡消融实验追踪",
     model: "gemini-2.5-pro-high",
     updatedAt: now - 30000,
     managed: true,
@@ -76,41 +77,65 @@ const states = new Map(
               id: "preview-question",
               tool: "AskUserQuestion",
               input: {
-                questions: [
-                  {
-                    question: "希望优先完善哪些实验图表与结论？",
-                    multiSelect: true,
-                    options: [
-                      { label: "收敛曲线对比", description: "合并 4 卡训练日志并绘制标准差阴影" },
-                      { label: "消融实验汇总", description: "核对 Table 2 中各基线指标" },
-                      { label: "显存与吞吐统计", description: "补充 A100 训练吞吐与显存峰值" },
+                questions: isEn
+                  ? [
+                      {
+                        question: "Which experimental figures and tables should we finalize first?",
+                        multiSelect: true,
+                        options: [
+                          { label: "Convergence curves", description: "Merge 4-GPU training logs with std shading" },
+                          { label: "Ablation summary", description: "Cross-check baseline scores in Table 2" },
+                          { label: "VRAM & throughput", description: "Add A100 throughput and peak memory stats" },
+                        ],
+                      },
+                      {
+                        question: "Preferred report format?",
+                        options: [{ label: "Concise summary" }, { label: "Detailed Markdown report" }],
+                      },
+                    ]
+                  : [
+                      {
+                        question: "希望优先完善哪些实验图表与结论？",
+                        multiSelect: true,
+                        options: [
+                          { label: "收敛曲线对比", description: "合并 4 卡训练日志并绘制标准差阴影" },
+                          { label: "消融实验汇总", description: "核对 Table 2 中各基线指标" },
+                          { label: "显存与吞吐统计", description: "补充 A100 训练吞吐与显存峰值" },
+                        ],
+                      },
+                      {
+                        question: "希望以什么形式汇报？",
+                        options: [{ label: "简短结论" }, { label: "详细 Markdown 报告" }],
+                      },
                     ],
-                  },
-                  {
-                    question: "希望以什么形式汇报？",
-                    options: [{ label: "简短结论" }, { label: "详细 Markdown 报告" }],
-                  },
-                ],
               },
             }
           : {
               id: "preview-form",
               kind: "acp-form",
-              tool: "提问",
+              tool: isEn ? "Question" : "提问",
               input: {},
-              description: "请选择本轮消融评测需要验证的选项。",
+              description: isEn
+                ? "Select which ablation targets to validate in this sweep."
+                : "请选择本轮消融评测需要验证的选项。",
               fields: [
                 {
                   name: "targets",
-                  title: "需要验证哪些模块？",
+                  title: isEn ? "Which modules should be verified?" : "需要验证哪些模块？",
                   type: "array",
                   required: true,
                   minItems: 1,
-                  options: [
-                    { value: "1", label: "数据增强流水线" },
-                    { value: "2", label: "学习率余弦退火" },
-                    { value: "3", label: "分布式梯度同步" },
-                  ],
+                  options: isEn
+                    ? [
+                        { value: "1", label: "Data augmentation pipeline" },
+                        { value: "2", label: "Cosine LR schedule" },
+                        { value: "3", label: "Distributed gradient sync" },
+                      ]
+                    : [
+                        { value: "1", label: "数据增强流水线" },
+                        { value: "2", label: "学习率余弦退火" },
+                        { value: "3", label: "分布式梯度同步" },
+                      ],
                 },
               ],
             },
@@ -180,7 +205,7 @@ export function nativeConversationFixture(request, response, url, json) {
             supportsAutoMode: false,
           }))
         : [
-            { id: "default", label: "主机默认", efforts: ["low", "high"], supportsAutoMode: true },
+            { id: "default", label: isEn ? "Host default" : "主机默认", efforts: ["low", "high"], supportsAutoMode: true },
             { id: "opus", label: "Opus", efforts: ["low", "high"], supportsAutoMode: true },
           ],
     });
@@ -191,18 +216,31 @@ export function nativeConversationFixture(request, response, url, json) {
     json(response, 200, {
       version: "preview-v1",
       subagents: isClaude ? claudeSubagents : agySubagents,
-      messages: [
-        {
-          id: "1",
-          role: "user",
-          text: "核对四组视觉基线评测指标，保留公式和原始引用，并并行启动后台子代理检查最新 checkpoint。",
-        },
-        {
-          id: "2",
-          role: "assistant",
-          text: "已整理实验描述，并委派 **2 个后台子代理** 同步核查基线与评测脚本。\n\n**新增表述**：\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**关键公式**：`e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\n等待下方确认你希望优先汇总的图表项。",
-        },
-      ],
+      messages: isEn
+        ? [
+            {
+              id: "1",
+              role: "user",
+              text: "Audit the four visual baseline benchmarks, preserve formulas and citations, and spawn background subagents to verify the latest checkpoints.",
+            },
+            {
+              id: "2",
+              role: "assistant",
+              text: "Updated the results narrative and delegated **2 background subagents** to audit baselines and eval scripts in parallel.\n\n**Proposed wording**:\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**Key equation**: `e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\nPlease confirm below which charts you'd like prioritized first.",
+            },
+          ]
+        : [
+            {
+              id: "1",
+              role: "user",
+              text: "核对四组视觉基线评测指标，保留公式和原始引用，并并行启动后台子代理检查最新 checkpoint。",
+            },
+            {
+              id: "2",
+              role: "assistant",
+              text: "已整理实验描述，并委派 **2 个后台子代理** 同步核查基线与评测脚本。\n\n**新增表述**：\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**关键公式**：`e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\n等待下方确认你希望优先汇总的图表项。",
+            },
+          ],
       summaryOnly: false,
       limited: false,
       nextBefore: null,

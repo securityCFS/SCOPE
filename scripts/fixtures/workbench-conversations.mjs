@@ -1,5 +1,6 @@
 /** Representative chat data, deliberately isolated from real hosts and agents. */
 export function createConversationFixture(snapshot, notify) {
+  const isEn = process.env.SCOPE_PREVIEW_LOCALE === "en";
   const chats = new Map();
   const timers = new Map();
   function add(id, host, cwd, title, messages) {
@@ -7,7 +8,7 @@ export function createConversationFixture(snapshot, notify) {
       id: `${id}-${index}`,
       kind,
       text,
-      title: kind === "tool" ? "检查项目结构" : "",
+      title: kind === "tool" ? (isEn ? "Inspect project layout" : "检查项目结构") : "",
       category: kind === "tool" ? "operations" : "dialogue",
       timestamp: new Date(
         Date.now() - (messages.length - index) * 60000,
@@ -73,59 +74,115 @@ export function createConversationFixture(snapshot, notify) {
     snapshot.appServer.sessions.push(session);
     chats.set(`${host}:${id}`, { events, agent, session });
   }
-  add("vision-plan", "lab-gpu", "/workspace/vision", "整理视觉模型的实验计划", [
-    ["user", "帮我整理一下这个项目的实验计划，先把数据和评估方法确定下来。"],
-    [
-      "intermediate",
-      "我先看一下项目结构和已有配置，再把下一步拆成可以直接执行的任务。",
-    ],
-    [
-      "tool",
-      "读取 README、数据配置和评估入口。\n\n这是隔离预览中的示例执行记录。",
-    ],
-    ["tool", "检查训练与评估配置的对应关系。"],
-    [
-      "assistant",
-      "可以先完成三件事：\n\n1. **固定数据划分**：让训练、验证和测试使用同一份清单。\n2. **建立基线**：先跑一个较小模型，确认整个流程能够复现。\n3. **统一评估入口**：记录准确率、耗时和显存，方便比较后续实验。\n\n建议先处理数据配置，完成后再申请训练资源。",
-    ],
-    ["user", "好，先从数据配置开始。每一步的结果都留在这个会话里。"],
-    [
-      "assistant",
-      "好，这个会话就作为实验工作的持续记录。\n\n我会先核对数据目录和划分清单，把需要你确认的内容直接放在对话中。具体命令和输出可以展开“执行过程”查看。\n\n*当前是界面演示，尚未连接真实的远端 Agent。*",
-    ],
-  ]);
-  add("vision-eval", "lab-gpu", "/workspace/vision", "评估脚本与结果记录", [
-    ["user", "把各轮评估结果放在一起，便于比较。"],
-    [
-      "assistant",
-      "可以按模型、数据版本、指标和运行时间来记录。这个会话专门处理评估。\n\n这是隔离预览中的示例对话。",
-    ],
-  ]);
-  add("scope-ui", "build-node", "/workspace/scope", "让项目会话真正成为聊天", [
-    ["user", "左侧按项目组织，点开会话后就能直接继续聊。"],
-    [
-      "assistant",
-      "会话会保留完整消息流，输入框固定在底部。筛选、资源和运行详情放在需要时才打开的工具中。\n\n这是隔离预览中的示例对话。",
-    ],
-  ]);
-  add("math-preview", "lab-gpu", "/workspace/research", "公式显示验证", [
-    ["user", "查看公式预览，保留论文未定义的宏名称。"],
-    ["assistant", [
-      "行内公式：`\\pi`，`H=8`，`e(a)=\\widehat{J}(a)-J^\\beta(a)`。",
-      "",
-      "```latex",
-      "% Eq. (5)",
-      "\\widehat{J}(a)-J^\\pi(a)=e(a)+(1-\\gamma)\\gamma^H E_{s,a}\\Delta V(s_H).",
-      "```",
-      "",
-      "未定义的论文宏保持原名：",
-      "```tex",
-      "\\hJ(\\va)-J^\\pi(\\va)=e(\\va).",
-      "```",
-      "",
-      "程序代码仍然是源码：`session_id`。",
-    ].join("\n")],
-  ]);
+  if (isEn) {
+    add("vision-plan", "lab-gpu", "/workspace/vision", "Vision model experiment roadmap", [
+      ["user", "Help me organize the experiment roadmap for this project, starting with dataset splits and evaluation metrics."],
+      [
+        "intermediate",
+        "Inspecting repository layout and existing configs before breaking down executable milestones.",
+      ],
+      [
+        "tool",
+        "Read README, dataset manifest, and evaluation entrypoints.\n\nSynthetic tool log from isolated preview mode.",
+      ],
+      ["tool", "Verified alignment between training and evaluation configs."],
+      [
+        "assistant",
+        "Let's lock down three foundations first:\n\n1. **Freeze dataset splits**: share one manifest across train, val, and test.\n2. **Establish a compact baseline**: run a small model end-to-end to confirm reproducibility.\n3. **Unify evaluation metrics**: log accuracy, latency, and peak VRAM for apples-to-apples comparisons.\n\nI recommend finalizing the dataset config before reserving multi-GPU nodes.",
+      ],
+      ["user", "Sounds good—start with the dataset config and keep every milestone logged in this session."],
+      [
+        "assistant",
+        "Got it. This session will serve as the persistent experiment log.\n\nI'll verify the dataset paths and split manifests first, and surface any confirmation prompts inline. Expand \"Used tools\" anytime to inspect commands and raw outputs.\n\n*Isolated UI preview — no remote agents or credentials connected.*",
+      ],
+    ]);
+    add("vision-eval", "lab-gpu", "/workspace/vision", "Benchmark scripts & metric logs", [
+      ["user", "Aggregate evaluation metrics across runs so they are easy to compare."],
+      [
+        "assistant",
+        "We can index runs by model, dataset revision, metric score, and wall-clock time. This session tracks all evaluation runs.\n\nSynthetic conversation from isolated preview mode.",
+      ],
+    ]);
+    add("scope-ui", "build-node", "/workspace/scope", "Project-native conversation workspace", [
+      ["user", "Organize sessions by project on the left so I can resume any run in one click."],
+      [
+        "assistant",
+        "Each session preserves its full message feed with a sticky composer below. Filters, GPU telemetry, and diagnostics stay tucked away until needed.\n\nSynthetic conversation from isolated preview mode.",
+      ],
+    ]);
+    add("math-preview", "lab-gpu", "/workspace/research", "LaTeX & equation rendering check", [
+      ["user", "Verify math preview while preserving custom paper macros."],
+      ["assistant", [
+        "Inline math: `\\pi`, `H=8`, `e(a)=\\widehat{J}(a)-J^\\beta(a)`.",
+        "",
+        "```latex",
+        "% Eq. (5)",
+        "\\widehat{J}(a)-J^\\pi(a)=e(a)+(1-\\gamma)\\gamma^H E_{s,a}\\Delta V(s_H).",
+        "```",
+        "",
+        "Undefined paper macros stay intact:",
+        "```tex",
+        "\\hJ(\\va)-J^\\pi(\\va)=e(\\va).",
+        "```",
+        "",
+        "Code identifiers remain code: `session_id`.",
+      ].join("\n")],
+    ]);
+  } else {
+    add("vision-plan", "lab-gpu", "/workspace/vision", "整理视觉模型的实验计划", [
+      ["user", "帮我整理一下这个项目的实验计划，先把数据和评估方法确定下来。"],
+      [
+        "intermediate",
+        "我先看一下项目结构和已有配置，再把下一步拆成可以直接执行的任务。",
+      ],
+      [
+        "tool",
+        "读取 README、数据配置和评估入口。\n\n这是隔离预览中的示例执行记录。",
+      ],
+      ["tool", "检查训练与评估配置的对应关系。"],
+      [
+        "assistant",
+        "可以先完成三件事：\n\n1. **固定数据划分**：让训练、验证和测试使用同一份清单。\n2. **建立基线**：先跑一个较小模型，确认整个流程能够复现。\n3. **统一评估入口**：记录准确率、耗时和显存，方便比较后续实验。\n\n建议先处理数据配置，完成后再申请训练资源。",
+      ],
+      ["user", "好，先从数据配置开始。每一步的结果都留在这个会话里。"],
+      [
+        "assistant",
+        "好，这个会话就作为实验工作的持续记录。\n\n我会先核对数据目录和划分清单，把需要你确认的内容直接放在对话中。具体命令和输出可以展开“执行过程”查看。\n\n*当前是界面演示，尚未连接真实的远端 Agent。*",
+      ],
+    ]);
+    add("vision-eval", "lab-gpu", "/workspace/vision", "评估脚本与结果记录", [
+      ["user", "把各轮评估结果放在一起，便于比较。"],
+      [
+        "assistant",
+        "可以按模型、数据版本、指标和运行时间来记录。这个会话专门处理评估。\n\n这是隔离预览中的示例对话。",
+      ],
+    ]);
+    add("scope-ui", "build-node", "/workspace/scope", "让项目会话真正成为聊天", [
+      ["user", "左侧按项目组织，点开会话后就能直接继续聊。"],
+      [
+        "assistant",
+        "会话会保留完整消息流，输入框固定在底部。筛选、资源和运行详情放在需要时才打开的工具中。\n\n这是隔离预览中的示例对话。",
+      ],
+    ]);
+    add("math-preview", "lab-gpu", "/workspace/research", "公式显示验证", [
+      ["user", "查看公式预览，保留论文未定义的宏名称。"],
+      ["assistant", [
+        "行内公式：`\\pi`，`H=8`，`e(a)=\\widehat{J}(a)-J^\\beta(a)`。",
+        "",
+        "```latex",
+        "% Eq. (5)",
+        "\\widehat{J}(a)-J^\\pi(a)=e(a)+(1-\\gamma)\\gamma^H E_{s,a}\\Delta V(s_H).",
+        "```",
+        "",
+        "未定义的论文宏保持原名：",
+        "```tex",
+        "\\hJ(\\va)-J^\\pi(\\va)=e(\\va).",
+        "```",
+        "",
+        "程序代码仍然是源码：`session_id`。",
+      ].join("\n")],
+    ]);
+  }
   snapshot.appServer.connections = snapshot.hosts.map((h) => ({
     host: h.alias,
     status: "connected",

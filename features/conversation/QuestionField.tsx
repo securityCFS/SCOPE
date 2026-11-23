@@ -1,5 +1,6 @@
 "use client";
 import { useId } from "react";
+import { useLocale } from "@/lib/i18n";
 import "./question-field.css";
 
 export type QuestionChoice = { label: string; description?: string; value?: string };
@@ -15,10 +16,11 @@ export function QuestionField({ title, options = [], multiple = false, disabled 
   title: string; options?: QuestionChoice[]; multiple?: boolean; disabled?: boolean;
   allowOther?: boolean; secret?: boolean; value: QuestionValue; onChange: (value: QuestionValue) => void;
 }) {
+  const { tr } = useLocale();
   const id = useId();
   return <fieldset className="scope-question" disabled={disabled}>
     <legend>{title}</legend>
-    {multiple && <small className="scope-question-hint">可多选</small>}
+    {multiple && <small className="scope-question-hint">{tr("可多选", "Multi-select")}</small>}
     <div className="scope-question-options">
       {options.map((option, index) => {
         const key = option.value ?? option.label;
@@ -32,9 +34,9 @@ export function QuestionField({ title, options = [], multiple = false, disabled 
       })}
     </div>
     {(allowOther || !options.length) && <label className="scope-question-other">
-      <span>{options.length ? "其他回答" : "你的回答"}</span>
-      <input type={secret ? "password" : "text"} autoComplete="off" aria-label={`${title} · 其他回答`}
-        value={value.other} maxLength={10000} placeholder={multiple ? "也可以补充自己的答案" : "输入自己的答案"}
+      <span>{options.length ? tr("其他回答", "Other") : tr("你的回答", "Your answer")}</span>
+      <input type={secret ? "password" : "text"} autoComplete="off" aria-label={tr(`${title} · 其他回答`, `${title} · Other`)}
+        value={value.other} maxLength={10000} placeholder={multiple ? tr("也可以补充自己的答案", "Or type a custom answer") : tr("输入自己的答案", "Type your answer")}
         onChange={event => onChange({ selected: multiple ? value.selected : [], other: event.target.value })} />
     </label>}
   </fieldset>;

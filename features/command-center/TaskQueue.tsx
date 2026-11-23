@@ -2,7 +2,8 @@
 import { MarkdownBody } from "@/features/workspace/shared";
 import { AgentLogo } from "@/components/agent-logo";
 import { ArrowUpRight, CheckCircle2, Clock3, Plus } from "lucide-react";
-import { taskStatus, type TaskRecord } from "./types";
+import { useLocale } from "@/lib/i18n";
+import { taskStatus, taskStatusEn, type TaskRecord } from "./types";
 import type { WorkbenchClient } from "./use-workbench";
 
 export function TaskQueue({
@@ -16,12 +17,13 @@ export function TaskQueue({
   onNew?: () => void;
   onOpenSession: (host: string, id: string) => void;
 }) {
+  const { locale, tr } = useLocale();
   return (
-    <section className="task-queue" aria-label="跨项目任务队列">
+    <section className="task-queue" aria-label={tr("跨项目任务队列", "Cross-project task queue")}>
       <header className="queue-heading">
         <div>
           <h2>
-            任务队列{" "}
+            {tr("任务队列", "Task Queue")}{" "}
             <span>
               {
                 tasks.filter(
@@ -33,17 +35,17 @@ export function TaskQueue({
               }
             </span>
           </h2>
-          <p>每项工作都有明确的去向和结果。</p>
+          <p>{tr("每项工作都有明确的去向和结果。", "Every queued job has a clear host and outcome.")}</p>
         </div>
         {onNew && <button className="center-secondary" onClick={onNew}>
-          <Plus size={15} /> 派发任务
+          <Plus size={15} /> {tr("派发任务", "Dispatch task")}
         </button>}
       </header>
       {!tasks.length && (
         <div className="queue-empty">
           <CheckCircle2 size={22} />
-          <strong>这里还很安静</strong>
-          <p>{onNew ? "开始一个任务，或让总调度帮你规划下一步。" : "实验任务队列未启用；现有执行记录仍可查看。"}</p>
+          <strong>{tr("这里还很安静", "All quiet here")}</strong>
+          <p>{onNew ? tr("开始一个任务，或让总调度帮你规划下一步。", "Dispatch a task or ask the coordinator to plan the next step.") : tr("实验任务队列未启用；现有执行记录仍可查看。", "Task queue is disabled; previous runs remain inspectable.")}</p>
         </div>
       )}
       {[...tasks].reverse().map((task) => (
@@ -52,7 +54,7 @@ export function TaskQueue({
             <AgentLogo provider={task.provider} />
             <div>
               <strong>
-                {task.kind === "manager" ? "总调度 · " : ""}
+                {task.kind === "manager" ? tr("总调度 · ", "Manager · ") : ""}
                 {task.prompt.slice(0, 100)}
               </strong>
               <small>
@@ -61,7 +63,9 @@ export function TaskQueue({
               </small>
             </div>
             <span className="task-status-label">
-              {taskStatus[task.status] || task.status}
+              {locale === "en"
+                ? taskStatusEn[task.status] || task.status
+                : taskStatus[task.status] || task.status}
             </span>
           </summary>
           <div className="queue-task-detail">

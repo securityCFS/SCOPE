@@ -16,6 +16,7 @@ import { QuotaMeterCard, quotaTone } from "@/components/quota-meter";
 import { SessionProfileControl } from "@/components/session-profile-control";
 import { normalizeAccountQuota, quotaHeadline } from "@/lib/account-quota";
 import { LOCAL_HOST } from "@/lib/execution-host";
+import { useLocale } from "@/lib/i18n";
 import {
   bridgeUrl,
   managementKey,
@@ -25,7 +26,7 @@ import {
 import type { AccountQuota } from "@/features/workspace/types";
 import type { WorkspaceController } from "@/features/workspace/use-workspace-controller";
 
-const effortNames: Record<string, string> = {
+const effortNamesZh: Record<string, string> = {
   none: "无",
   minimal: "最低",
   low: "低",
@@ -35,11 +36,23 @@ const effortNames: Record<string, string> = {
   max: "最高",
   ultra: "极限",
 };
+const effortNamesEn: Record<string, string> = {
+  none: "None",
+  minimal: "Min",
+  low: "Low",
+  medium: "Med",
+  high: "High",
+  xhigh: "XHigh",
+  max: "Max",
+  ultra: "Ultra",
+};
 export function ComposerControls({
   workspace,
 }: {
   workspace: WorkspaceController;
 }) {
+  const { locale, tr } = useLocale();
+  const effortNames = locale === "en" ? effortNamesEn : effortNamesZh;
   const agent = workspace.selectedAgent;
   const session = workspace.selectedAppServerSession;
   const [panel, setPanel] = useState<"model" | "permission" | "account" | null>(
@@ -202,18 +215,18 @@ export function ComposerControls({
       <button
         type="button"
         className={`composer-permission ${current.yolo ? "full-access" : ""}`}
-        aria-label="选择权限"
+        aria-label={tr("选择权限", "Select permissions")}
         aria-expanded={panel === "permission"}
         onClick={() => toggle("permission")}
       >
         {current.yolo ? <Shield size={14} /> : <ShieldCheck size={14} />}
-        <span>{current.yolo ? "完全访问" : "工作区权限"}</span>
+        <span>{current.yolo ? tr("完全访问", "Full access") : tr("工作区权限", "Workspace")}</span>
         <ChevronDown size={12} />
       </button>
       <button
         type="button"
         className={`composer-quota is-${quotaTone(headline)}`}
-        aria-label="查看账号剩余额度"
+        aria-label={tr("查看账号剩余额度", "View account quota")}
         aria-expanded={panel === "account"}
         onClick={() => toggle("account")}
       >
@@ -224,25 +237,25 @@ export function ComposerControls({
         )}
         <span>
           {headline
-            ? `剩余 ${headline.remainingPercent}%`
+            ? tr(`剩余 ${headline.remainingPercent}%`, `${headline.remainingPercent}% left`)
             : effectiveQuota?.credits?.unlimited
-              ? "无限额度"
+              ? tr("无限额度", "Unlimited")
               : effectiveQuota?.credits?.balance
-                ? `点数 ${effectiveQuota.credits.balance}`
+                ? tr(`点数 ${effectiveQuota.credits.balance}`, `Credits ${effectiveQuota.credits.balance}`)
                 : quotaLoading
-                  ? "额度…"
-                  : "额度"}
+                  ? tr("额度…", "Quota…")
+                  : tr("额度", "Quota")}
         </span>
       </button>
       <button
         type="button"
         className="composer-model"
-        aria-label="选择模型与推理强度"
+        aria-label={tr("选择模型与推理强度", "Select model & reasoning effort")}
         aria-expanded={panel === "model"}
         onClick={() => toggle("model")}
       >
         {busy ? <LoaderCircle size={14} className="is-spinning" /> : null}
-        <span>{selected?.displayName || current.model || "选择模型"}</span>
+        <span>{selected?.displayName || current.model || tr("选择模型", "Select model")}</span>
         <small>{effortNames[current.effort] || current.effort}</small>
         <ChevronDown size={12} />
       </button>

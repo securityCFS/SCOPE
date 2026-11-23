@@ -9,12 +9,14 @@ import { beginDialogueRefresh, failDialogueRefresh } from "../lib/dialogue-refre
 const sourceUrl = new URL("../components/markdown-body.tsx", import.meta.url).href;
 const formulaUrl = new URL("../components/formula-preview.tsx", import.meta.url).href;
 const formulaCssUrl = new URL("../components/formula-preview.css", import.meta.url).href;
+const i18nUrl = new URL("../lib/i18n.tsx", import.meta.url).href;
 const hooks = registerHooks({ resolve(specifier, context, nextResolve) {
   if (context.parentURL === sourceUrl && specifier === "./formula-preview") return { url: formulaUrl, shortCircuit: true };
+  if (specifier === "@/lib/i18n") return { url: i18nUrl, shortCircuit: true };
   return nextResolve(specifier, context);
 }, load(url, context, nextLoad) {
   if (url === formulaCssUrl) return { format: "module", shortCircuit: true, source: "" };
-  if (url !== sourceUrl && url !== formulaUrl) return nextLoad(url, context);
+  if (url !== sourceUrl && url !== formulaUrl && url !== i18nUrl) return nextLoad(url, context);
   return { format: "module", shortCircuit: true, source: ts.transpileModule(readFileSync(new URL(url), "utf8"), {
     compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText };
