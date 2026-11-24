@@ -16,7 +16,13 @@ export function remoteBootstrapRoutes({ bootstrap, readJsonBody, jsonResponse })
         if (action === "inspect") {
           jsonResponse(response, 200, await bootstrap.inspect(host));
         } else if (action === "sync-protocol") {
-          jsonResponse(response, 200, await bootstrap.syncProtocol(host));
+          jsonResponse(
+            response,
+            200,
+            await bootstrap.syncProtocol(host, {
+              operatorName: body.operatorName,
+            }),
+          );
         } else if (action === "deploy") {
           jsonResponse(
             response,
@@ -25,6 +31,7 @@ export function remoteBootstrapRoutes({ bootstrap, readJsonBody, jsonResponse })
               remotePort: body.remotePort,
               registerMcp: body.registerMcp !== false,
               injectProtocol: body.injectProtocol !== false,
+              operatorName: body.operatorName,
             }),
           );
         } else if (action === "remove") {

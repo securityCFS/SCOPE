@@ -113,7 +113,7 @@ npm run scope
 
 Open **http://localhost:3000/**. Both the Web UI (`3000`) and Bridge (`4815`) bind strictly to `127.0.0.1`.
 
-> Want to preview the full UI locally without connecting any SSH hosts? Run `SCOPE_PREVIEW_LOCALE=en npm run preview:fixture` (or `scope preview --en`) and open `http://127.0.0.2:3001/`.
+> Want to preview the full UI locally without connecting any SSH hosts? Run `SCOPE_PREVIEW_LOCALE=en npm run preview:fixture` (or `scope preview --en`) and open `http://127.0.0.1:3001/`.
 
 ---
 

@@ -113,7 +113,7 @@ with open(state / (provider + '.lock'), 'a') as lock:
         if action == 'update' and not executable: raise RuntimeError('尚未安装，请先安装')
         current_version = re.search(r'(\d+)\.(\d+)\.(\d+)', installed or '')
         if latest and current_version and tuple(map(int, current_version.groups())) > tuple(map(int, latest.split('-')[0].split('.'))): raise RuntimeError('已安装版本高于当前发布版本，拒绝降级；请检查安装渠道')
-        print('正在安装' if action == 'install' else '正在更新', provider, flush=True)
+        print('正在安装' if action == 'install' else '正在更新', provider, f'({package}@{latest or "latest"})' if package else '', '— 下载安装包可能需要 30–120 秒，请稍候…', flush=True)
         if provider == 'claude' and not executable:
             with tempfile.TemporaryDirectory(prefix='scope-claude-install-') as temporary:
                 installer = str(Path(temporary) / 'install.sh')
@@ -121,10 +121,14 @@ with open(state / (provider + '.lock'), 'a') as lock:
                 run(['bash', installer], 600)
             executable = str(Path.home() / '.local/bin/claude')
         elif native_claude:
-            run([executable, 'update'], 600)
+            out = run([executable, 'update'], 600)
+            if out:
+                print(out[-1000:], flush=True)
         else:
             target = latest or 'latest'
-            run([npm, 'install', '-g', package + '@' + target, '--fetch-timeout=60000', '--fetch-retries=1', '--no-audit', '--no-fund'], 600)
+            out = run([npm, 'install', '-g', package + '@' + target, '--fetch-timeout=60000', '--fetch-retries=1', '--no-audit', '--no-fund'], 600)
+            if out:
+                print(out[-1000:], flush=True)
             executable = shutil.which(config['executable'])
         if not executable: raise RuntimeError('安装完成但 PATH 中找不到命令，请检查 npm prefix 和 PATH')
         new_ver_out = run([executable, '--version'], 30)

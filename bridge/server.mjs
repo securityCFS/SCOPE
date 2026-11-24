@@ -3077,6 +3077,7 @@ await tunnelManager.start();
 const remoteBootstrap = new RemoteBootstrapService({
   run: runSshCommand,
   getHost: (alias) => snapshot.hosts.find((host) => host.alias === alias),
+  getOperatorName: () => managementState.operatorName,
   tunnels: tunnelManager,
 });
 const handleEmail = emailRoutes({

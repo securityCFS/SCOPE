@@ -175,10 +175,11 @@ test("syncLocalScopeProtocol idempotently injects LaTeX, GFM table, media, and f
   await mkdir(path.join(fakeHome, ".codex"), { recursive: true });
   await writeFile(path.join(fakeHome, ".codex", "AGENTS.md"), "# User Codex Rules\n\nKeep me intact.\n", "utf8");
 
-  const first = await syncLocalScopeProtocol(fakeHome);
+  const first = await syncLocalScopeProtocol(fakeHome, { operatorName: "Alice" });
   assert.equal(first.codex, true);
   assert.equal(first.claude, true);
   assert.equal(first.antigravity, true);
+  assert.equal(first.operatorName, "Alice");
   assert.equal(first.files.length, 3);
 
   const codexText = await readFile(path.join(fakeHome, ".codex", "AGENTS.md"), "utf8");
@@ -189,6 +190,7 @@ test("syncLocalScopeProtocol idempotently injects LaTeX, GFM table, media, and f
   for (const text of [codexText, claudeText, agyText]) {
     assert.ok(text.includes(SCOPE_PROTOCOL_BEGIN));
     assert.ok(text.includes(SCOPE_PROTOCOL_END));
+    assert.match(text, /Address the user as \*\*Alice\*\*/);
     assert.match(text, /LaTeX/i);
     assert.match(text, /Markdown Tables/i);
     assert.match(text, /file:\/\/\//);
@@ -197,8 +199,13 @@ test("syncLocalScopeProtocol idempotently injects LaTeX, GFM table, media, and f
   }
 
   // Idempotent on second run: no duplicate blocks.
-  await syncLocalScopeProtocol(fakeHome);
+  await syncLocalScopeProtocol(fakeHome, { operatorName: "Alice" });
   const codexAgain = await readFile(path.join(fakeHome, ".codex", "AGENTS.md"), "utf8");
   assert.equal(codexAgain.split(SCOPE_PROTOCOL_BEGIN).length - 1, 1);
   assert.equal(codexAgain, codexText);
+
+  // Generic default "Operator" omits the personalized operator line cleanly.
+  await syncLocalScopeProtocol(fakeHome, { operatorName: "Operator" });
+  const codexGeneric = await readFile(path.join(fakeHome, ".codex", "AGENTS.md"), "utf8");
+  assert.doesNotMatch(codexGeneric, /Address the user as/);
 });

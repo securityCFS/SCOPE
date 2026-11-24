@@ -205,6 +205,23 @@ export async function startProductionUiServer({
           passThroughOnException() {},
         },
       );
+      const customBridgePort = Number(process.env.SCOPE_BRIDGE_PORT || 4815);
+      const contentType = rendered.headers.get("content-type") || "";
+      if (
+        Number.isInteger(customBridgePort) &&
+        customBridgePort !== 4815 &&
+        contentType.includes("text/html")
+      ) {
+        const html = await rendered.text();
+        const injected = html.replace(
+          /<head(\b[^>]*)>/i,
+          `<head$1><meta name="scope-bridge-url" content="http://127.0.0.1:${customBridgePort}">`,
+        );
+        const headers = new Headers(rendered.headers);
+        headers.delete("content-length");
+        await sendWebResponse(new Response(injected, { status: rendered.status, headers }), response);
+        return;
+      }
       await sendWebResponse(rendered, response);
     } catch (error) {
       console.error(`[scope-ui] ${error instanceof Error ? error.stack : error}`);

@@ -69,6 +69,14 @@ export function parseGpuKey(value: string) {
 
 export function bridgeUrl(path: string) {
   if (typeof window === "undefined") return `${LOCAL_BRIDGE}${path}`;
+  const override = document
+    .querySelector<HTMLMetaElement>('meta[name="scope-bridge-url"]')
+    ?.content?.trim();
+  if (override) {
+    return override === "/scope-api"
+      ? `/scope-api${path}`
+      : `${override.replace(/\/+$/, "")}${path}`;
+  }
   const hostname = window.location.hostname;
   const local =
     hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";

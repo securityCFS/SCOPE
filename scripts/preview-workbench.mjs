@@ -277,13 +277,16 @@ const archives = sessionArchiveService({
   },
 });
 const archiveRoute = archiveRoutes(archives, { jsonResponse, readJsonBody });
-const ui = await startProductionUiServer({ host: "127.0.0.1", port: 3002 });
+const previewHost = process.env.SCOPE_PREVIEW_HOST || "127.0.0.1";
+const previewPort = Number(process.env.SCOPE_PREVIEW_PORT || 3001);
+const ui = await startProductionUiServer({ host: "127.0.0.1", port: 0 });
+const uiPort = ui.address().port;
 const createdDirectories = new Map();
 const fixtureImageBytes = await readFile(new URL("./fixtures/media/convergence.png", import.meta.url));
 const fixtureVideoBytes = await readFile(new URL("./fixtures/media/rollout_demo.mp4", import.meta.url));
 const preview = createServer(async (request, response) => {
   try {
-    const url = new URL(request.url, "http://127.0.0.2:3001");
+    const url = new URL(request.url, `http://${previewHost}:${previewPort}`);
     if (url.pathname === "/scope-image-api") {
       response.writeHead(200, {
         "content-type": "image/png",
@@ -625,23 +628,31 @@ const preview = createServer(async (request, response) => {
         });
       return jsonResponse(response, 200, {});
     }
-    const upstream = await fetch(`http://127.0.0.1:3002${request.url}`);
-    response.writeHead(
-      upstream.status,
-      Object.fromEntries(
-        [...upstream.headers].filter(
-          ([key]) => !["content-encoding", "content-length"].includes(key),
-        ),
+    const upstream = await fetch(`http://127.0.0.1:${uiPort}${request.url}`);
+    const outHeaders = Object.fromEntries(
+      [...upstream.headers].filter(
+        ([key]) => !["content-encoding", "content-length"].includes(key),
       ),
     );
+    const contentType = upstream.headers.get("content-type") || "";
+    if (contentType.includes("text/html")) {
+      const html = (await upstream.text()).replace(
+        /<head(\b[^>]*)>/i,
+        '<head$1><meta name="scope-bridge-url" content="/scope-api">',
+      );
+      response.writeHead(upstream.status, outHeaders);
+      response.end(html);
+      return;
+    }
+    response.writeHead(upstream.status, outHeaders);
     response.end(Buffer.from(await upstream.arrayBuffer()));
   } catch (error) {
     jsonResponse(response, 500, { error: error.message });
   }
 });
-preview.listen(3001, "127.0.0.2", () =>
+preview.listen(previewPort, previewHost, () =>
   console.log(
-    "Isolated preview: http://127.0.0.2:3001 (synthetic data, no SSH; temporary state: " +
+    `Isolated preview: http://${previewHost}:${previewPort} (synthetic data, no SSH; temporary state: ` +
       dir +
       ")",
   ),

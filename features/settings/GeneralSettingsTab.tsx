@@ -25,9 +25,13 @@ export function GeneralSettingsTab({
   onSaveOperatorName?: (name: string) => Promise<void>;
 }) {
   const { tr } = useLocale();
-  const [nameDraft, setNameDraft] = useState(operatorName);
+  const [nameEdit, setNameEdit] = useState<{ base: string; value: string } | null>(null);
+  const nameDraft = nameEdit?.base === operatorName ? nameEdit.value : operatorName;
+  const setNameDraft = (value: string) => setNameEdit({ base: operatorName, value });
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSaved, setNameSaved] = useState("");
+  const [protoSyncing, setProtoSyncing] = useState(false);
+  const [protoNotice, setProtoNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -110,6 +114,63 @@ export function GeneralSettingsTab({
     }
   }
 
+  async function syncNameToAgentRules() {
+    const trimmed = nameDraft.trim();
+    if (!trimmed || protoSyncing) return;
+    setProtoSyncing(true);
+    setProtoNotice(null);
+    try {
+      if (onSaveOperatorName && trimmed !== operatorName) {
+        await onSaveOperatorName(trimmed);
+      }
+      const targets = [
+        LOCAL_HOST,
+        ...hosts.filter((h) => h.alias !== LOCAL_HOST && h.reachable).map((h) => h.alias),
+      ];
+      let okCount = 0;
+      const failed: string[] = [];
+      for (const host of targets) {
+        try {
+          const response = await fetch(bridgeUrl("/api/remote-bootstrap"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              host,
+              action: "sync-protocol",
+              operatorName: trimmed,
+            }),
+          });
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${response.status}`);
+          }
+          okCount++;
+        } catch (error) {
+          failed.push(`${hostLabel(host)}: ${(error as Error).message}`);
+        }
+      }
+      setProtoNotice(
+        failed.length
+          ? {
+              kind: "error",
+              text: tr(
+                `已同步 ${okCount}/${targets.length} 台设备；失败：${failed.join("；")}`,
+                `Synced ${okCount}/${targets.length} hosts; failed: ${failed.join("; ")}`,
+              ),
+            }
+          : {
+              kind: "success",
+              text: tr(
+                `已将用户名「${trimmed}」与 SCOPE 协议写入 ${okCount} 台设备的 AGENTS.md / CLAUDE.md / GEMINI.md。`,
+                `Synced "${trimmed}" and the SCOPE protocol into AGENTS.md / CLAUDE.md / GEMINI.md on ${okCount} host(s).`,
+              ),
+            },
+      );
+    } finally {
+      setProtoSyncing(false);
+    }
+  }
+
   return (
     <div className="settings-hub-body">
       <div className="settings-card">
@@ -121,8 +182,8 @@ export function GeneralSettingsTab({
             </h2>
             <p>
               {tr(
-                "用于界面显示与邮件通知称呼，仅保存在本机 .scope/state.json。",
-                "Shown in the topbar and notification titles. Stored locally in .scope/state.json.",
+                "用于界面显示与邮件通知称呼，并会在同步 SCOPE 协议时写入 Codex (AGENTS.md)、Claude (CLAUDE.md) 与 Antigravity (GEMINI.md)，仅保存在本机 .scope/state.json。",
+                "Shown in the topbar, notifications, and injected into Codex (AGENTS.md), Claude (CLAUDE.md), and Antigravity (GEMINI.md) when syncing the SCOPE protocol. Stored locally in .scope/state.json.",
               )}
             </p>
           </div>
@@ -150,8 +211,22 @@ export function GeneralSettingsTab({
               {tr("保存名称", "Save name")}
             </button>
           )}
+          <button
+            type="button"
+            className="center-secondary"
+            disabled={protoSyncing || !nameDraft.trim()}
+            onClick={() => void syncNameToAgentRules()}
+          >
+            <RefreshCw size={14} className={protoSyncing ? "is-spinning" : ""} />
+            {protoSyncing
+              ? tr("正在写入三端协议…", "Syncing rules…")
+              : tr("写入三端 AGENTS.md", "Sync to AGENTS.md")}
+          </button>
           {nameSaved && <span className="settings-badge ok">{nameSaved}</span>}
         </div>
+        {protoNotice && (
+          <p className={`settings-status-banner ${protoNotice.kind}`}>{protoNotice.text}</p>
+        )}
       </div>
 
       <div className="settings-card">

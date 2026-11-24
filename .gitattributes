@@ -1,5 +1,4 @@
-* text=auto eol=lf
-*.png binary
-*.jpg binary
-*.ico binary
-*.woff2 binary
+* text=auto
+bin/*.mjs text eol=lf
+*.sh text eol=lf
+*.py text eol=lf

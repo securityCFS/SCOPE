@@ -113,7 +113,7 @@ npm run scope
 
 打开 **http://localhost:3000/**。前端（`3000`）与 Bridge（`4815`）默认只监听 `127.0.0.1`。
 
-> 想先免配 SSH 体验完整界面？直接运行 `npm run preview:fixture`（或 `scope preview`），然后访问 `http://127.0.0.2:3001/`。
+> 想先免配 SSH 体验完整界面？直接运行 `npm run preview:fixture`（或 `scope preview`），然后访问 `http://127.0.0.1:3001/`。
 
 ---
 

@@ -5,7 +5,19 @@ import { LOCAL_HOST } from "../../lib/execution-host.js";
 import { shellQuote } from "../transport/ssh-command.mjs";
 import { MAINTAINED_PROVIDERS, installCommand } from "./install-command.mjs";
 
-/** Reuse the durable remote spool; a Bridge restart observes, never relaunches. */
+function cleanRemoteLog(stdout, stderr) {
+  const combined = [stdout, stderr].filter(Boolean).join("\n");
+  return combined
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !/^bash: cannot set terminal process group \(\d+\): Inappropriate ioctl for device$/.test(line.trim()) &&
+        line.trim() !== "bash: no job control in this shell",
+    )
+    .join("\n")
+    .trim()
+    .slice(-8000);
+}
 export class AgentMaintenance {
   constructor({ directory, run, getHost, settings }) {
     Object.assign(this, { directory, run, getHost, settings });
@@ -110,10 +122,7 @@ export class AgentMaintenance {
       const job = this.jobs.find((j) => j.id === id);
       if (!job || ["completed", "failed"].includes(job.status)) return;
       job.status = result.status;
-      job.log = [result.stdout, result.stderr]
-        .filter(Boolean)
-        .join("\n")
-        .slice(-8000);
+      job.log = cleanRemoteLog(result.stdout, result.stderr);
       job.error =
         result.error ||
         (result.status === "failed"

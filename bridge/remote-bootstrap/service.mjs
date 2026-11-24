@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { LOCAL_HOST } from "../../lib/execution-host.js";
 import {
   SCOPE_PROTOCOL_BEGIN,
-  SCOPE_PROTOCOL_BLOCK,
   SCOPE_PROTOCOL_END,
+  buildScopeProtocolBlock,
   syncLocalScopeProtocol,
 } from "./scope-protocol.mjs";
 
@@ -181,14 +181,15 @@ const COMPLETION_BLOCK = [
   "<!-- SCOPE_COMPLETION_EMAIL_END -->",
 ].join("\n");
 
-function buildSyncProtocolScript() {
+function buildSyncProtocolScript({ operatorName = "" } = {}) {
+  const protocolBlock = buildScopeProtocolBlock({ operatorName });
   return String.raw`
 import json, os
 from pathlib import Path
 
 BEGIN = ${JSON.stringify(SCOPE_PROTOCOL_BEGIN)}
 END = ${JSON.stringify(SCOPE_PROTOCOL_END)}
-BLOCK = json.loads(${JSON.stringify(JSON.stringify(SCOPE_PROTOCOL_BLOCK))})
+BLOCK = json.loads(${JSON.stringify(JSON.stringify(protocolBlock))})
 
 home = Path.home()
 targets = [
@@ -231,7 +232,8 @@ print("SCOPE_PROTOCOL_SYNC_OK=" + json.dumps({"codex": True, "claude": True, "an
 `;
 }
 
-function buildDeployScript({ toolSourceBase64, remotePort, token, registerMcp, injectProtocol = true }) {
+function buildDeployScript({ toolSourceBase64, remotePort, token, registerMcp, injectProtocol = true, operatorName = "" }) {
+  const protocolBlock = buildScopeProtocolBlock({ operatorName });
   const configJson = JSON.stringify({
     endpoint: `http://127.0.0.1:${remotePort}/v1/notify`,
     token,
@@ -245,7 +247,7 @@ CONFIG = json.loads(${JSON.stringify(configJson)})
 BLOCK = json.loads(${JSON.stringify(JSON.stringify(COMPLETION_BLOCK))})
 PROTO_BEGIN = ${JSON.stringify(SCOPE_PROTOCOL_BEGIN)}
 PROTO_END = ${JSON.stringify(SCOPE_PROTOCOL_END)}
-PROTO_BLOCK = json.loads(${JSON.stringify(JSON.stringify(SCOPE_PROTOCOL_BLOCK))})
+PROTO_BLOCK = json.loads(${JSON.stringify(JSON.stringify(protocolBlock))})
 INJECT_PROTOCOL = ${injectProtocol ? "True" : "False"}
 REGISTER_MCP = ${registerMcp ? "True" : "False"}
 
@@ -452,11 +454,13 @@ export class RemoteBootstrapService {
     run,
     getHost,
     tunnels,
+    getOperatorName = () => "",
     readRemoteTool = () => readFile(REMOTE_EMAIL_TOOL_PATH, "utf8"),
   }) {
     this.run = run;
     this.getHost = getHost;
     this.tunnels = tunnels;
+    this.getOperatorName = getOperatorName;
     this.readRemoteTool = readRemoteTool;
     this.cache = new Map();
   }
@@ -506,17 +510,19 @@ export class RemoteBootstrapService {
     return this.state(host);
   }
 
-  async deploy(host, { remotePort = DEFAULT_REMOTE_PORT, registerMcp = true, injectProtocol = true } = {}) {
+  async deploy(host, { remotePort = DEFAULT_REMOTE_PORT, registerMcp = true, injectProtocol = true, operatorName } = {}) {
     this.#requireRemoteHost(host);
     const port = validPort(remotePort);
     const relay = await this.tunnels.enable(host, port);
     const toolSource = await this.readRemoteTool();
+    const effectiveOperator = operatorName ?? this.getOperatorName?.() ?? "";
     const script = buildDeployScript({
       toolSourceBase64: Buffer.from(toolSource, "utf8").toString("base64"),
       remotePort: port,
       token: relay.token,
       registerMcp,
       injectProtocol,
+      operatorName: effectiveOperator,
     });
     const result = await this.run(host, "python3 -", script, 60_000, 1_000_000);
     if (result.code !== 0) {
@@ -534,9 +540,12 @@ export class RemoteBootstrapService {
     return { ...refreshed, lastAction: "deploy" };
   }
 
-  async syncProtocol(host) {
+  async syncProtocol(host, { operatorName } = {}) {
+    const effectiveOperator = operatorName ?? this.getOperatorName?.() ?? "";
     if (host === LOCAL_HOST) {
-      const protocol = await syncLocalScopeProtocol();
+      const protocol = await syncLocalScopeProtocol(undefined, {
+        operatorName: effectiveOperator,
+      });
       return {
         host: LOCAL_HOST,
         lastAction: "sync-protocol",
@@ -545,7 +554,13 @@ export class RemoteBootstrapService {
       };
     }
     this.#requireRemoteHost(host);
-    const result = await this.run(host, "python3 -", buildSyncProtocolScript(), 45_000, 1_000_000);
+    const result = await this.run(
+      host,
+      "python3 -",
+      buildSyncProtocolScript({ operatorName: effectiveOperator }),
+      45_000,
+      1_000_000,
+    );
     if (result.code !== 0) {
       throw new Error(
         (result.stderr || result.stdout || "同步三端 SCOPE 协议失败").trim().slice(-800),
