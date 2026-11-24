@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
 </p>
 
 <h1 align="center">SCOPE</h1>
@@ -10,13 +10,14 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <b>简体中文</b> ·
-  <a href="./docs/deployment.zh-CN.md">完备部署指南</a> ·
-  <a href="./docs/plugin-protocol.zh-CN.md">插件接入指南</a>
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/README.md">English</a> · <b>简体中文</b> ·
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md">完备部署指南</a> ·
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md">插件接入指南</a>
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://www.npmjs.com/package/scope-agent-workbench"><img src="https://img.shields.io/npm/v/scope-agent-workbench.svg" alt="npm version" /></a>
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
   <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="支持 Agent" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="本机回环监听" />
@@ -27,7 +28,7 @@
 ## 实机交互体验演示
 
 <p align="center">
-  <img src="./docs/assets/scope-demo-zh.gif" alt="SCOPE 实机交互演示（中文界面，全程脱敏虚拟数据）" width="100%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-demo-zh.gif" alt="SCOPE 实机交互演示（中文界面，全程脱敏虚拟数据）" width="100%" />
 </p>
 
 <p align="center">
@@ -36,7 +37,7 @@
 
 | 浅色模式（表格 · 公式 · 图片与视频内嵌预览） | 深色模式（后台子代理实时追踪 · 交互审批） |
 | :---: | :---: |
-| <img src="./docs/assets/scope-preview-light-zh.png" alt="SCOPE 浅色模式预览（中文界面）" width="100%" /> | <img src="./docs/assets/scope-preview-dark-zh.png" alt="SCOPE 深色模式预览（中文界面）" width="100%" /> |
+| <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-light-zh.png" alt="SCOPE 浅色模式预览（中文界面）" width="100%" /> | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-dark-zh.png" alt="SCOPE 深色模式预览（中文界面）" width="100%" /> |
 
 ---
 
@@ -65,7 +66,7 @@ flowchart LR
 ## Agent 能力矩阵
 
 <p align="center">
-  <img src="./docs/assets/scope-agents-anime.jpg" alt="SCOPE 协同编排 Codex、Claude Code 与 Antigravity" width="92%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-agents-anime.jpg" alt="SCOPE 协同编排 Codex、Claude Code 与 Antigravity" width="92%" />
 </p>
 
 | 能力 | Codex | Claude Code | Antigravity (`agy`) | DSH |
@@ -128,13 +129,13 @@ npm run scope
 
 ## 完整文档导航
 
-- **[完备部署指南](./docs/deployment.zh-CN.md)** — 本机模式、Linux `systemd --user` 常驻部署、Tailscale / 局域网 HTTPS 私有网关、代理与环境配置、并发池、多 Agent 额度、运维排障与安全清单
-- **[插件接入与开发指南 (v1)](./docs/plugin-protocol.zh-CN.md)** — 从零编写、校验、安装、调用与卸载 SCOPE 插件的完整手册（含协议字段、生命周期、HTTP API、扩展新 Agent 说明）
-- [快速上手速查](./docs/getting-started.zh-CN.md) — 精简版启动与 SSH 配置说明
-- [多 Agent 会话、审批与账号管理](./docs/agents-and-sessions.zh-CN.md) — Codex 多账号故障切换、Claude/AGY 实时交互、附件上传与可逆归档
-- [邮件通知与远端一键初始化](./docs/notifications-and-remote.zh-CN.md) — Web SMTP 预设、本地 `0600` 凭据与非 root 的 `scope-notify` 部署
-- [架构说明](./docs/architecture.zh-CN.md) — 前后端目录与模块职责
-- [贡献指南](./CONTRIBUTING.md) · [安全说明](./SECURITY.md)
+- **[完备部署指南](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md)** — 本机模式、Linux `systemd --user` 常驻部署、Tailscale / 局域网 HTTPS 私有网关、代理与环境配置、并发池、多 Agent 额度、运维排障与安全清单
+- **[插件接入与开发指南 (v1)](https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md)** — 从零编写、校验、安装、调用与卸载 SCOPE 插件的完整手册（含协议字段、生命周期、HTTP API、扩展新 Agent 说明）
+- [快速上手速查](https://github.com/securityCFS/SCOPE/blob/main/docs/getting-started.zh-CN.md) — 精简版启动与 SSH 配置说明
+- [多 Agent 会话、审批与账号管理](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.zh-CN.md) — Codex 多账号故障切换、Claude/AGY 实时交互、附件上传与可逆归档
+- [邮件通知与远端一键初始化](https://github.com/securityCFS/SCOPE/blob/main/docs/notifications-and-remote.zh-CN.md) — Web SMTP 预设、本地 `0600` 凭据与非 root 的 `scope-notify` 部署
+- [架构说明](https://github.com/securityCFS/SCOPE/blob/main/docs/architecture.zh-CN.md) — 前后端目录与模块职责
+- [贡献指南](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) · [安全说明](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
 
 ---
 
@@ -154,7 +155,7 @@ npm run scope
 非常欢迎大家提 **Issue**、提交 **PR** 和参与社区共建！无论是反馈 Bug、提出新场景需求、贡献插件/新 IDE 适配，还是完善文档：
 
 - 提交 Bug 或功能建议：[GitHub Issues](https://github.com/securityCFS/SCOPE/issues)
-- 参与代码或文档贡献：[Pull Requests](https://github.com/securityCFS/SCOPE/pulls)（请参考 [CONTRIBUTING.md](./CONTRIBUTING.md)）
+- 参与代码或文档贡献：[Pull Requests](https://github.com/securityCFS/SCOPE/pulls)（请参考 [CONTRIBUTING.md](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md)）
 - 如果 SCOPE 帮到了你，欢迎点个 Star 支持项目持续演进！
 
 ---
@@ -171,4 +172,4 @@ npm run export:opensource -- --check
 
 ## 开源协议
 
-[MIT](./LICENSE)
+[MIT](https://github.com/securityCFS/SCOPE/blob/main/LICENSE)

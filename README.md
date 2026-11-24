@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
 </p>
 
 <h1 align="center">SCOPE</h1>
@@ -10,13 +10,14 @@
 </p>
 
 <p align="center">
-  <b>English</b> · <a href="./README.zh-CN.md">简体中文</a> ·
-  <a href="./docs/deployment.md">Deployment Guide</a> ·
-  <a href="./docs/plugin-protocol.md">Plugin Guide</a>
+  <b>English</b> · <a href="https://github.com/securityCFS/SCOPE/blob/main/README.zh-CN.md">简体中文</a> ·
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md">Deployment Guide</a> ·
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md">Plugin Guide</a>
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://www.npmjs.com/package/scope-agent-workbench"><img src="https://img.shields.io/npm/v/scope-agent-workbench.svg" alt="npm version" /></a>
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
   <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="Local-first Loopback" />
@@ -27,7 +28,7 @@
 ## Live Interactive Walkthrough
 
 <p align="center">
-  <img src="./docs/assets/scope-demo-en.gif" alt="SCOPE interactive demo walkthrough (English UI, synthetic fixture data)" width="100%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-demo-en.gif" alt="SCOPE interactive demo walkthrough (English UI, synthetic fixture data)" width="100%" />
 </p>
 
 <p align="center">
@@ -36,7 +37,7 @@
 
 | Light Mode (Tables · KaTeX · Inline Image & Video) | Dark Mode (Live Background Subagents · Approvals) |
 | :---: | :---: |
-| <img src="./docs/assets/scope-preview-light-en.png" alt="SCOPE Light Mode preview (English UI)" width="100%" /> | <img src="./docs/assets/scope-preview-dark-en.png" alt="SCOPE Dark Mode preview (English UI)" width="100%" /> |
+| <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-light-en.png" alt="SCOPE Light Mode preview (English UI)" width="100%" /> | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-dark-en.png" alt="SCOPE Dark Mode preview (English UI)" width="100%" /> |
 
 ---
 
@@ -65,7 +66,7 @@ flowchart LR
 ## Multi-Agent Support Matrix
 
 <p align="center">
-  <img src="./docs/assets/scope-agents-anime.jpg" alt="SCOPE orchestrating Codex, Claude Code, and Antigravity across GPU clusters" width="92%" />
+  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-agents-anime.jpg" alt="SCOPE orchestrating Codex, Claude Code, and Antigravity across GPU clusters" width="92%" />
 </p>
 
 | Capability | Codex | Claude Code | Antigravity (`agy`) | DSH |
@@ -128,13 +129,13 @@ All runtime state—host pre-launch commands, SMTP secrets (`0600`), remote tunn
 
 ## Documentation
 
-- **[Complete Deployment Guide](./docs/deployment.md)** — Workstation mode, persistent Linux `systemd --user` server deployment, Tailscale Serve & LAN HTTPS gateways, SSH/proxy setup, concurrency pools, multi-agent quotas, operations, and troubleshooting
-- **[Plugin Integration & Development Guide (v1)](./docs/plugin-protocol.md)** — End-to-end guide to authoring, inspecting, installing, calling, and securing SCOPE plugins (plus extending built-in views & new agent providers)
-- [Quickstart & SSH Setup](./docs/getting-started.md) — Short setup reference
-- [Agents, Sessions & Approvals](./docs/agents-and-sessions.md) — Codex multi-account failover, Claude/AGY streaming, attachments, and reversible archiving
-- [Email Notifications & Remote Bootstrap](./docs/notifications-and-remote.md) — Web SMTP presets and non-root `scope-notify` MCP deployment
-- [Architecture Overview](./docs/architecture.md) — Module layout for contributors
-- [Contributing](./CONTRIBUTING.md) · [Security Model](./SECURITY.md)
+- **[Complete Deployment Guide](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md)** — Workstation mode, persistent Linux `systemd --user` server deployment, Tailscale Serve & LAN HTTPS gateways, SSH/proxy setup, concurrency pools, multi-agent quotas, operations, and troubleshooting
+- **[Plugin Integration & Development Guide (v1)](https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md)** — End-to-end guide to authoring, inspecting, installing, calling, and securing SCOPE plugins (plus extending built-in views & new agent providers)
+- [Quickstart & SSH Setup](https://github.com/securityCFS/SCOPE/blob/main/docs/getting-started.md) — Short setup reference
+- [Agents, Sessions & Approvals](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.md) — Codex multi-account failover, Claude/AGY streaming, attachments, and reversible archiving
+- [Email Notifications & Remote Bootstrap](https://github.com/securityCFS/SCOPE/blob/main/docs/notifications-and-remote.md) — Web SMTP presets and non-root `scope-notify` MCP deployment
+- [Architecture Overview](https://github.com/securityCFS/SCOPE/blob/main/docs/architecture.md) — Module layout for contributors
+- [Contributing](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) · [Security Model](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
 
 ---
 
@@ -154,7 +155,7 @@ SCOPE is currently at an early milestone—we have completed the core multi-agen
 Issues, feature proposals, plugins, and pull requests are warmly welcome! Whether you are reporting a bug, improving documentation, adding an IDE/agent adapter, or shaping the roadmap:
 
 - Open an [Issue](https://github.com/securityCFS/SCOPE/issues) for bugs, ideas, or workflow requests.
-- Submit a [Pull Request](https://github.com/securityCFS/SCOPE/pulls) following [CONTRIBUTING.md](./CONTRIBUTING.md).
+- Submit a [Pull Request](https://github.com/securityCFS/SCOPE/pulls) following [CONTRIBUTING.md](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md).
 - Star the repo if SCOPE helps keep your agent sessions under control.
 
 ---
@@ -171,4 +172,4 @@ npm run export:opensource -- --check
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](https://github.com/securityCFS/SCOPE/blob/main/LICENSE)

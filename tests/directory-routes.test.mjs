@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { pythonExecutable } from "../bridge/local/python-probe.mjs";
 import {
   directoryRoutes,
   validateDirectoryTarget,
@@ -92,7 +93,7 @@ test("remote mkdir script creates only one child and preserves existing contents
   const name = "literal ' $(name)";
   const execute = (target) =>
     spawnSync(
-      "python",
+      pythonExecutable(),
       ["-", Buffer.from(JSON.stringify(target)).toString("base64")],
       {
         input: CREATE_DIRECTORY,
@@ -104,7 +105,11 @@ test("remote mkdir script creates only one child and preserves existing contents
     const result = execute({ parent, name });
     assert.equal(result.status, 0, result.stderr);
     const cwd = JSON.parse(result.stdout).cwd;
-    assert.equal(cwd, path.join(parent, name));
+    const expected = path.join(await realpath(parent), name);
+    assert.equal(
+      process.platform === "win32" ? cwd.toLowerCase() : cwd,
+      process.platform === "win32" ? expected.toLowerCase() : expected,
+    );
     await writeFile(path.join(cwd, "keep.txt"), "keep");
     assert.notEqual(execute({ parent, name }).status, 0);
     assert.equal(await readFile(path.join(cwd, "keep.txt"), "utf8"), "keep");
