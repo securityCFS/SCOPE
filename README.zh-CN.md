@@ -31,10 +31,10 @@
 </p>
 
 <p align="center">
-  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：多 Agent 会话与 KaTeX 公式 → Claude 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载与离线节点折叠 → 深色模式切换。</sub>
+  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：富媒体渲染（表格 · KaTeX 公式 · 内嵌图片与可播放视频 · <code>file://</code> 跳转）→ Claude 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载 → 深色模式。</sub>
 </p>
 
-| 浅色模式（公式渲染 · 常驻并发池 · 额度条） | 深色模式（后台子代理实时追踪 · 交互审批） |
+| 浅色模式（表格 · 公式 · 图片与视频内嵌预览） | 深色模式（后台子代理实时追踪 · 交互审批） |
 | :---: | :---: |
 | <img src="./docs/assets/scope-preview-light-zh.png" alt="SCOPE 浅色模式预览（中文界面）" width="100%" /> | <img src="./docs/assets/scope-preview-dark-zh.png" alt="SCOPE 深色模式预览（中文界面）" width="100%" /> |
 
@@ -47,7 +47,9 @@
 - **多 Agent 账号中心与实时 `/usage` 额度**：统一查看 **Codex**（多 Profile 池 + 故障自动切换 + 5h/周额度）、**Claude Code**（本地 OAuth 实时 5h/7d 额度）和 **Antigravity**（官方 `agy -p /usage --output-format json` 分组 5h/周额度）的登录态与余量，并支持一键打开内置 Web SSH 终端登录/切换账号。
 - **GPU 归属与会话并发池**：实时采集各主机 `nvidia-smi` 显存/利用率和训练进程树，自动关联到对应 Agent 会话；提供按主机的常驻会话并发池（`residentSessionsPerHost`）与会话 **保留（Pin）** 机制，避免重要长程任务被误回收。
 - **跨项目总调度（Coordinator）**：只读汇总各主机状态、会话进展和 GPU 资源，在一个对话框里对比实验、定位异常或起草下一步任务。
-- **本机优先、零硬编码密钥**：所有 SSH 主机、出口代理命令（`preLaunchCommand`）、SMTP 凭据、网关令牌与本地防泄漏词表全部存放在 Git 忽略的 `.scope/` 目录中。
+- **富媒体渲染与三端 SCOPE 协议一键注入**：原生支持 KaTeX 公式、GFM 表格、远端图片内嵌、HTML5 视频流式预览与 `file://` 行号跳转（全面兼容 Antigravity 的 `file://` 链接习惯），并支持一键向 `~/.codex/AGENTS.md`、`~/.claude/CLAUDE.md` 与 `~/.gemini/config/GEMINI.md` 注入规范协议。
+- **独立 CLI 更新代理路径**：每台主机支持分别配置 Agent 对话运行代理（`preLaunchCommand`）与 CLI 版本检测/更新独立代理（`updatePreCommand`，如 `source ~/.pkg_proxy.sh` 或独立代理别名），互不干扰且支持 Codex 安全热升级。
+- **本机优先、零硬编码密钥**：所有 SSH 主机、出口代理命令（`preLaunchCommand` / `updatePreCommand`）、SMTP 凭据、网关令牌与本地防泄漏词表全部存放在 Git 忽略的 `.scope/` 目录中。
 
 ```mermaid
 flowchart LR
@@ -87,10 +89,23 @@ flowchart LR
 - **远端主机**：Linux，已安装 **Python 3**、配置免密 SSH 登录（`BatchMode=yes` 可直连），Codex 托管会话建议安装 `tmux`
 - **Agent CLI**：在目标机器上预先安装并登录对应工具（`codex`、`claude`、`agy` 或可选 `dsh`）
 
-### 本机启动
+### 方式 A：通过 npm 包直接安装运行（推荐）
 
 ```sh
-git clone <本仓库地址> scope
+# 全局安装
+npm install -g scope-agent-workbench
+scope
+
+# 或无需克隆直接运行
+npx scope-agent-workbench
+# 免配 SSH 立即体验完整交互预览：
+npx scope-agent-workbench preview
+```
+
+### 方式 B：克隆源码启动
+
+```sh
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 npm ci
 npm run scope
@@ -98,7 +113,7 @@ npm run scope
 
 打开 **http://localhost:3000/**。前端（`3000`）与 Bridge（`4815`）默认只监听 `127.0.0.1`。
 
-> 想先免配 SSH 体验完整界面？直接运行 `npm run preview:fixture`，然后访问 `http://127.0.0.2:3001/`。
+> 想先免配 SSH 体验完整界面？直接运行 `npm run preview:fixture`（或 `scope preview`），然后访问 `http://127.0.0.2:3001/`。
 
 ---
 

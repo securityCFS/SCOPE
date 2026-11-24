@@ -60,7 +60,13 @@ import { WebSocketJsonlChild } from "./app-server-websocket-transport.mjs";
 import { remoteResumeValidator } from "./remote-rollout-locks.mjs";
 import { profileCapacityRetryDelays } from "./profile-capacity-policy.mjs";
 import { HostSessionRestarts } from "./host-session-restart.mjs";
-import { CodexUpgrades, remoteCodexUpgradeScript, stableVersion } from "./codex-upgrade.mjs";
+import {
+  CodexUpgrades,
+  parseCodexUpgradeOutput,
+  remoteCodexUpgradeScript,
+  stableVersion,
+  wrapCodexUpgradeCommand,
+} from "./codex-upgrade.mjs";
 import { SessionProfileAssignments, sessionProfileKey, profileFromConnection, boundConnectionKey, profileHandoffPending } from "./session-profiles.mjs";
 import { modelCatalogTarget, modelCatalogHomeCommands } from "./model-catalog.mjs";
 import {
@@ -117,11 +123,15 @@ import {
 } from "./account-quotas.mjs";
 
 const PORT = Number(process.env.SCOPE_BRIDGE_PORT || 4815);
+const UI_PORT = Number(process.env.SCOPE_UI_PORT || 3000);
 const HOST = "127.0.0.1";
 const TRUSTED_BROWSER_ORIGINS = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://[::1]:3000",
+  `http://localhost:${UI_PORT}`,
+  `http://127.0.0.1:${UI_PORT}`,
+  `http://[::1]:${UI_PORT}`,
 ]);
 const SSH_CONFIG =
   process.env.SCOPE_SSH_CONFIG || path.join(os.homedir(), ".ssh", "config");
@@ -142,7 +152,9 @@ const CONCURRENCY = Math.max(
   1,
   Math.min(12, Number(process.env.SCOPE_CONCURRENCY || 6)),
 );
-const STATE_DIR = path.resolve(process.cwd(), ".scope");
+const STATE_DIR = process.env.SCOPE_STATE_DIR
+  ? path.resolve(process.env.SCOPE_STATE_DIR)
+  : path.resolve(process.cwd(), ".scope");
 const localCodex = new LocalCodexRuntime(STATE_DIR);
 const persistentCodexHomes = JSON.parse(await readFile(path.join(STATE_DIR, "persistent-codex-homes.json"), "utf8").catch(error => {
   if (error.code === "ENOENT") return "{}";
@@ -1611,21 +1623,32 @@ const hostConfigRestarts = new HostSessionRestarts({
 
 const codexUpgrades = new CodexUpgrades({
   async inspect(host) {
-    // Query the registry locally: remote machines may have restricted npm egress.
-    const registry = await fetch("https://registry.npmjs.org/@openai%2Fcodex/latest", { signal: AbortSignal.timeout(20_000) });
-    if (!registry.ok) throw new Error("无法查询 Codex 稳定版（HTTP " + registry.status + "）");
-    const latest = stableVersion((await registry.json()).version);
-    const result = await runSshCommand(host, "python3 -", remoteCodexUpgradeScript(null, latest), 45_000, 20_000);
+    // Query npm registry locally first; if local egress is restricted, let the
+    // remote host query via its configured updatePreCommand / preLaunchCommand.
+    let latest = null;
+    try {
+      const registry = await fetch("https://registry.npmjs.org/@openai%2Fcodex/latest", { signal: AbortSignal.timeout(15_000) });
+      if (registry.ok) latest = stableVersion((await registry.json()).version);
+    } catch {
+      latest = null;
+    }
+    const runtime = hostRuntimeConfig(host);
+    const updatePre = runtime?.updatePreCommand?.trim() || runtime?.preLaunchCommand?.trim() || "";
+    const wrapped = wrapCodexUpgradeCommand(remoteCodexUpgradeScript(null, latest), updatePre);
+    const result = await runSshCommand(host, wrapped.command, wrapped.stdin, 60_000, 60_000);
     if (result.code !== 0) throw new Error((result.stderr || result.stdout).trim().split(/\r?\n/).filter(Boolean).at(-1) || "远端 Codex 检查失败");
-    return JSON.parse(result.stdout.trim());
+    return parseCodexUpgradeOutput(result.stdout);
   },
   async install(host, target) {
     if (hostConfigRestarts.view(host)?.status === "running" || appServerAuthRecoveryHosts.has(host)) {
       throw new Error("主机正在重启或迁移账号，请稍后再升级");
     }
-    const result = await runSshCommand(host, "python3 -", remoteCodexUpgradeScript(target), 360_000, 20_000);
+    const runtime = hostRuntimeConfig(host);
+    const updatePre = runtime?.updatePreCommand?.trim() || runtime?.preLaunchCommand?.trim() || "";
+    const wrapped = wrapCodexUpgradeCommand(remoteCodexUpgradeScript(target), updatePre);
+    const result = await runSshCommand(host, wrapped.command, wrapped.stdin, 360_000, 60_000);
     if (result.code !== 0) throw new Error((result.stderr || result.stdout).trim().split(/\r?\n/).filter(Boolean).at(-1) || "远端 Codex 安装失败");
-    return JSON.parse(result.stdout.trim());
+    return parseCodexUpgradeOutput(result.stdout);
   },
   async restart(host) {
     if (!appServerManager.sessionRecords().some((s) => s.host === host)) return { status: "completed", results: [] };
@@ -2982,9 +3005,20 @@ function effectiveProviderSettings(provider, host) {
     preLaunchCommand: base.preLaunchCommand?.trim() || hostSetup,
   };
 }
+function effectiveMaintenanceSettings(provider, host) {
+  const base = workbench.state().config.providers[provider] || {};
+  const runtime = host ? hostRuntimeConfig(host) : null;
+  const hostUpdate = runtime?.updatePreCommand?.trim() || "";
+  const hostLaunch = runtime?.preLaunchCommand?.trim() || "";
+  return {
+    ...base,
+    updatePreCommand: hostUpdate || hostLaunch || base.preLaunchCommand?.trim() || "",
+    preLaunchCommand: hostLaunch || base.preLaunchCommand?.trim() || "",
+  };
+}
 const maintenance = await new AgentMaintenance({ directory: STATE_DIR, run: runSshCommand,
   getHost: alias => snapshot.hosts.find(h => h.alias === alias),
-  settings: effectiveProviderSettings,
+  settings: effectiveMaintenanceSettings,
 }).load();
 const sessionCatalog = new SessionCatalog({ hosts: () => snapshot.hosts, run: runSshCommand });
 const handleCatalog = catalogRoutes(sessionCatalog, { jsonResponse, readJsonBody, resolveCodex: (entry) => {

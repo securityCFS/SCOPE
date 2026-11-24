@@ -58,6 +58,9 @@ export function runtimeRoutes(context) {
         }
         const config = await saveHostRuntimeConfig(host, {
           preLaunchCommand: body.preLaunchCommand,
+          ...(body.updatePreCommand !== undefined
+            ? { updatePreCommand: body.updatePreCommand }
+            : {}),
           yolo: body.yolo,
           ...(residentSessionLimit !== undefined ? { residentSessionLimit } : {}),
         });

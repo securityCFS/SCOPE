@@ -31,10 +31,10 @@
 </p>
 
 <p align="center">
-  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Multi-agent sessions &amp; KaTeX math → Claude live background subagents &amp; approval cards → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
+  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Rich media (GFM tables · KaTeX · inline image &amp; playable video · <code>file://</code> links) → Claude live background subagents &amp; approvals → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
 </p>
 
-| Light Mode (KaTeX · Concurrency Pool · Quota) | Dark Mode (Live Background Subagents · Approvals) |
+| Light Mode (Tables · KaTeX · Inline Image & Video) | Dark Mode (Live Background Subagents · Approvals) |
 | :---: | :---: |
 | <img src="./docs/assets/scope-preview-light-en.png" alt="SCOPE Light Mode preview (English UI)" width="100%" /> | <img src="./docs/assets/scope-preview-dark-en.png" alt="SCOPE Dark Mode preview (English UI)" width="100%" /> |
 
@@ -47,7 +47,9 @@
 - **Multi-agent account hub & live `/usage` quotas**: Inspect login state and live remaining subscription quotas across **Codex** (`app-server` rate limits + multi-profile failover), **Claude Code** (5h / 7d OAuth usage), and **Antigravity** (grouped 5h / weekly quota via `agy -p /usage --output-format json`), plus one-click built-in Web SSH Terminal login.
 - **GPU ownership & session concurrency pool**: Live `nvidia-smi` telemetry and training/evaluation process trees are matched to the sessions owning each GPU. Manage long-running Codex sessions with per-host resident pools and explicit session pinning (**Reserve**).
 - **Cross-project Coordinator**: A read-only coordinator chat with access to your cross-host session and GPU snapshot so you can compare runs, locate stuck jobs, or draft tasks in one place.
-- **Local-first & zero baked-in secrets**: Every SSH host, outbound proxy (`preLaunchCommand`), SMTP credential, gateway token, and local leak denylist stays in your git-ignored `.scope/` directory.
+- **Rich media, LaTeX, tables & 3-agent protocol sync**: Renders KaTeX math, GFM tables, inline remote images, range-streamed HTML5 videos, and clickable `file://` line links across Codex, Claude Code, and Antigravity. One-click **Sync SCOPE Protocol** injects formatting rules cleanly into `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.gemini/config/GEMINI.md`.
+- **Independent CLI update proxy**: Configure separate shell pre-commands per host for agent API traffic (`preLaunchCommand`) vs. CLI version checks and updates (`updatePreCommand`, e.g. `source ~/.pkg_proxy.sh`), with safe hot-upgrade for Codex sessions.
+- **Local-first & zero baked-in secrets**: Every SSH host, outbound proxy (`preLaunchCommand` / `updatePreCommand`), SMTP credential, gateway token, and local leak denylist stays in your git-ignored `.scope/` directory.
 
 ```mermaid
 flowchart LR
@@ -87,10 +89,23 @@ flowchart LR
 - **Remote servers**: Linux with **Python 3**, key-based non-interactive SSH (`BatchMode=yes`), and `tmux` (for durable Codex sessions)
 - **Agent CLIs**: Installed on the target machines where you run them (`codex`, `claude`, `agy`, or optional `dsh`)
 
-### Start Locally
+### Option A: Run via npm Package (`scope` CLI)
 
 ```sh
-git clone <this-repository-url> scope
+# Install globally
+npm install -g scope-agent-workbench
+scope
+
+# Or run directly without cloning
+npx scope-agent-workbench
+# Try zero-SSH interactive preview immediately:
+npx scope-agent-workbench preview --en
+```
+
+### Option B: Clone & Run from Source
+
+```sh
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 npm ci
 npm run scope
@@ -98,7 +113,7 @@ npm run scope
 
 Open **http://localhost:3000/**. Both the Web UI (`3000`) and Bridge (`4815`) bind strictly to `127.0.0.1`.
 
-> Want to preview the full UI locally without connecting any SSH hosts? Run `npm run preview:fixture` and open `http://127.0.0.2:3001/`.
+> Want to preview the full UI locally without connecting any SSH hosts? Run `SCOPE_PREVIEW_LOCALE=en npm run preview:fixture` (or `scope preview --en`) and open `http://127.0.0.2:3001/`.
 
 ---
 

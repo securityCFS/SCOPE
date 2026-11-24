@@ -81,7 +81,7 @@ ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 <主机
 适合 SSH 私钥与 `~/.ssh/config` 就在日常笔记本/台式机上的场景。
 
 ```sh
-git clone <本仓库地址> scope
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 npm ci
 npm run scope
@@ -110,7 +110,7 @@ npm run scope
 适合把 SCOPE 长期部署在跳板机或实验室 Linux 主机上，随时从任意电脑通过 SSH 端口转发访问。
 
 ```sh
-git clone <本仓库地址> scope
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 bash scripts/install-remote-server.sh
 ```

@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CodexUpgrades, stableVersion, remoteCodexUpgradeScript } from "../bridge/codex-upgrade.mjs";
+import {
+  CodexUpgrades,
+  parseCodexUpgradeOutput,
+  remoteCodexUpgradeScript,
+  stableVersion,
+  wrapCodexUpgradeCommand,
+} from "../bridge/codex-upgrade.mjs";
 
 function setup(overrides = {}) {
   const calls = [];
@@ -68,5 +74,20 @@ test("remote script validates version, backs up, locks and pins official package
   const localRegistry = remoteCodexUpgradeScript(null, "0.162.1");
   assert.match(localRegistry, /latest = "0.162.1"/);
   assert.doesNotMatch(localRegistry, /npm', 'view'/);
+  assert.match(localRegistry, /\.nvm\/versions\/node/);
   assert.throws(() => remoteCodexUpgradeScript(null, "1;kill"));
+
+  const direct = wrapCodexUpgradeCommand("print(1)", "");
+  assert.equal(direct.command, "python3 -");
+  assert.equal(direct.stdin, "print(1)");
+
+  const proxied = wrapCodexUpgradeCommand("print(1)", "source ~/.pkg_proxy.sh");
+  assert.match(proxied.command, /^bash -ic /);
+  assert.match(proxied.command, /pkg_proxy\.sh/);
+  assert.equal(proxied.stdin, "");
+
+  assert.deepEqual(
+    parseCodexUpgradeOutput('motd noise\nSCOPE_CODEX_UPGRADE_RESULT={"installed":"0.172.0","latest":"0.172.0"}\n'),
+    { installed: "0.172.0", latest: "0.172.0" },
+  );
 });

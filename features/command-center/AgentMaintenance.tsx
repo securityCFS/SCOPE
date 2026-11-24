@@ -17,6 +17,7 @@ type Job = {
   info?: {
     installed?: string;
     latest?: string;
+    latestError?: string | null;
     executable?: string;
     supported: boolean;
     channel?: string;
@@ -46,6 +47,25 @@ const names: Record<string, string> = {
   antigravity: "Antigravity",
   dsh: "DSH",
 };
+
+function extractSemver(value?: string | null) {
+  if (!value) return null;
+  const match = String(value).match(/\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?/);
+  return match ? match[0] : null;
+}
+
+function isNewerVersion(latest?: string | null, installed?: string | null) {
+  const latestSemver = extractSemver(latest);
+  const installedSemver = extractSemver(installed);
+  if (!latestSemver) return false;
+  if (!installedSemver) return true;
+  const a = latestSemver.split("-")[0].split(".").map(Number);
+  const b = installedSemver.split("-")[0].split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return latestSemver !== installedSemver;
+}
 
 export function AgentMaintenance({
   hosts,
@@ -305,8 +325,14 @@ export function AgentMaintenance({
             Boolean(job && ["starting", "running", "unknown"].includes(job.status)) ||
             busy === provider;
           const disabled = !hostReachable || Boolean(busy) || checkingAll || active;
-          const hasActionError =
-            job?.status === "failed" && (!isInstalled || job.action !== "check");
+          const hasActionError = job?.status === "failed";
+          const hasUpdate = isNewerVersion(job?.info?.latest, installedVersion);
+          const upToDate = Boolean(
+            isInstalled &&
+              job?.info?.latest &&
+              !hasUpdate &&
+              extractSemver(installedVersion),
+          );
 
           return (
             <article className="cli-maint-row" key={provider}>
@@ -323,9 +349,14 @@ export function AgentMaintenance({
                   ) : (
                     <span className="settings-badge">{tr("待检查", "Unchecked")}</span>
                   )}
-                  {job?.info?.latest && job.info.latest !== installedVersion && (
+                  {hasUpdate && job?.info?.latest && (
                     <span className="settings-badge warn">
-                      {tr("最新", "Latest")} {job.info.latest}
+                      {tr("可更新", "Update")} {job.info.latest}
+                    </span>
+                  )}
+                  {upToDate && (
+                    <span className="settings-badge ok">
+                      {tr("已是最新", "Up to date")}
                     </span>
                   )}
                   {active && (
@@ -402,6 +433,15 @@ export function AgentMaintenance({
               {hasActionError && job?.error && (
                 <p className="cli-maint-meta" style={{ color: "var(--red)" }}>
                   {job.error}
+                </p>
+              )}
+
+              {!hasActionError && job?.info?.latestError && provider !== "antigravity" && (
+                <p className="cli-maint-meta">
+                  {tr(
+                    `未获取到远端最新版本（${job.info.latestError}）。若需通过独立代理访问 npm/下载源，请在上方填写「CLI 更新前命令」。`,
+                    `Could not fetch latest version (${job.info.latestError}). If package registries require a separate proxy, set "CLI update pre-command" above.`,
+                  )}
                 </p>
               )}
 

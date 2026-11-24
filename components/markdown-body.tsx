@@ -9,8 +9,9 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { isVideoSource } from "../lib/markdown-images.js";
 import { markdownUrlTransform } from "../lib/markdown-url.js";
-import { normalizeLatexDelimiters } from "../lib/markdown-math.js";
+import { normalizeLatexDelimiters, normalizeMarkdownMedia } from "../lib/markdown-math.js";
 import { remoteFileTargetFromMarkdownHref } from "../lib/remote-links.js";
+import { useLocale } from "@/lib/i18n";
 
 type RemoteLinkProps = {
   host: string; cwd: string; remotePath: string;
@@ -19,29 +20,31 @@ type RemoteLinkProps = {
 };
 
 export function MarkdownVideo({ src, label }: { src: string; label?: ReactNode }) {
+  const { tr } = useLocale();
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   return <span className="markdown-video">
-    <video key={retry} src={src} controls preload="none" playsInline onError={() => setFailed(true)} aria-label="视频预览" />
-    <span className="markdown-video-caption"><a href={src} target="_blank" rel="noreferrer">{label || "打开视频"}</a>
-      {failed && <button type="button" onClick={() => { setFailed(false); setRetry((count) => count + 1); }}>加载失败或编码不受支持 · 重试</button>}
+    <video key={retry} src={src} controls preload="metadata" playsInline onError={() => setFailed(true)} aria-label={tr("视频预览", "Video preview")} />
+    <span className="markdown-video-caption"><a href={src} target="_blank" rel="noreferrer">{label || tr("打开视频", "Open video")}</a>
+      {failed && <button type="button" onClick={() => { setFailed(false); setRetry((count) => count + 1); }}>{tr("加载失败或编码不受支持 · 重试", "Playback failed · Retry")}</button>}
     </span>
   </span>;
 }
 
 function MarkdownImage({ src, alt, title }: { src: string; alt?: string; title?: string }) {
+  const { tr } = useLocale();
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const remotePath = src.startsWith("/scope-image-api?") ? new URLSearchParams(src.split("?")[1]).get("path") : src;
   const imageSrc = retry && src.startsWith("/scope-image-api?") ? `${src}&retry=${retry}` : src;
   if (!src || failed) return (
     <span className="markdown-image-error">
-      <span>{alt || "图片"}：图片无法加载</span>
+      <span>{alt || tr("图片", "Image")}：{tr("图片无法加载", "Failed to load image")}</span>
       {remotePath && <code>{remotePath}</code>}
-      {src && <button type="button" onClick={() => { setFailed(false); setRetry(Date.now()); }}>重试</button>}
+      {src && <button type="button" onClick={() => { setFailed(false); setRetry(Date.now()); }}>{tr("重试", "Retry")}</button>}
     </span>
   );
-  return <img className="markdown-image" src={imageSrc} alt={alt || "Codex 引用的图片"} title={title || alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+  return <img className="markdown-image" src={imageSrc} alt={alt || tr("Agent 引用的图片", "Embedded image")} title={title || alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
 export const MarkdownContent = memo(function MarkdownContent({
@@ -85,7 +88,7 @@ export const MarkdownContent = memo(function MarkdownContent({
     markdownUrlTransform(url, key, remoteHost, remoteCwd), [remoteHost, remoteCwd]);
   return <div className={`markdown-body ${className}`.trim()}>
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} urlTransform={urlTransform} components={components}>
-      {normalizeLatexDelimiters(value)}
+      {normalizeMarkdownMedia(normalizeLatexDelimiters(value))}
     </ReactMarkdown>
   </div>;
 });

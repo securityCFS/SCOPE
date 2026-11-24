@@ -2,7 +2,9 @@ import path from "node:path";
 import { inspectPackage, installPackage, installedPackages, removePackage } from "../bridge/plugins/package.mjs";
 
 const [operation, argument] = process.argv.slice(2);
-const stateDirectory = path.resolve(".scope");
+const stateDirectory = process.env.SCOPE_STATE_DIR
+  ? path.resolve(process.env.SCOPE_STATE_DIR)
+  : path.resolve(".scope");
 try {
   let result;
   if (operation === "inspect" && argument) {

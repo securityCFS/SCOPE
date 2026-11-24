@@ -81,7 +81,7 @@ ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 <host-a
 Best when your laptop/desktop already holds your SSH keys and `~/.ssh/config`.
 
 ```sh
-git clone <this-repository-url> scope
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 npm ci
 npm run scope
@@ -110,7 +110,7 @@ npm run scope
 Best when you want SCOPE running 24/7 on a Linux jump host or lab workstation and accessing it from any laptop over SSH forwarding.
 
 ```sh
-git clone <this-repository-url> scope
+git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 bash scripts/install-remote-server.sh
 ```

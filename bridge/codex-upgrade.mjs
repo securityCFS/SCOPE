@@ -1,7 +1,34 @@
+import { shellQuote } from "./transport/ssh-command.mjs";
+
 // Upgrade installation, then reuse the guarded account-preserving restart.
 export function stableVersion(value) {
   if (typeof value !== "string" || !/^\d+\.\d+\.\d+$/.test(value)) throw new Error("无效的 Codex 稳定版本");
   return value;
+}
+
+export function wrapCodexUpgradeCommand(script, preCommand = "") {
+  const setup = String(preCommand || "").trim();
+  if (!setup) {
+    return { command: "python3 -", stdin: script };
+  }
+  const encoded = Buffer.from(script, "utf8").toString("base64");
+  const inner = [
+    setup,
+    "scope_setup_status=$?",
+    'if [ "$scope_setup_status" -ne 0 ]; then exit "$scope_setup_status"; fi',
+    `exec python3 -c ${shellQuote(`import base64; exec(compile(base64.b64decode(${JSON.stringify(encoded)}).decode("utf-8"), "<scope-codex-upgrade>", "exec"))`)}`,
+  ].join("\n");
+  // Interactive bash loads ~/.bashrc aliases/functions; stdin is closed so
+  // bash -i never blocks waiting for a terminal.
+  return { command: `bash -ic ${shellQuote(inner)} </dev/null`, stdin: "" };
+}
+
+export function parseCodexUpgradeOutput(stdout) {
+  const lines = String(stdout || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const marked = lines.findLast((line) => line.startsWith("SCOPE_CODEX_UPGRADE_RESULT="));
+  if (marked) return JSON.parse(marked.slice("SCOPE_CODEX_UPGRADE_RESULT=".length));
+  const jsonLine = lines.findLast((line) => line.startsWith("{") && line.endsWith("}"));
+  return JSON.parse(jsonLine || String(stdout || "").trim());
 }
 
 export function remoteCodexUpgradeScript(target = null, knownLatest = null) {
@@ -10,6 +37,19 @@ export function remoteCodexUpgradeScript(target = null, knownLatest = null) {
   return [
     "import json, os, re, shutil, subprocess, tempfile, fcntl, signal",
     "from pathlib import Path",
+    "def _extend_path():",
+    "    extra = [Path.home() / '.local/bin', Path.home() / '.cargo/bin']",
+    "    nvm_root = Path.home() / '.nvm/versions/node'",
+    "    if nvm_root.is_dir():",
+    "        extra.extend(sorted(nvm_root.glob('*/bin'), reverse=True))",
+    "    extra.append(Path('/usr/local/bin'))",
+    "    current = [p for p in os.environ.get('PATH', '').split(os.pathsep) if p]",
+    "    for candidate in reversed(extra):",
+    "        text = str(candidate)",
+    "        if candidate.is_dir() and text not in current:",
+    "            current.insert(0, text)",
+    "    os.environ['PATH'] = os.pathsep.join(current)",
+    "_extend_path()",
     "target = " + (target === null ? "None" : JSON.stringify(target)),
     "def run(args, timeout=30):",
     "    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)",
@@ -35,8 +75,10 @@ export function remoteCodexUpgradeScript(target = null, knownLatest = null) {
     "if not re.fullmatch(r'\\d+\\.\\d+\\.\\d+', latest): raise RuntimeError('注册表未返回稳定版本')",
     "root = Path(run(['npm', 'root', '-g'])).resolve()",
     "package = root / '@openai' / 'codex'",
-    "executable = Path(shutil.which('codex')).resolve()",
-    "supported = executable == package / 'bin' / 'codex.js' and package.is_dir()",
+    "codex_bin = shutil.which('codex')",
+    "if not codex_bin: raise RuntimeError('PATH 中未找到 codex 可执行文件')",
+    "executable = Path(codex_bin).resolve()",
+    "supported = package.is_dir() and (executable == package / 'bin' / 'codex.js' or package in executable.parents)",
     "backup = None",
     "if target is not None:",
     "    if not supported: raise RuntimeError('当前 Codex 不是 npm 全局安装，拒绝覆盖；请按原安装渠道更新')",
@@ -51,7 +93,7 @@ export function remoteCodexUpgradeScript(target = null, knownLatest = null) {
     "            run(['npm', 'install', '-g', '@openai/codex@' + target, '--registry=https://registry.npmjs.org', '--fetch-timeout=60000', '--fetch-retries=1', '--no-audit', '--no-fund'], 240)",
     "            installed = version()",
     "            if installed != target: raise RuntimeError('安装后 PATH 版本不匹配，未切换会话')",
-    "print(json.dumps(dict(installed=installed, latest=latest, executable=str(executable), supported=supported, backup=backup)))",
+    "print('SCOPE_CODEX_UPGRADE_RESULT=' + json.dumps(dict(installed=installed, latest=latest, executable=str(executable), supported=supported, backup=backup)))",
   ].join("\n") + "\n";
 }
 

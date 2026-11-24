@@ -9,12 +9,14 @@ const host = process.argv[3] || "";
 const portArg = process.argv.indexOf("--port");
 const remotePort = portArg >= 0 ? Number(process.argv[portArg + 1]) : 4922;
 
-if (!["inspect", "deploy", "remove"].includes(action) || !host) {
-  console.error("Usage: node scripts/remote-bootstrap-cli.mjs <inspect|deploy|remove> <ssh-host> [--port 4922]");
+if (!["inspect", "deploy", "sync-protocol", "remove"].includes(action) || !host) {
+  console.error("Usage: node scripts/remote-bootstrap-cli.mjs <inspect|deploy|sync-protocol|remove> <ssh-host|@local> [--port 4922]");
   process.exit(1);
 }
 
-const stateDir = path.resolve(process.cwd(), ".scope");
+const stateDir = process.env.SCOPE_STATE_DIR
+  ? path.resolve(process.env.SCOPE_STATE_DIR)
+  : path.resolve(process.cwd(), ".scope");
 const emailNotifier = await createEmailNotifier({
   configPath: path.join(stateDir, "email-notifications.json"),
   statePath: path.join(stateDir, "email-notification-state.json"),
@@ -39,9 +41,11 @@ try {
   const result =
     action === "inspect"
       ? await bootstrap.inspect(host)
-      : action === "deploy"
-        ? await bootstrap.deploy(host, { remotePort })
-        : await bootstrap.remove(host);
+      : action === "sync-protocol"
+        ? await bootstrap.syncProtocol(host)
+        : action === "deploy"
+          ? await bootstrap.deploy(host, { remotePort })
+          : await bootstrap.remove(host);
   console.log(JSON.stringify(result, null, 2));
 } finally {
   tunnels.stop();

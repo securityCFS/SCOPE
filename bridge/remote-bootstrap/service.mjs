@@ -1,5 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { LOCAL_HOST } from "../../lib/execution-host.js";
+import {
+  SCOPE_PROTOCOL_BEGIN,
+  SCOPE_PROTOCOL_BLOCK,
+  SCOPE_PROTOCOL_END,
+  syncLocalScopeProtocol,
+} from "./scope-protocol.mjs";
 
 const REMOTE_EMAIL_TOOL_PATH = new URL(
   "../../scripts/remote-email-tool.py",
@@ -117,6 +123,18 @@ if codex_exe:
 if claude_exe:
     claude_mcp = run([claude_exe, "mcp", "get", "scope-email"], timeout=8)[0] == 0
 
+def has_protocol(path_obj):
+    try:
+        if not path_obj.exists():
+            return False
+        text = path_obj.read_text(encoding="utf-8", errors="ignore")
+        return ${JSON.stringify(SCOPE_PROTOCOL_BEGIN)} in text and ${JSON.stringify(SCOPE_PROTOCOL_END)} in text
+    except Exception:
+        return False
+
+agy_gemini = home / ".gemini" / "config" / "GEMINI.md"
+agy_gemini_alt = home / ".gemini" / "GEMINI.md"
+
 report = {
     "user": user,
     "isRoot": os.geteuid() == 0,
@@ -133,6 +151,11 @@ report = {
         "claude": cli_info("claude"),
         "antigravity": cli_info("agy"),
         "dsh": cli_info("dsh"),
+    },
+    "scopeProtocol": {
+        "codex": has_protocol(home / ".codex" / "AGENTS.md"),
+        "claude": has_protocol(home / ".claude" / "CLAUDE.md"),
+        "antigravity": has_protocol(agy_gemini) or has_protocol(agy_gemini_alt),
     },
     "scopeNotify": {
         "installed": bool(notify_exe and (home / ".config" / "scope-email" / "config.json").exists()),
@@ -158,7 +181,57 @@ const COMPLETION_BLOCK = [
   "<!-- SCOPE_COMPLETION_EMAIL_END -->",
 ].join("\n");
 
-function buildDeployScript({ toolSourceBase64, remotePort, token, registerMcp }) {
+function buildSyncProtocolScript() {
+  return String.raw`
+import json, os
+from pathlib import Path
+
+BEGIN = ${JSON.stringify(SCOPE_PROTOCOL_BEGIN)}
+END = ${JSON.stringify(SCOPE_PROTOCOL_END)}
+BLOCK = json.loads(${JSON.stringify(JSON.stringify(SCOPE_PROTOCOL_BLOCK))})
+
+home = Path.home()
+targets = [
+    ("codex", home / ".codex" / "AGENTS.md"),
+    ("claude", home / ".claude" / "CLAUDE.md"),
+    ("antigravity", home / ".gemini" / "config" / "GEMINI.md"),
+]
+legacy_gemini = home / ".gemini" / "GEMINI.md"
+if legacy_gemini.exists() and not legacy_gemini.is_symlink():
+    targets.append(("antigravity", legacy_gemini))
+
+profiles_dir = home / ".codex" / "scope-auth-profiles"
+if profiles_dir.is_dir():
+    for sub in ("home", "scope-home"):
+        for profile_home in profiles_dir.glob(f"*/{sub}"):
+            if (profile_home / "config.toml").exists():
+                targets.append(("codex", profile_home / "AGENTS.md"))
+
+seen = set()
+updated_files = []
+for client, filename in targets:
+    filename.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    canonical = os.path.realpath(str(filename))
+    if canonical in seen:
+        continue
+    seen.add(canonical)
+    current = filename.read_text(encoding="utf-8") if filename.exists() else ""
+    if BEGIN in current and END in current:
+        prefix, remainder = current.split(BEGIN, 1)
+        _, suffix = remainder.split(END, 1)
+        joined_prefix = (prefix.rstrip() + "\n\n") if prefix.strip() else ""
+        joined_suffix = suffix if suffix.startswith("\n") else ("\n" + suffix if suffix else "\n")
+        updated = joined_prefix + BLOCK + joined_suffix
+    else:
+        updated = (current.rstrip() + "\n\n" + BLOCK + "\n") if current.strip() else (BLOCK + "\n")
+    filename.write_text(updated, encoding="utf-8")
+    updated_files.append({"client": client, "path": str(filename)})
+
+print("SCOPE_PROTOCOL_SYNC_OK=" + json.dumps({"codex": True, "claude": True, "antigravity": True, "files": updated_files}, ensure_ascii=False))
+`;
+}
+
+function buildDeployScript({ toolSourceBase64, remotePort, token, registerMcp, injectProtocol = true }) {
   const configJson = JSON.stringify({
     endpoint: `http://127.0.0.1:${remotePort}/v1/notify`,
     token,
@@ -170,6 +243,10 @@ from pathlib import Path
 TOOL_B64 = ${JSON.stringify(toolSourceBase64)}
 CONFIG = json.loads(${JSON.stringify(configJson)})
 BLOCK = json.loads(${JSON.stringify(JSON.stringify(COMPLETION_BLOCK))})
+PROTO_BEGIN = ${JSON.stringify(SCOPE_PROTOCOL_BEGIN)}
+PROTO_END = ${JSON.stringify(SCOPE_PROTOCOL_END)}
+PROTO_BLOCK = json.loads(${JSON.stringify(JSON.stringify(SCOPE_PROTOCOL_BLOCK))})
+INJECT_PROTOCOL = ${injectProtocol ? "True" : "False"}
 REGISTER_MCP = ${registerMcp ? "True" : "False"}
 
 home = Path.home()
@@ -210,22 +287,41 @@ os.chmod(config_path, 0o600)
 BEGIN = "<!-- SCOPE_COMPLETION_EMAIL_BEGIN -->"
 END = "<!-- SCOPE_COMPLETION_EMAIL_END -->"
 
-targets = [home / ".codex" / "AGENTS.md", home / ".claude" / "CLAUDE.md"]
+def upsert_block(text, b_mark, e_mark, payload):
+    if b_mark in text and e_mark in text:
+        prefix, remainder = text.split(b_mark, 1)
+        _, suffix = remainder.split(e_mark, 1)
+        joined_prefix = (prefix.rstrip() + "\n\n") if prefix.strip() else ""
+        joined_suffix = suffix if suffix.startswith("\n") else ("\n" + suffix if suffix else "\n")
+        return joined_prefix + payload + joined_suffix
+    return (text.rstrip() + "\n\n" + payload + "\n") if text.strip() else (payload + "\n")
+
+targets = [
+    home / ".codex" / "AGENTS.md",
+    home / ".claude" / "CLAUDE.md",
+    home / ".gemini" / "config" / "GEMINI.md",
+]
+legacy_gemini = home / ".gemini" / "GEMINI.md"
+if legacy_gemini.exists() and not legacy_gemini.is_symlink():
+    targets.append(legacy_gemini)
 profiles_dir = home / ".codex" / "scope-auth-profiles"
 if profiles_dir.is_dir():
-    for profile_home in profiles_dir.glob("*/home"):
-        if (profile_home / "config.toml").exists():
-            targets.append(profile_home / "AGENTS.md")
+    for sub in ("home", "scope-home"):
+        for profile_home in profiles_dir.glob(f"*/{sub}"):
+            if (profile_home / "config.toml").exists():
+                targets.append(profile_home / "AGENTS.md")
 
+seen_targets = set()
 for filename in targets:
     filename.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    canonical = os.path.realpath(str(filename))
+    if canonical in seen_targets:
+        continue
+    seen_targets.add(canonical)
     current = filename.read_text(encoding="utf-8") if filename.exists() else ""
-    if BEGIN in current and END in current:
-        prefix, remainder = current.split(BEGIN, 1)
-        _, suffix = remainder.split(END, 1)
-        updated = prefix.rstrip() + "\n\n" + BLOCK + suffix
-    else:
-        updated = (current.rstrip() + "\n\n" + BLOCK + "\n") if current.strip() else (BLOCK + "\n")
+    updated = upsert_block(current, BEGIN, END, BLOCK)
+    if INJECT_PROTOCOL:
+        updated = upsert_block(updated, PROTO_BEGIN, PROTO_END, PROTO_BLOCK)
     filename.write_text(updated, encoding="utf-8")
 
 def which_cmd(name):
@@ -311,13 +407,24 @@ for cmd_args in (["codex", "mcp", "remove", "scope-email"], ["claude", "mcp", "r
 
 BEGIN = "<!-- SCOPE_COMPLETION_EMAIL_BEGIN -->"
 END = "<!-- SCOPE_COMPLETION_EMAIL_END -->"
-targets = [home / ".codex" / "AGENTS.md", home / ".claude" / "CLAUDE.md"]
+targets = [
+    home / ".codex" / "AGENTS.md",
+    home / ".claude" / "CLAUDE.md",
+    home / ".gemini" / "config" / "GEMINI.md",
+    home / ".gemini" / "GEMINI.md",
+]
 profiles_dir = home / ".codex" / "scope-auth-profiles"
 if profiles_dir.is_dir():
-    for profile_home in profiles_dir.glob("*/home"):
-        targets.append(profile_home / "AGENTS.md")
+    for sub in ("home", "scope-home"):
+        for profile_home in profiles_dir.glob(f"*/{sub}"):
+            targets.append(profile_home / "AGENTS.md")
+seen_remove = set()
 for filename in targets:
     if filename.exists():
+        canonical = os.path.realpath(str(filename))
+        if canonical in seen_remove:
+            continue
+        seen_remove.add(canonical)
         text = filename.read_text(encoding="utf-8")
         if BEGIN in text and END in text:
             prefix, remainder = text.split(BEGIN, 1)
@@ -399,7 +506,7 @@ export class RemoteBootstrapService {
     return this.state(host);
   }
 
-  async deploy(host, { remotePort = DEFAULT_REMOTE_PORT, registerMcp = true } = {}) {
+  async deploy(host, { remotePort = DEFAULT_REMOTE_PORT, registerMcp = true, injectProtocol = true } = {}) {
     this.#requireRemoteHost(host);
     const port = validPort(remotePort);
     const relay = await this.tunnels.enable(host, port);
@@ -409,6 +516,7 @@ export class RemoteBootstrapService {
       remotePort: port,
       token: relay.token,
       registerMcp,
+      injectProtocol,
     });
     const result = await this.run(host, "python3 -", script, 60_000, 1_000_000);
     if (result.code !== 0) {
@@ -424,6 +532,35 @@ export class RemoteBootstrapService {
       lastAction: "deploy",
     });
     return { ...refreshed, lastAction: "deploy" };
+  }
+
+  async syncProtocol(host) {
+    if (host === LOCAL_HOST) {
+      const protocol = await syncLocalScopeProtocol();
+      return {
+        host: LOCAL_HOST,
+        lastAction: "sync-protocol",
+        protocol,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+    this.#requireRemoteHost(host);
+    const result = await this.run(host, "python3 -", buildSyncProtocolScript(), 45_000, 1_000_000);
+    if (result.code !== 0) {
+      throw new Error(
+        (result.stderr || result.stdout || "同步三端 SCOPE 协议失败").trim().slice(-800),
+      );
+    }
+    const line = result.stdout
+      .split(/\r?\n/)
+      .findLast((item) => item.startsWith("SCOPE_PROTOCOL_SYNC_OK="));
+    const protocol = line ? JSON.parse(line.slice("SCOPE_PROTOCOL_SYNC_OK=".length)) : null;
+    const refreshed = await this.inspect(host);
+    this.cache.set(host, {
+      ...this.cache.get(host),
+      lastAction: "sync-protocol",
+    });
+    return { ...refreshed, lastAction: "sync-protocol", protocol };
   }
 
   async remove(host) {

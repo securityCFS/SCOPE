@@ -3,8 +3,10 @@ import path from "node:path";
 
 /** Machine-specific integrations are opt-in, outside the tracked repository. */
 export function loadDeploymentProfile({
-  filename = path.resolve(".scope/deployment.json"),
   env = process.env,
+  filename = env.SCOPE_STATE_DIR
+    ? path.resolve(env.SCOPE_STATE_DIR, "deployment.json")
+    : path.resolve(".scope/deployment.json"),
 } = {}) {
   let value = {};
   try {

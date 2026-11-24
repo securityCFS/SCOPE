@@ -213,10 +213,62 @@ export function nativeConversationFixture(request, response, url, json) {
   }
   if (url.pathname === "/api/session-catalog/dialogue") {
     const isClaude = (url.searchParams.get("key") || "").includes('"claude"');
-    json(response, 200, {
-      version: "preview-v1",
-      subagents: isClaude ? claudeSubagents : agySubagents,
-      messages: isEn
+    const isAgy = (url.searchParams.get("key") || "").includes('"antigravity"');
+    const messages = isAgy
+      ? isEn
+        ? [
+            {
+              id: "1",
+              role: "user",
+              text: "Summarize the 4-GPU ablation matrix with a comparison table, convergence plot, rollout video preview, and clickable script links.",
+            },
+            {
+              id: "2",
+              role: "assistant",
+              text: [
+                "Completed the 4× A100 ablation sweep (see [eval_metrics.py](file:///workspace/research/eval_metrics.py#L42-L68)).",
+                "",
+                "| Variant | Success (%) | Peak VRAM (GB) | Throughput (steps/s) |",
+                "| --- | ---: | ---: | ---: |",
+                "| Baseline | 66.2 | 41.8 | 11.4 |",
+                "| Cosine LR | 79.5 | 38.2 | 13.1 |",
+                "| **Ours (SCOPE Policy)** | **92.8** | **27.6** | **16.9** |",
+                "",
+                "Advantage objective: $$\\mathcal{L}(\\theta) = \\mathbb{E}_{(s,a)}\\!\\left[\\big(\\widehat{J}_\\theta(s,a) - J^\\beta(s,a)\\big)^2\\right]$$",
+                "",
+                "![Benchmark Convergence Curve](file:///workspace/research/plots/convergence.png)",
+                "",
+                "![Policy Rollout Video Preview](file:///workspace/research/videos/rollout_demo.mp4)",
+              ].join("\n"),
+            },
+          ]
+        : [
+            {
+              id: "1",
+              role: "user",
+              text: "汇总 4 卡消融实验结果，用标准表格对比指标，附上收敛曲线图、策略仿真视频预览和脚本跳转链接。",
+            },
+            {
+              id: "2",
+              role: "assistant",
+              text: [
+                "已完成 4× A100 消融评测汇总（详见 [eval_metrics.py](file:///workspace/research/eval_metrics.py#L42-L68)）：",
+                "",
+                "| 实验方案 | 成功率 (%) | 显存峰值 (GB) | 吞吐 (steps/s) |",
+                "| --- | ---: | ---: | ---: |",
+                "| Baseline | 66.2 | 41.8 | 11.4 |",
+                "| Cosine LR | 79.5 | 38.2 | 13.1 |",
+                "| **Ours (SCOPE Policy)** | **92.8** | **27.6** | **16.9** |",
+                "",
+                "核心目标函数：$$\\mathcal{L}(\\theta) = \\mathbb{E}_{(s,a)}\\!\\left[\\big(\\widehat{J}_\\theta(s,a) - J^\\beta(s,a)\\big)^2\\right]$$",
+                "",
+                "![实验收敛曲线预览](file:///workspace/research/plots/convergence.png)",
+                "",
+                "![策略仿真视频预览](file:///workspace/research/videos/rollout_demo.mp4)",
+              ].join("\n"),
+            },
+          ]
+      : isEn
         ? [
             {
               id: "1",
@@ -226,7 +278,7 @@ export function nativeConversationFixture(request, response, url, json) {
             {
               id: "2",
               role: "assistant",
-              text: "Updated the results narrative and delegated **2 background subagents** to audit baselines and eval scripts in parallel.\n\n**Proposed wording**:\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**Key equation**: `e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\nPlease confirm below which charts you'd like prioritized first.",
+              text: "Updated the results narrative and delegated **2 background subagents** to audit baselines and eval scripts in parallel (see [eval_metrics.py](file:///workspace/research/eval_metrics.py#L18-L45)).\n\n**Proposed wording**:\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**Key equation**: `e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\nPlease confirm below which charts you'd like prioritized first.",
             },
           ]
         : [
@@ -238,9 +290,13 @@ export function nativeConversationFixture(request, response, url, json) {
             {
               id: "2",
               role: "assistant",
-              text: "已整理实验描述，并委派 **2 个后台子代理** 同步核查基线与评测脚本。\n\n**新增表述**：\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**关键公式**：`e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\n等待下方确认你希望优先汇总的图表项。",
+              text: "已整理实验描述，并委派 **2 个后台子代理** 同步核查基线与评测脚本（详见 [eval_metrics.py](file:///workspace/research/eval_metrics.py#L18-L45)）。\n\n**新增表述**：\n\n`Without training an actor, \\method{} achieves the highest success rate across all four visual manipulation benchmarks, while reducing GPU memory footprint by 34% (\\cref{tab:zeroshot-pixels}).`\n\n**关键公式**：`e(\\va)=\\widehat{J}(\\va)-J^\\beta(\\va)`\n\n等待下方确认你希望优先汇总的图表项。",
             },
-          ],
+          ];
+    json(response, 200, {
+      version: "preview-v1",
+      subagents: isClaude ? claudeSubagents : agySubagents,
+      messages,
       summaryOnly: false,
       limited: false,
       nextBefore: null,

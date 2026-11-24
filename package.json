@@ -2,6 +2,34 @@
   "name": "scope-agent-workbench",
   "version": "0.2.0",
   "description": "SCOPE: One monitor for all agent sessions — unified web workbench for coding agents across local and SSH GPU hosts",
+  "homepage": "https://github.com/securityCFS/SCOPE#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/securityCFS/SCOPE.git"
+  },
+  "bugs": {
+    "url": "https://github.com/securityCFS/SCOPE/issues"
+  },
+  "bin": {
+    "scope": "./bin/scope.mjs",
+    "scope-workbench": "./bin/scope.mjs"
+  },
+  "files": [
+    "bin/",
+    "bridge/",
+    "dist/",
+    "examples/",
+    "lib/",
+    "scripts/",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "ai-agents",
     "codex",
@@ -38,6 +66,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "check": "npm run typecheck && npm run build && npm run test:unit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "prepack": "npm run build",
     "preview:fixture": "node scripts/preview-workbench.mjs"
   },
   "dependencies": {

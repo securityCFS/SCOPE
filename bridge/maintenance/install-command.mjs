@@ -82,15 +82,31 @@ with open(state / (provider + '.lock'), 'a') as lock:
     ))
     supported = (not executable and (provider == 'claude' or bool(npm))) or npm_owned or native_claude
     latest = None
-    if provider != 'claude' and npm and package:
-        try:
-            raw_latest = run([npm, 'view', package, 'version', '--json', '--fetch-timeout=8000', '--fetch-retries=0'], 12)
-            candidate_latest = json.loads(raw_latest)
-            if isinstance(candidate_latest, str) and re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?', candidate_latest):
-                latest = candidate_latest
-        except Exception:
-            latest = None
-    info = dict(installed=installed, latest=latest, executable=executable, supported=supported, channel='npm' if npm_owned else 'native' if native_claude else 'not-installed' if not executable else 'external')
+    latest_error = None
+    if package:
+        if npm:
+            try:
+                raw_latest = run([npm, 'view', package, 'version', '--json', '--fetch-timeout=15000', '--fetch-retries=1'], 25)
+                candidate_latest = json.loads(raw_latest)
+                if isinstance(candidate_latest, str) and re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?', candidate_latest):
+                    latest = candidate_latest
+            except Exception as exc:
+                latest = None
+                latest_error = str(exc).splitlines()[-1][:200] if str(exc).strip() else 'npm view failed'
+        if not latest:
+            try:
+                import urllib.request
+                req = urllib.request.Request(f'https://registry.npmjs.org/{package.replace("/", "%2F")}/latest', headers={'Accept': 'application/json'})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    payload = json.loads(resp.read().decode('utf-8', 'replace'))
+                candidate_latest = payload.get('version') if isinstance(payload, dict) else None
+                if isinstance(candidate_latest, str) and re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?', candidate_latest):
+                    latest = candidate_latest
+                    latest_error = None
+            except Exception as exc:
+                if not latest_error:
+                    latest_error = str(exc).splitlines()[-1][:200] if str(exc).strip() else 'registry check failed'
+    info = dict(installed=installed, latest=latest, latestError=latest_error, executable=executable, supported=supported, channel='npm' if npm_owned else 'native' if native_claude else 'not-installed' if not executable else 'external')
     if action != 'check':
         if not supported: raise RuntimeError('现有安装由其他渠道管理，或缺少 npm；请按原渠道配置，未覆盖安装')
         if action == 'install' and executable: raise RuntimeError('已经安装，请使用更新')
@@ -111,10 +127,11 @@ with open(state / (provider + '.lock'), 'a') as lock:
             run([npm, 'install', '-g', package + '@' + target, '--fetch-timeout=60000', '--fetch-retries=1', '--no-audit', '--no-fund'], 600)
             executable = shutil.which(config['executable'])
         if not executable: raise RuntimeError('安装完成但 PATH 中找不到命令，请检查 npm prefix 和 PATH')
-        info.update(installed=run([executable, '--version'], 30), executable=executable)
+        new_ver_out = run([executable, '--version'], 30)
+        info.update(installed=(new_ver_out.splitlines()[0] if new_ver_out else '').strip()[:120] or new_ver_out, executable=executable, latestError=None)
         if latest and provider != 'claude' and not re.search(r'(?<![\d.])' + re.escape(latest) + r'(?![\d.])', info['installed']): raise RuntimeError('PATH 中的版本与安装目标不一致，请检查路径优先级')
     emit(info)
 `;
-  const bootstrap = settings.preLaunchCommand?.trim();
+  const bootstrap = (settings.updatePreCommand || settings.preLaunchCommand || "").trim();
   return `${bootstrap ? `${bootstrap}\nscope_setup_status=$?\nif [ "$scope_setup_status" -ne 0 ]; then exit "$scope_setup_status"; fi\n` : ""}exec python3 -c ${shellQuote(script)}`;
 }

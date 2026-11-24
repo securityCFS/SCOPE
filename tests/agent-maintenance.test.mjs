@@ -26,7 +26,14 @@ test("installation uses fixed vendor packages and applies optional pre-launch se
   assert.ok(installCommand("dsh", "update", {}).includes("@deepseek-ai/dsh"));
   const checkCodex = installCommand("codex", "check", {});
   assert.ok(checkCodex.includes(".nvm/versions/node"));
-  assert.ok(checkCodex.includes("except Exception:\n            latest = None"));
+  assert.ok(checkCodex.includes("latest = None"));
+  const withUpdateProxy = installCommand("codex", "update", {
+    preLaunchCommand: "source ~/.api_proxy.sh",
+    updatePreCommand: "source ~/.pkg_proxy.sh",
+  });
+  assert.ok(withUpdateProxy.startsWith("source ~/.pkg_proxy.sh\nscope_setup_status=$?\nif"));
+  const checkClaude = installCommand("claude", "check", {});
+  assert.ok(checkClaude.includes("@anthropic-ai/claude-code"));
 });
 test("installer checkpoints before launch, deduplicates double clicks and reconciles after restart", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "scope-maintenance-"));

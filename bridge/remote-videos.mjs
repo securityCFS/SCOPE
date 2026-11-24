@@ -9,7 +9,7 @@ with os.fdopen(fd, 'rb') as f:
     s = os.fstat(f.fileno())
     if not stat.S_ISREG(s.st_mode): raise ValueError('Not a regular video file')
     head = f.read(4096)
-    if head[4:8] == b'ftyp' and any(b in head[8:64] for b in [b'isom', b'iso2', b'iso4', b'iso5', b'iso6', b'mp41', b'mp42', b'avc1', b'M4V ']): mime = 'video/mp4'
+    if head[4:8] == b'ftyp' and any(b in head[8:64] for b in [b'isom', b'iso2', b'iso4', b'iso5', b'iso6', b'mp41', b'mp42', b'avc1', b'M4V ', b'qt  ']): mime = 'video/mp4'
     elif head[:4] == bytes([0x1a,0x45,0xdf,0xa3]) and b'webm' in head: mime = 'video/webm'
     elif head[:4] == b'OggS' and b'theora' in head: mime = 'video/ogg'
     else: raise ValueError('Unsupported video content (MP4/WebM/Ogg required)')
@@ -47,7 +47,7 @@ export async function remoteVideoResponse(request, { spawnProcess = spawn, resol
   if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
   if (request.headers.get("sec-fetch-site") === "cross-site" || (request.headers.get("origin") && request.headers.get("origin") !== url.origin)) return new Response("Forbidden", { status: 403 });
   const remotePath = url.searchParams.get("path") || "";
-  if (!remotePath.startsWith("/") || remotePath.startsWith("//") || remotePath.length > 4096 || /[\x00-\x1f]/.test(remotePath) || !/\.(mp4|m4v|webm|ogv)$/i.test(remotePath)) return new Response("Invalid video path", { status: 400 });
+  if (!remotePath.startsWith("/") || remotePath.startsWith("//") || remotePath.length > 4096 || /[\x00-\x1f]/.test(remotePath) || !/\.(mp4|m4v|webm|ogv|mov)$/i.test(remotePath)) return new Response("Invalid video path", { status: 400 });
   if (active >= 4) return new Response("Video reader busy", { status: 503, headers: { "Retry-After": "2" } });
   active++;
   let child;

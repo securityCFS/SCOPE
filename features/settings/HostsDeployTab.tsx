@@ -20,6 +20,11 @@ type BootstrapReport = {
   localBinInPath: boolean;
   systemdUserAvailable: boolean;
   clis: Record<string, { installed: boolean; executable: string | null; version: string | null }>;
+  scopeProtocol?: {
+    codex: boolean;
+    claude: boolean;
+    antigravity: boolean;
+  };
   scopeNotify: {
     installed: boolean;
     executable: string | null;
@@ -68,6 +73,7 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
 
   // Per-host runtime proxy/sandbox state
   const [preLaunchCommand, setPreLaunchCommand] = useState("");
+  const [updatePreCommand, setUpdatePreCommand] = useState("");
   const [yolo, setYolo] = useState(true);
   const [residentLimitDraft, setResidentLimitDraft] = useState("");
   const [runtimeSaving, setRuntimeSaving] = useState(false);
@@ -94,6 +100,7 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
       .then((data) => {
         if (!cancelled && data?.config) {
           setPreLaunchCommand(data.config.preLaunchCommand || "");
+          setUpdatePreCommand(data.config.updatePreCommand || "");
           setYolo(data.config.yolo !== false);
           setResidentLimitDraft(
             typeof data.config.residentSessionLimit === "number"
@@ -153,6 +160,7 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
         body: JSON.stringify({
           host: activeHost,
           preLaunchCommand,
+          updatePreCommand,
           yolo,
           residentSessionLimit:
             residentLimitDraft.trim() === ""
@@ -173,7 +181,7 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
     }
   }
 
-  async function runBootstrap(action: "inspect" | "deploy" | "remove") {
+  async function runBootstrap(action: "inspect" | "deploy" | "sync-protocol" | "remove") {
     if (!activeHost) return;
     setBootstrapBusy(action);
     setBootstrapNotice(null);
@@ -196,9 +204,14 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
         text:
           action === "inspect"
             ? tr("远端主机环境检查完成。", "Remote host environment inspected.")
-            : action === "deploy"
-              ? tr("远端 Scope 服务与隧道已部署并启动。", "Remote Scope service and reverse tunnel deployed.")
-              : tr("已停止并清理该主机的远端通知服务。", "Remote service and tunnel removed for this host."),
+            : action === "sync-protocol"
+              ? tr(
+                  "已向 Codex (AGENTS.md)、Claude (CLAUDE.md) 与 Antigravity (GEMINI.md) 注入 SCOPE 公式/表格/音视频与 file:// 显示协议。",
+                  "Injected SCOPE LaTeX, table, media, and file:// protocol into Codex (AGENTS.md), Claude (CLAUDE.md), and Antigravity (GEMINI.md).",
+                )
+              : action === "deploy"
+                ? tr("远端 Scope 服务、三端协议与隧道已部署并启动。", "Remote Scope service, agent protocols, and reverse tunnel deployed.")
+                : tr("已停止并清理该主机的远端通知服务。", "Remote service and tunnel removed for this host."),
       });
     } catch (error) {
       setBootstrapNotice({ kind: "error", text: (error as Error).message });
@@ -287,16 +300,31 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
 
         <div className="center-form-grid">
           <label className="span-full">
-            {tr("启动前命令（Pre-launch command）", "Pre-launch command")}
+            {tr("启动前命令（Pre-launch command · Agent 运行代理）", "Pre-launch command (Agent runtime proxy)")}
             <textarea
-              rows={3}
+              rows={2}
               value={preLaunchCommand}
               placeholder={tr(
-                "例如：export https_proxy=http://127.0.0.1:7890 或 source ~/.proxy_env（留空则直连）",
-                "Example: export https_proxy=http://127.0.0.1:7890 or source ~/.proxy_env (empty = direct)",
+                "例如：export https_proxy=http://127.0.0.1:7890 或 source ~/.api_proxy.sh（留空则直连）",
+                "Example: export https_proxy=http://127.0.0.1:7890 or source ~/.api_proxy.sh (empty = direct)",
               )}
               onChange={(e) => {
                 setPreLaunchCommand(e.target.value);
+                setRuntimeNotice(null);
+              }}
+            />
+          </label>
+          <label className="span-full">
+            {tr("CLI 更新前命令（包管理 / 独立下载代理，留空沿用上方命令）", "CLI update pre-command (package registry proxy; blank = inherit above)")}
+            <textarea
+              rows={2}
+              value={updatePreCommand}
+              placeholder={tr(
+                "例如：source ~/.pkg_proxy.sh 或自定义包管理代理命令（专门用于 npm / curl 检查与升级 CLI，不干扰 Agent 对话代理）",
+                "Example: source ~/.pkg_proxy.sh or custom package-proxy alias (used for npm/curl CLI version checks & updates without changing agent API proxy)",
+              )}
+              onChange={(e) => {
+                setUpdatePreCommand(e.target.value);
                 setRuntimeNotice(null);
               }}
             />
@@ -421,6 +449,16 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
                 {report.scopeNotify.claudeMcp ? "Claude ✓" : "Claude -"}
               </strong>
             </div>
+            {report.scopeProtocol && (
+              <div className="settings-env-item">
+                <span>{tr("SCOPE 显示协议（公式/表格/媒体）", "SCOPE Protocol (Math/Tables/Media)")}</span>
+                <strong>
+                  {report.scopeProtocol.codex ? "Codex ✓" : "Codex -"} /{" "}
+                  {report.scopeProtocol.claude ? "Claude ✓" : "Claude -"} /{" "}
+                  {report.scopeProtocol.antigravity ? "AGY ✓" : "AGY -"}
+                </strong>
+              </div>
+            )}
           </div>
         )}
 
@@ -475,6 +513,17 @@ export function HostsDeployTab({ hosts }: { hosts: Host[] }) {
           >
             <RefreshCw size={14} className={bootstrapBusy === "inspect" ? "is-spinning" : ""} />
             {tr("检查远端环境", "Inspect host")}
+          </button>
+          <button
+            type="button"
+            className="center-secondary"
+            disabled={!hostInfo?.reachable || Boolean(bootstrapBusy)}
+            onClick={() => void runBootstrap("sync-protocol")}
+          >
+            <Check size={14} />
+            {bootstrapBusy === "sync-protocol"
+              ? tr("正在注入协议…", "Syncing protocol…")
+              : tr("同步三端 SCOPE 协议", "Sync SCOPE protocol")}
           </button>
           <button
             type="button"

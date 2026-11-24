@@ -85,7 +85,13 @@ export function TaskQueue({
               </p>
             )}
             {task.note && <p>{task.note}</p>}
-            {task.result?.text && <MarkdownBody value={task.result.text} />}
+            {task.result?.text && (
+              <MarkdownBody
+                value={task.result.text}
+                remoteHost={task.host}
+                remoteCwd={task.cwd}
+              />
+            )}
             {task.result?.stderr && (
               <details>
                 <summary>执行日志</summary>

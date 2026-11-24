@@ -2,7 +2,7 @@
 import { sessionArchiveService } from "../bridge/archive/service.mjs";
 import { archiveRoutes } from "../bridge/archive/routes.mjs";
 import { createServer } from "node:http";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { startProductionUiServer } from "../bridge/ui-server.mjs";
@@ -279,9 +279,45 @@ const archives = sessionArchiveService({
 const archiveRoute = archiveRoutes(archives, { jsonResponse, readJsonBody });
 const ui = await startProductionUiServer({ host: "127.0.0.1", port: 3002 });
 const createdDirectories = new Map();
+const fixtureImageBytes = await readFile(new URL("./fixtures/media/convergence.png", import.meta.url));
+const fixtureVideoBytes = await readFile(new URL("./fixtures/media/rollout_demo.mp4", import.meta.url));
 const preview = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://127.0.0.2:3001");
+    if (url.pathname === "/scope-image-api") {
+      response.writeHead(200, {
+        "content-type": "image/png",
+        "content-length": String(fixtureImageBytes.length),
+        "cache-control": "private, max-age=60",
+      });
+      response.end(fixtureImageBytes);
+      return;
+    }
+    if (url.pathname === "/scope-video-api") {
+      const total = fixtureVideoBytes.length;
+      const rangeHeader = request.headers.range;
+      if (rangeHeader && /^bytes=(\d*)-(\d*)$/.test(rangeHeader)) {
+        const [, rawStart, rawEnd] = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+        const start = rawStart ? Number(rawStart) : 0;
+        const end = rawEnd ? Math.min(total - 1, Number(rawEnd)) : total - 1;
+        const slice = fixtureVideoBytes.subarray(start, end + 1);
+        response.writeHead(206, {
+          "content-type": "video/mp4",
+          "accept-ranges": "bytes",
+          "content-range": `bytes ${start}-${end}/${total}`,
+          "content-length": String(slice.length),
+        });
+        response.end(slice);
+        return;
+      }
+      response.writeHead(200, {
+        "content-type": "video/mp4",
+        "accept-ranges": "bytes",
+        "content-length": String(total),
+      });
+      response.end(fixtureVideoBytes);
+      return;
+    }
     if (await fixturePluginRoutes(request, response, new URL(url.pathname.replace(/^\/scope-api/, "") + url.search, url.origin))) return;
     if (url.pathname === "/scope-directory-api") {
       const cwd = url.searchParams.get("path") || "/workspace";
@@ -422,6 +458,7 @@ const preview = createServer(async (request, response) => {
               antigravity: { installed: false, executable: null, version: null },
               dsh: { installed: false, executable: null, version: null },
             },
+            scopeProtocol: { codex: true, claude: true, antigravity: true },
             scopeNotify: { installed: false, executable: null, daemonActive: false, systemdServiceActive: false, relayReachable: false, queued: 0, lastDeliveredAt: null, codexMcp: false, claudeMcp: false },
           },
           tunnel: { enabled: false, remotePort: 4922, status: "disabled", connectedAt: null, lastError: null },

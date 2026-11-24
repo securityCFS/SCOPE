@@ -157,6 +157,7 @@ export type ManagementState = {
     string,
     {
       preLaunchCommand: string;
+      updatePreCommand?: string;
       yolo: boolean;
       residentSessionLimit?: number | null;
       updatedAt: string | null;

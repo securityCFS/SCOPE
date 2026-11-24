@@ -4,8 +4,12 @@ import type { useNativeHistory } from "./use-native-history";
 
 export function NativeHistoryView({
   value,
+  host,
+  cwd,
 }: {
   value: ReturnType<typeof useNativeHistory>;
+  host?: string;
+  cwd?: string;
 }) {
   const { history, busy, error, earlier, refresh } = value;
   return (
@@ -57,7 +61,7 @@ export function NativeHistoryView({
           ) : (
             message.text && (
               <div className={`native-message ${message.role}`}>
-                <MarkdownBody value={message.text} />
+                <MarkdownBody value={message.text} remoteHost={host} remoteCwd={cwd} />
               </div>
             )
           )}

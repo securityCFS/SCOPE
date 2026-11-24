@@ -12,10 +12,19 @@ test("normalizes host startup commands and preserves legacy defaults", () => {
     normalizeHostRuntimeConfig({}, { preLaunchCommand: "source ~/.proxy.sh", yolo: true }),
     {
       preLaunchCommand: "source ~/.proxy.sh",
+      updatePreCommand: "",
       yolo: true,
       residentSessionLimit: null,
       updatedAt: null,
     },
+  );
+  assert.equal(
+    normalizeHostRuntimeConfig({ updatePreCommand: "  source ~/.pkg_proxy.sh\r\n" }).updatePreCommand,
+    "source ~/.pkg_proxy.sh",
+  );
+  assert.equal(
+    normalizeHostRuntimeConfig({}, { updatePreCommand: "source ~/.pkg_proxy.sh" }).updatePreCommand,
+    "source ~/.pkg_proxy.sh",
   );
   assert.equal(
     normalizeHostRuntimeConfig({ residentSessionLimit: 8 }).residentSessionLimit,

@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
-const UI_PORT = 3000;
-const BRIDGE_PORT = 4815;
+const UI_PORT = Number(process.env.SCOPE_UI_PORT || 3000);
+const BRIDGE_PORT = Number(process.env.SCOPE_BRIDGE_PORT || 4815);
 const developmentMode = process.argv.includes("--dev");
+const forceBuild = process.argv.includes("--build");
 const skipBuild = process.argv.includes("--skip-build");
 
 function portIsOpen(port) {
@@ -93,8 +95,22 @@ const vinextEntry = fileURLToPath(
   new URL("../node_modules/vinext/dist/cli.js", import.meta.url),
 );
 const uiEntry = fileURLToPath(new URL("./ui-server.mjs", import.meta.url));
+const prebuiltServerEntry = fileURLToPath(
+  new URL("../dist/server/index.js", import.meta.url),
+);
+const shouldBuild =
+  !developmentMode &&
+  !skipBuild &&
+  (forceBuild || !existsSync(prebuiltServerEntry) || existsSync(vinextEntry));
 
-if (!developmentMode && !skipBuild) {
+if (shouldBuild && !existsSync(vinextEntry)) {
+  if (existsSync(prebuiltServerEntry)) {
+    console.log("[scope] Using prebuilt UI bundle.");
+  } else {
+    console.error("[scope] Missing prebuilt dist/ bundle and vinext build tool.");
+    process.exit(1);
+  }
+} else if (shouldBuild) {
   console.log("[scope] Building the stable local UI...");
   const buildCode = await new Promise((resolve, reject) => {
     const build = spawn(process.execPath, [vinextEntry, "build"], {

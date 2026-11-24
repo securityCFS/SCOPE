@@ -208,6 +208,7 @@ export function hostRuntimeConfig(management: ManagementState, host: string) {
   return (
     management.hostRuntimeConfigs?.[host] || {
       preLaunchCommand: "",
+      updatePreCommand: "",
       yolo: true,
       residentSessionLimit: null,
       updatedAt: null,

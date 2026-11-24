@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import { markdownUrlTransform } from "../lib/markdown-url.js";
+import { normalizeMarkdownMedia } from "../lib/markdown-math.js";
 import {
   remoteFileTargetFromMarkdownHref,
 } from "../lib/remote-links.js";
@@ -79,4 +80,28 @@ test("resolves Markdown file locations against the remote workspace", () => {
     remoteFileTargetFromMarkdownHref("https://example.com/report.md", "/work/repo"),
     null,
   );
+  assert.deepEqual(
+    remoteFileTargetFromMarkdownHref("file:///work/repo/eval.py#L42-L68"),
+    { path: "/work/repo/eval.py", line: 42, column: null },
+  );
+  assert.deepEqual(
+    remoteFileTargetFromMarkdownHref("file:/work/repo/plot.png"),
+    { path: "/work/repo/plot.png", line: null, column: null },
+  );
+});
+
+test("normalizeMarkdownMedia supports AGY bare file:// links, spaces, and HTML media tags while protecting code", () => {
+  const input = [
+    "See file:///data/out/curve.png and file:///data/out/rollout.mp4 and file:///data/code.py#L10-L20.",
+    "![Plot](file:///data/my folder/loss curve.png)",
+    '<video src="file:///data/demo.mp4" controls></video>',
+    "`file:///data/keep-literal.png`",
+  ].join("\n");
+  const out = normalizeMarkdownMedia(input);
+  assert.match(out, /!\[curve\.png\]\(<file:\/\/\/data\/out\/curve\.png>\)/);
+  assert.match(out, /!\[rollout\.mp4\]\(<file:\/\/\/data\/out\/rollout\.mp4>\)/);
+  assert.match(out, /\[code\.py\]\(<file:\/\/\/data\/code\.py#L10-L20>\)/);
+  assert.match(out, /!\[Plot\]\(<file:\/\/\/data\/my folder\/loss curve\.png>\)/);
+  assert.match(out, /!\[demo\.mp4\]\(<file:\/\/\/data\/demo\.mp4>\)/);
+  assert.ok(out.includes("`file:///data/keep-literal.png`"));
 });

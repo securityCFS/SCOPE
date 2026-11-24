@@ -15,6 +15,8 @@ export function remoteBootstrapRoutes({ bootstrap, readJsonBody, jsonResponse })
         const action = String(body.action || "inspect").trim();
         if (action === "inspect") {
           jsonResponse(response, 200, await bootstrap.inspect(host));
+        } else if (action === "sync-protocol") {
+          jsonResponse(response, 200, await bootstrap.syncProtocol(host));
         } else if (action === "deploy") {
           jsonResponse(
             response,
@@ -22,6 +24,7 @@ export function remoteBootstrapRoutes({ bootstrap, readJsonBody, jsonResponse })
             await bootstrap.deploy(host, {
               remotePort: body.remotePort,
               registerMcp: body.registerMcp !== false,
+              injectProtocol: body.injectProtocol !== false,
             }),
           );
         } else if (action === "remove") {

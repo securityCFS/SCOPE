@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { RemoteTunnelManager } from "../bridge/remote-bootstrap/tunnels.mjs";
 import { RemoteBootstrapService } from "../bridge/remote-bootstrap/service.mjs";
 import { remoteBootstrapRoutes } from "../bridge/remote-bootstrap/routes.mjs";
+import {
+  SCOPE_PROTOCOL_BEGIN,
+  SCOPE_PROTOCOL_END,
+  syncLocalScopeProtocol,
+} from "../bridge/remote-bootstrap/scope-protocol.mjs";
 import { jsonResponse, readJsonBody } from "../bridge/http.mjs";
 
 function createFakeChild() {
@@ -161,4 +166,39 @@ test("RemoteBootstrapService inspects, deploys to ~/.local without hardcoded nam
   );
   assert.equal(status, 200);
   assert.equal(responseBody.host, "gpu-node");
+});
+
+test("syncLocalScopeProtocol idempotently injects LaTeX, GFM table, media, and file:// protocol into all three agent rule files", async (t) => {
+  const fakeHome = await mkdtemp(path.join(tmpdir(), "scope-proto-home-"));
+  t.after(() => rm(fakeHome, { recursive: true, force: true }));
+
+  await mkdir(path.join(fakeHome, ".codex"), { recursive: true });
+  await writeFile(path.join(fakeHome, ".codex", "AGENTS.md"), "# User Codex Rules\n\nKeep me intact.\n", "utf8");
+
+  const first = await syncLocalScopeProtocol(fakeHome);
+  assert.equal(first.codex, true);
+  assert.equal(first.claude, true);
+  assert.equal(first.antigravity, true);
+  assert.equal(first.files.length, 3);
+
+  const codexText = await readFile(path.join(fakeHome, ".codex", "AGENTS.md"), "utf8");
+  const claudeText = await readFile(path.join(fakeHome, ".claude", "CLAUDE.md"), "utf8");
+  const agyText = await readFile(path.join(fakeHome, ".gemini", "config", "GEMINI.md"), "utf8");
+
+  assert.match(codexText, /Keep me intact\./);
+  for (const text of [codexText, claudeText, agyText]) {
+    assert.ok(text.includes(SCOPE_PROTOCOL_BEGIN));
+    assert.ok(text.includes(SCOPE_PROTOCOL_END));
+    assert.match(text, /LaTeX/i);
+    assert.match(text, /Markdown Tables/i);
+    assert.match(text, /file:\/\/\//);
+    assert.match(text, /\.mp4/);
+    assert.match(text, /\.png/);
+  }
+
+  // Idempotent on second run: no duplicate blocks.
+  await syncLocalScopeProtocol(fakeHome);
+  const codexAgain = await readFile(path.join(fakeHome, ".codex", "AGENTS.md"), "utf8");
+  assert.equal(codexAgain.split(SCOPE_PROTOCOL_BEGIN).length - 1, 1);
+  assert.equal(codexAgain, codexText);
 });
