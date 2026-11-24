@@ -12,6 +12,9 @@ import re
 import subprocess
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 WORKER = r'''
 import json, os, subprocess, sys, time
 from pathlib import Path
@@ -120,7 +123,7 @@ for name in ("stdout", "stderr"):
 result["remotePath"] = str(root)
 snapshot_file = root / "interactive.json"
 if snapshot_file.exists():
-    snapshot = json.loads(snapshot_file.read_text())
+    snapshot = json.loads(snapshot_file.read_text(encoding="utf-8"))
     if result.get("status") == "unknown" and snapshot.get("status") in ("running", "waiting_permission", "stopping", "finishing"):
         snapshot.update(status="unknown", error=result.get("error"))
     result["interactive"] = snapshot

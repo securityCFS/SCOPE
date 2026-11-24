@@ -15,7 +15,11 @@ test("remote spool claims a durable receipt, rejects reuse and only observes on 
         new URL("../bridge/providers/remote-job.py", import.meta.url),
       ),
     ],
-    { encoding: "utf8", timeout: 15000 },
+    {
+      encoding: "utf8",
+      timeout: 15000,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+    },
   );
   assert.equal(
     result.status,
