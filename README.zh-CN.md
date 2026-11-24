@@ -138,6 +138,27 @@ npm run scope
 
 ---
 
+## 路线图（Roadmap）
+
+目前 SCOPE 仅初步完成了多 Agent 统一监控框架、原生会话接管、富媒体渲染与本机优先 SSH 工作台的基础能力，后续重点 TODO 包括：
+
+- [ ] **自定义云服务器多端控制方案（如手机端控制）**：提供可自建的云服务器中继与移动端友好交互方案，随时随地通过手机、平板安全查看任务进度、审批高风险操作并向 Agent 追加指令。
+- [ ] **主界面与工作台高度自定义**：支持自定义首页布局、主题风格、快捷看板、置顶模块与插件自定义视图，按团队或个人科研/研发习惯灵活编排界面。
+- [ ] **更多 IDE 与编辑器深度联动**：在现有 VS Code Remote SSH 跳转之外，扩展支持 Cursor、Windsurf、JetBrains Gateway、Zed、Neovim 等主流 IDE/编辑器的双向联动。
+- [ ] **更多 Agent 后端与集群插件生态**：持续接入更多编程 Agent、Slurm / Kubernetes / Ray 等集群调度器插件，以及 Webhook、飞书、钉钉、Slack、Telegram 等多渠道推送。
+
+---
+
+## 欢迎参与贡献（Contributing）
+
+非常欢迎大家提 **Issue**、提交 **PR** 和参与社区共建！无论是反馈 Bug、提出新场景需求、贡献插件/新 IDE 适配，还是完善文档：
+
+- 提交 Bug 或功能建议：[GitHub Issues](https://github.com/securityCFS/SCOPE/issues)
+- 参与代码或文档贡献：[Pull Requests](https://github.com/securityCFS/SCOPE/pulls)（请参考 [CONTRIBUTING.md](./CONTRIBUTING.md)）
+- 如果 SCOPE 帮到了你，欢迎点个 Star 支持项目持续演进！
+
+---
+
 ## 本地校验
 
 ```sh

@@ -138,6 +138,27 @@ All runtime state—host pre-launch commands, SMTP secrets (`0600`), remote tunn
 
 ---
 
+## Roadmap
+
+SCOPE is currently at an early milestone—we have completed the core multi-agent framework, native session discovery/resume, rich-media rendering, and local-first SSH workbench foundation. Planned next steps include:
+
+- [ ] **Self-hosted Cloud Relay & Multi-Device Control**: Customizable cloud-server relay and mobile-first remote control so you can monitor jobs, approve tool calls, and steer agent sessions securely from phones and tablets anywhere.
+- [ ] **Customizable Home & Workspace UI**: Configurable dashboard layouts, custom themes/panels, pinned widgets, and plugin-contributed UI views tailored to your workflow.
+- [ ] **Broader IDE & Editor Integrations**: Native jump-to-line and session handoff beyond VS Code Remote SSH—including Cursor, Windsurf, JetBrains Gateway, Zed, and Neovim.
+- [ ] **Expanded Agent & Cluster Ecosystem**: Additional coding-agent backends, Slurm / Kubernetes / Ray cluster plugins, and richer push notification channels (Webhook, Telegram, Lark/Feishu, Slack, Discord).
+
+---
+
+## Contributing
+
+Issues, feature proposals, plugins, and pull requests are warmly welcome! Whether you are reporting a bug, improving documentation, adding an IDE/agent adapter, or shaping the roadmap:
+
+- Open an [Issue](https://github.com/securityCFS/SCOPE/issues) for bugs, ideas, or workflow requests.
+- Submit a [Pull Request](https://github.com/securityCFS/SCOPE/pulls) following [CONTRIBUTING.md](./CONTRIBUTING.md).
+- Star the repo if SCOPE helps keep your agent sessions under control.
+
+---
+
 ## Development & Verification
 
 ```sh
