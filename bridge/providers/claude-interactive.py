@@ -39,7 +39,18 @@ def save():
         state["events"].pop(0)
         state["truncated"] = True
     state["controlResults"] = state["controlResults"][-30:]
-    state["subagents"] = list(subagents.values())[-24:]
+    sub_list = list(subagents.values())[-24:]
+    # Keep total subagent workflow buffer bounded inside interactive.json
+    while len(json.dumps(sub_list)) > 240_000:
+        trimmed = False
+        for item in sub_list:
+            steps = item.get("steps")
+            if isinstance(steps, list) and len(steps) > 4:
+                item["steps"] = ([steps[0]] + steps[2:]) if steps[0].get("kind") == "prompt" else steps[1:]
+                trimmed = True
+        if not trimmed:
+            break
+    state["subagents"] = sub_list
     state["partial"] = partial[-60000:]
     encoded = json.dumps(state)
     if encoded == last_snapshot: return
@@ -71,7 +82,32 @@ def find_subagent(task_id=None, tool_id=None):
         for entry in subagents.values():
             if entry.get("taskId") == task_id:
                 return entry
+    if tool_id:
+        for entry in subagents.values():
+            if entry.get("toolUseId") == tool_id:
+                return entry
     return None
+
+def subagent_tool_summary(name, raw_input):
+    if isinstance(raw_input, dict):
+        for key in ("description", "file_path", "path", "command", "cmd", "pattern", "query", "url", "glob", "prompt"):
+            val = raw_input.get(key)
+            if isinstance(val, str) and val.strip():
+                line = val.strip().splitlines()[0].strip()
+                if key in ("file_path", "path") and ("/" in line or "\\" in line):
+                    return (line.replace("\\", "/").split("/")[-1] or line)[:80]
+                return line[:80]
+    return ""
+
+def append_subagent_step(entry, step):
+    steps = entry.setdefault("steps", [])
+    steps.append(step)
+    if len(steps) > 40:
+        if steps[0].get("kind") == "prompt":
+            entry["steps"] = [steps[0]] + steps[-39:]
+        else:
+            entry["steps"] = steps[-40:]
+    entry["hasWorkflow"] = True
 
 def frame(value):
     global initialized, partial, result_value, finished, session_state
@@ -91,6 +127,7 @@ def frame(value):
             if entry is None:
                 entry = {
                     "id": str(tool_id or task_id),
+                    "toolUseId": str(tool_id) if tool_id else "",
                     "taskId": str(task_id),
                     "role": str(value.get("description") or "后台子代理")[:120],
                     "typeName": str(value.get("task_type") or "agent")[:60],
@@ -98,10 +135,15 @@ def frame(value):
                     "status": "working",
                     "lastAction": "后台运行中",
                     "updatedAt": now_ms,
+                    "hasWorkflow": True,
+                    "steps": [],
+                    "partial": "",
                 }
                 subagents[entry["id"]] = entry
             else:
                 entry["taskId"] = str(task_id)
+                if tool_id and not entry.get("toolUseId"):
+                    entry["toolUseId"] = str(tool_id)
                 entry["background"] = True
                 entry["status"] = "working"
                 entry["updatedAt"] = now_ms
@@ -162,8 +204,15 @@ def frame(value):
         pending.pop(value.get("request_id"), None)
         if not pending and not stopping: state["status"] = "running"
     elif kind == "stream_event":
-        if value.get("parent_tool_use_id"): return
+        parent_id = value.get("parent_tool_use_id")
         data = value.get("event", {})
+        if parent_id:
+            entry = find_subagent(tool_id=parent_id)
+            if entry is not None and data.get("type") == "content_block_delta" and data.get("delta", {}).get("type") == "text_delta":
+                entry["partial"] = (entry.get("partial", "") + data["delta"].get("text", ""))[-8000:]
+                entry["updatedAt"] = now_ms
+                entry["hasWorkflow"] = True
+            return
         if data.get("type") == "content_block_delta" and data.get("delta", {}).get("type") == "text_delta":
             partial += data["delta"].get("text", "")
     elif kind == "assistant":
@@ -172,11 +221,57 @@ def frame(value):
             entry = find_subagent(tool_id=parent_id)
             if entry is not None:
                 entry["updatedAt"] = now_ms
-                for block in value.get("message", {}).get("content", []):
-                    if block.get("type") == "tool_use":
-                        entry["lastAction"] = str(block.get("name") or "工具调用")[:80]
-                    elif block.get("type") == "text" and not entry.get("lastAction"):
-                        entry["lastAction"] = "生成回复中"
+                entry["partial"] = ""
+                msg = value.get("message") if isinstance(value.get("message"), dict) else {}
+                if isinstance(msg.get("model"), str) and not entry.get("model"):
+                    entry["model"] = msg["model"][:80]
+                for block in msg.get("content", []):
+                    if not isinstance(block, dict):
+                        continue
+                    btype = block.get("type")
+                    if btype == "thinking":
+                        tval = str(block.get("thinking") or block.get("text") or "").strip()
+                        if tval:
+                            append_subagent_step(entry, {
+                                "id": f"live-think-{now_ms}-{len(entry.get('steps', []))}",
+                                "kind": "thinking",
+                                "title": "思考过程",
+                                "text": tval[:2500],
+                                "timestamp": now_ms,
+                            })
+                    elif btype == "tool_use":
+                        tname = str(block.get("name") or "工具调用")[:80]
+                        tinput = block.get("input")
+                        summary = subagent_tool_summary(tname, tinput)
+                        entry["lastAction"] = f"{tname} · {summary}"[:96] if summary else tname
+                        try:
+                            in_str = json.dumps(tinput, ensure_ascii=False, indent=2) if tinput is not None else ""
+                        except (TypeError, ValueError):
+                            in_str = str(tinput)
+                        append_subagent_step(entry, {
+                            "id": str(block.get("id") or f"live-tool-{now_ms}-{len(entry.get('steps', []))}"),
+                            "kind": "tool",
+                            "toolName": tname,
+                            "title": tname,
+                            "summary": summary,
+                            "inputPreview": in_str[:2500],
+                            "output": "",
+                            "isError": False,
+                            "status": "running",
+                            "timestamp": now_ms,
+                        })
+                    elif btype == "text":
+                        tval = str(block.get("text") or "").strip()
+                        if tval:
+                            if not entry.get("lastAction"):
+                                entry["lastAction"] = "生成回复中"
+                            append_subagent_step(entry, {
+                                "id": f"live-asst-{now_ms}-{len(entry.get('steps', []))}",
+                                "kind": "assistant",
+                                "title": "回复",
+                                "text": tval[:6000],
+                                "timestamp": now_ms,
+                            })
             return
         partial = ""
         for block in value.get("message", {}).get("content", []):
@@ -187,21 +282,48 @@ def frame(value):
                 tool_input = block.get("input", {})
                 if tool_name in ("Agent", "Task") and isinstance(tool_input, dict):
                     tid = str(block.get("id") or f"sub-{len(subagents) + 1}")
+                    prompt_val = str(tool_input.get("prompt") or "").strip()
                     subagents[tid] = {
                         "id": tid,
-                        "role": str(tool_input.get("description") or tool_input.get("prompt") or "子代理任务")[:120],
+                        "toolUseId": tid,
+                        "role": str(tool_input.get("description") or prompt_val or "子代理任务")[:120],
                         "typeName": str(tool_input.get("subagent_type") or "agent")[:60],
                         "background": bool(tool_input.get("run_in_background")),
                         "status": "working",
                         "lastAction": "启动中",
                         "updatedAt": now_ms,
+                        "hasWorkflow": True,
+                        "steps": ([{"id": f"prompt-{tid}", "kind": "prompt", "title": "子代理任务", "text": prompt_val[:4000], "timestamp": now_ms}] if prompt_val else []),
+                        "partial": "",
                     }
                 if len(json.dumps(tool_input)) > 60000: tool_input = {"preview": json.dumps(tool_input, ensure_ascii=False)[:60000], "truncated": True}
                 event("tool", id=block.get("id"), name=tool_name, input=tool_input)
     elif kind == "user" and isinstance(value.get("message", {}).get("content"), list):
         if value.get("parent_tool_use_id"):
             entry = find_subagent(tool_id=value.get("parent_tool_use_id"))
-            if entry is not None: entry["updatedAt"] = now_ms
+            if entry is not None:
+                entry["updatedAt"] = now_ms
+                for block in value["message"]["content"]:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        tid = str(block.get("tool_use_id") or "")
+                        raw_out = block.get("content", "")
+                        if isinstance(raw_out, list):
+                            out_text = "\n".join(
+                                (p.get("text", "") if isinstance(p, dict) else str(p))
+                                for p in raw_out
+                                if not (isinstance(p, dict) and p.get("type") == "image")
+                            )
+                        elif isinstance(raw_out, str):
+                            out_text = raw_out
+                        else:
+                            out_text = json.dumps(raw_out, ensure_ascii=False)
+                        is_err = bool(block.get("is_error"))
+                        for step in reversed(entry.get("steps", [])):
+                            if step.get("kind") == "tool" and step.get("id") == tid:
+                                step["output"] = out_text[:3000]
+                                step["isError"] = is_err
+                                step["status"] = "failed" if is_err else "completed"
+                                break
             return
         for block in value["message"]["content"]:
             if block.get("type") == "tool_result":

@@ -165,8 +165,60 @@ paths.sort(
     reverse=order == "recent",
 )
 records = []
+subagents_by_parent = {}
+scanned_index = 0
 
-for filename in paths:
+def parse_subagent_summary(filename, first_obj, meta, spawn, parent_thread_id):
+    sub_record = {
+        "id": meta.get("id") or meta.get("session_id") or os.path.basename(filename),
+        "rootSessionId": meta.get("session_id") or meta.get("id") or "",
+        "parentThreadId": parent_thread_id,
+        "agentPath": spawn.get("agent_path") or "",
+        "agentNickname": spawn.get("agent_nickname") or meta.get("agent_nickname") or "",
+        "agentRole": spawn.get("agent_role") or meta.get("agent_role") or "",
+        "isSubagent": True,
+        "cwd": meta.get("cwd") or "",
+        "startedAt": meta.get("timestamp") or first_obj.get("timestamp"),
+        "path": filename,
+        "mtimeMs": int(path_mtimes.get(filename, 0.0) * 1000),
+        "lastUser": "",
+        "lastAssistant": "",
+        "lastAction": "",
+        "model": "",
+        "turnState": "idle",
+        "lastEventAt": path_activity.get(filename, (0, ""))[1]
+        or first_obj.get("timestamp"),
+    }
+    for raw in sampled_lines(filename):
+        try:
+            ev = json.loads(raw)
+        except Exception:
+            continue
+        pl = ev.get("payload", {})
+        if not isinstance(pl, dict):
+            continue
+        et = ev.get("type")
+        if et == "turn_context":
+            sub_record["model"] = pl.get("model") or sub_record["model"]
+        elif et == "response_item":
+            k = pl.get("type")
+            r = pl.get("role")
+            if k == "message" and r == "user":
+                cand = clean(text_from_content(pl.get("content")), 240)
+                if cand and not is_context_message(cand):
+                    sub_record["lastUser"] = sub_record["lastUser"] or cand
+            elif k == "message" and r == "assistant":
+                cand = clean(text_from_content(pl.get("content")), 300)
+                if cand:
+                    sub_record["lastAssistant"] = cand
+            elif k in ("function_call", "custom_tool_call"):
+                nm = pl.get("name") or "tool"
+                arg = pl.get("arguments") or pl.get("input") or ""
+                sub_record["lastAction"] = clean(f"{nm}: {arg}", 200)
+    return sub_record
+
+for idx, filename in enumerate(paths):
+    scanned_index = idx + 1
     if len(records) >= limit:
         break
     try:
@@ -183,7 +235,12 @@ for filename in paths:
     source = meta.get("source")
     subagent = source.get("subagent", {}) if isinstance(source, dict) else {}
     spawn = subagent.get("thread_spawn", {}) if isinstance(subagent, dict) else {}
-    if spawn or meta.get("parent_thread_id"):
+    parent_thread_id = spawn.get("parent_thread_id") or meta.get("parent_thread_id") or ""
+    if spawn or parent_thread_id:
+        if parent_thread_id:
+            subagents_by_parent.setdefault(parent_thread_id, []).append(
+                parse_subagent_summary(filename, first_obj, meta, spawn, parent_thread_id)
+            )
         continue
 
     record = {
@@ -337,6 +394,34 @@ for filename in paths:
                 record["lastError"] = output
 
     records.append(record)
+
+record_ids = {rec["id"] for rec in records if rec.get("id")}
+if record_ids and scanned_index < len(paths):
+    for filename in paths[scanned_index:scanned_index + 400]:
+        try:
+            with open(filename, "r", encoding="utf-8", errors="replace") as handle:
+                first_obj = json.loads(handle.readline())
+            meta = (
+                first_obj.get("payload", {})
+                if first_obj.get("type") == "session_meta"
+                else {}
+            )
+        except Exception:
+            continue
+        source = meta.get("source")
+        subagent = source.get("subagent", {}) if isinstance(source, dict) else {}
+        spawn = subagent.get("thread_spawn", {}) if isinstance(subagent, dict) else {}
+        parent_thread_id = spawn.get("parent_thread_id") or meta.get("parent_thread_id") or ""
+        if parent_thread_id and parent_thread_id in record_ids:
+            subagents_by_parent.setdefault(parent_thread_id, []).append(
+                parse_subagent_summary(filename, first_obj, meta, spawn, parent_thread_id)
+            )
+
+for rec in records:
+    subs = subagents_by_parent.get(rec["id"])
+    if subs:
+        subs.sort(key=lambda item: item.get("mtimeMs", 0), reverse=True)
+        rec["subagents"] = subs[:24]
 
 print(json.dumps({
     "totalFiles": len(paths),

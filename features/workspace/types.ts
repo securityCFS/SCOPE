@@ -15,6 +15,7 @@ export type Rollout = {
   parentThreadId: string;
   agentPath: string;
   agentNickname: string;
+  agentRole?: string;
   isSubagent: boolean;
   cwd: string;
   startedAt: string;

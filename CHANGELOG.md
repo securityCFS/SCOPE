@@ -2,6 +2,19 @@
 
 All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in this file.
 
+## [0.2.1] — 2026-11-24
+
+### Added
+
+- **Subagent Workflow Drawer for Claude Code & Codex**: Click any subagent row or the header **`Subagents · N`** button in a Claude Code or Codex session to open a right slide-over inspector drawer displaying the full step-by-step workflow timeline — task prompt, thinking/reasoning duration, shell commands & tool calls with concise summaries and expandable input/output, `SubagentHandback` Markdown reports, rich-media Markdown replies (KaTeX, GFM tables, inline images/videos, `file://` links), sibling subagent switcher tabs, and live auto-refresh while running.
+- **Claude Code Subagent Parsing & Live Buffering**:
+  - Streams `agent-*.jsonl` + companion `agent-*.meta.json` on demand via `GET /api/session-catalog/subagent-workflow` (skips large API request blobs, strips base64 images, caps oversized tool outputs, matches `tool_use_id`, supports `agent-*` and `toolUseId` lookup, strict path containment, and `version` cache short-circuiting).
+  - Preserves live `parent_tool_use_id` thinking, tool calls/results, and streaming text deltas in `claude-interactive.py` so active subagents update in real time before disk flush.
+- **Codex Subagent Discovery & Authorized Inspection**:
+  - Automatically discovers and attaches child subagent rollouts (`source.subagent.thread_spawn`) onto live CLI, App Server, cached historical, and catalog-selected Codex parent sessions without cluttering the root session list.
+  - Extends `POST /api/dialogue` with ownership-verified `subagentId` reading and earlier-step pagination across both remote SSH and local hosts.
+- **Interactive Preview Fixtures**: Updated `scope preview` with synthetic Claude Code and Codex subagent workflows so the slide-over drawer can be explored offline with zero SSH.
+
 ## [0.2.0] — 2026-11-24
 
 Initial public open-source release of **SCOPE — One monitor for all agent sessions.**

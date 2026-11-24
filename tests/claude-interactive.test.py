@@ -37,6 +37,16 @@ for line in sys.stdin:
             if prompt == "question-test":
                 emit({"type":"control_request", "request_id":"question-1", "request":{"subtype":"can_use_tool", "tool_name":"AskUserQuestion", "input":{"questions":[{"question":"Colors?", "multiSelect":True, "options":[{"label":"Red"},{"label":"Green"}]}]}}})
                 continue
+            if prompt == "subagent-workflow-test":
+                emit({"type":"assistant", "message":{"content":[{"type":"tool_use", "id":"toolu_sub1", "name":"Agent", "input":{"description":"Audit timeout config", "subagent_type":"Explore", "prompt":"Check timeouts in bridge/"}}]}})
+                emit({"type":"assistant", "parent_tool_use_id":"toolu_sub1", "message":{"content":[{"type":"thinking", "thinking":"Checking bridge files"}, {"type":"tool_use", "id":"sub_tu_1", "name":"Grep", "input":{"pattern":"TIMEOUT"}}]}})
+                emit({"type":"user", "parent_tool_use_id":"toolu_sub1", "message":{"content":[{"type":"tool_result", "tool_use_id":"sub_tu_1", "content":"bridge/server.mjs:10: TIMEOUT=30"}]}})
+                emit({"type":"stream_event", "parent_tool_use_id":"toolu_sub1", "event":{"type":"content_block_delta", "delta":{"type":"text_delta", "text":"Partial report"}}})
+                emit({"type":"assistant", "parent_tool_use_id":"toolu_sub1", "message":{"content":[{"type":"text", "text":"Final audit report"}]}})
+                emit({"type":"user", "message":{"content":[{"type":"tool_result", "tool_use_id":"toolu_sub1", "content":"Done"}]}})
+                text("subagent done")
+                emit({"type":"result", "session_id":"native-id", "is_error":False, "result":"subagent done"})
+                continue
             if prompt == "background-test":
                 background = True
                 emit({"type":"system", "subtype":"session_state_changed", "state":"running"})
@@ -147,6 +157,21 @@ class InteractiveTest(unittest.TestCase):
         self.assertEqual(done["subagents"][0]["status"], "completed")
         self.assertEqual(done["text"], "allow")
         self.assertTrue((self.home / "allowed.txt").exists())
+
+    def test_live_subagent_workflow_captures_parent_tool_use_steps(self):
+        self.start("subagent-workflow-test")
+        done = self.wait(lambda v: v["status"] == "completed")
+        self.assertEqual(len(done["subagents"]), 1)
+        sub = done["subagents"][0]
+        self.assertEqual(sub["id"], "toolu_sub1")
+        self.assertEqual(sub["toolUseId"], "toolu_sub1")
+        self.assertEqual(sub["status"], "completed")
+        self.assertTrue(sub.get("hasWorkflow"))
+        kinds = [s["kind"] for s in sub.get("steps", [])]
+        self.assertEqual(kinds, ["prompt", "thinking", "tool", "assistant"])
+        self.assertEqual(sub["steps"][2]["toolName"], "Grep")
+        self.assertIn("TIMEOUT=30", sub["steps"][2]["output"])
+        self.assertEqual(sub["steps"][3]["text"], "Final audit report")
 
     def test_stop_escalates_only_owned_process_group(self):
         external = subprocess.Popen(["sleep", "30"])

@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { QuotaMeterCard } from "@/components/quota-meter";
+import { CodexSubagentRows } from "@/features/workspace/CodexSubagentsPanel";
 import { normalizeAccountQuota } from "@/lib/account-quota";
 import {
   attachCommand,
@@ -29,9 +30,11 @@ import { useLocale } from "@/lib/i18n";
 export function WorkspaceTools({
   workspace,
   onClose,
+  onInspectSubagent,
 }: {
   workspace: WorkspaceController;
   onClose: () => void;
+  onInspectSubagent?: (subagentId: string) => void;
 }) {
   const { tr } = useLocale();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -318,9 +321,21 @@ export function WorkspaceTools({
                   </div>
                 )}
                 {subagents.length > 0 && (
-                  <p className="session-drawer-note">
-                    {tr(`当前挂载 ${subagents.length} 个子代理`, `${subagents.length} subagent(s) recorded`)}
-                  </p>
+                  <div>
+                    <p className="session-drawer-note">
+                      {tr(
+                        `当前挂载 ${subagents.length} 个子代理（点击查看工作流）`,
+                        `${subagents.length} subagent(s) recorded (click to inspect)`,
+                      )}
+                    </p>
+                    <CodexSubagentRows
+                      subagents={subagents}
+                      onInspect={(sub) => {
+                        onClose();
+                        onInspectSubagent?.(sub.id);
+                      }}
+                    />
+                  </div>
                 )}
               </section>
             )}

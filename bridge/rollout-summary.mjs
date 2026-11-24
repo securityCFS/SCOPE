@@ -101,7 +101,7 @@ export function historicalAgent(host, rollout) {
     status: "idle",
     pane: null,
     rollout,
-    subagents: [],
+    subagents: Array.isArray(rollout.subagents) ? rollout.subagents : [],
     historical: true,
     mapping: {
       rollout: "history",
@@ -120,9 +120,26 @@ export function historicalAgent(host, rollout) {
 export function createAgentEnricher({ getSubmissionItems }) {
   return function enrichAgentRelations(host, agent) {
     const sessionId = agent.rollout?.id || "";
+    const subagentById = new Map();
+    for (const sub of Array.isArray(agent.subagents) ? agent.subagents : []) {
+      if (sub?.id) subagentById.set(sub.id, sub);
+    }
+    if (sessionId) {
+      for (const session of Array.isArray(host.sessions) ? host.sessions : []) {
+        if (!session?.isSubagent || !session.id) continue;
+        if (session.parentThreadId !== sessionId) continue;
+        const prev = subagentById.get(session.id);
+        if (!prev || (session.mtimeMs || 0) >= (prev.mtimeMs || 0)) {
+          subagentById.set(session.id, session);
+        }
+      }
+    }
+    const mergedSubagents = Array.from(subagentById.values()).sort(
+      (a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0),
+    );
     const relatedSessionIds = new Set([
       sessionId,
-      ...(agent.subagents || []).map((subagent) => subagent.id),
+      ...mergedSubagents.map((subagent) => subagent.id),
     ]);
     const localWorkloads = (host.workloads || []).filter(
       (workload) => workload.ownerSessionId === sessionId,
@@ -151,6 +168,7 @@ export function createAgentEnricher({ getSubmissionItems }) {
     for (const workload of localWorkloads) addPane(workload.pane);
     return {
       ...agent,
+      subagents: mergedSubagents,
       localWorkloads,
       remoteJobs,
       relatedPanes,

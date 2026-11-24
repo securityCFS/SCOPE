@@ -17,6 +17,12 @@ export function catalogRoutes(catalog, { jsonResponse, readJsonBody, resolveCode
         jsonResponse(response, 200, await catalog.dialogue(url.searchParams.get("key"), {
           before: url.searchParams.get("before"), version: url.searchParams.get("version"),
         }));
+      } else if (url.pathname === "/api/session-catalog/subagent-workflow" && request.method === "GET") {
+        response.setHeader("Cache-Control", "no-store");
+        jsonResponse(response, 200, await catalog.subagentWorkflow(url.searchParams.get("key"), {
+          subagentId: url.searchParams.get("subagentId"),
+          version: url.searchParams.get("version"),
+        }));
       } else if (url.pathname === "/api/session-catalog/select" && request.method === "POST") {
         const entry = catalog.get((await readJsonBody(request)).key);
         if (!entry || entry.provider !== "codex") throw new Error("不是 Codex 会话");

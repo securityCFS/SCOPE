@@ -1,9 +1,15 @@
 "use client";
 import { hostLabel } from "@/lib/execution-host";
-import { useState } from "react";
-import { Info, LoaderCircle, MessageSquare, Pin, Plus, Square } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bot, Info, LoaderCircle, MessageSquare, Pin, Plus, Square } from "lucide-react";
+import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
+import {
+  CodexSubagentsCard,
+  toCodexDrawerItems,
+} from "@/features/workspace/CodexSubagentsPanel";
 import { HumanRequests } from "@/features/workspace/HumanRequests";
 import { SessionComposer } from "@/features/workspace/SessionComposer";
+import { useCodexSubagentWorkflow } from "@/features/workspace/use-codex-subagent-workflow";
 import { ComposerControls } from "./ComposerControls";
 import { bridgeUrl, managementKey } from "@/features/workspace/shared";
 import type { WorkspaceController } from "@/features/workspace/use-workspace-controller";
@@ -13,18 +19,37 @@ import { ConversationFeed } from "./ConversationFeed";
 export function SessionConversation({
   workspace,
   onTools,
+  openSubagentId,
+  onOpenSubagent,
 }: {
   workspace: WorkspaceController;
   onTools: () => void;
+  openSubagentId?: string | null;
+  onOpenSubagent?: (id: string | null) => void;
 }) {
   const { tr } = useLocale();
   const [stopping, setStopping] = useState(false);
+  const [localSubagentId, setLocalSubagentId] = useState<string | null>(null);
   const {
     selectedAgent: agent,
     selectedDialogue: dialogue,
     selectedAppServerSession: session,
     selectedProject: project,
   } = workspace;
+  const subagents = useMemo(() => agent?.subagents || [], [agent?.subagents]);
+  const activeSubagentId =
+    openSubagentId !== undefined ? openSubagentId : localSubagentId;
+  const setActiveSubagentId = onOpenSubagent || setLocalSubagentId;
+  const codexWorkflow = useCodexSubagentWorkflow(
+    agent?.host || "",
+    agent?.rollout?.id || "",
+    subagents,
+    activeSubagentId,
+  );
+  const codexDrawerItems = useMemo(
+    () => toCodexDrawerItems(subagents),
+    [subagents],
+  );
   const working =
     agent?.status === "working" ||
     session?.status === "working" ||
@@ -117,6 +142,24 @@ export function SessionConversation({
               </button>
             );
           })()}
+          {subagents.length > 0 && (
+            <button
+              type="button"
+              className="session-info-trigger"
+              onClick={() =>
+                setActiveSubagentId(
+                  subagents.find((item) => item.turnState === "working")?.id ||
+                    subagents[0].id,
+                )
+              }
+              title={tr("查看 Codex 子代理工作流", "Inspect Codex subagent workflows")}
+            >
+              <Bot size={14} />
+              <span>
+                {tr(`子代理 · ${subagents.length}`, `Subagents · ${subagents.length}`)}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className="session-info-trigger"
@@ -146,6 +189,10 @@ export function SessionConversation({
         onOlder={workspace.loadOlderDialogue}
         onRetry={() => workspace.setDialogueRefresh((value) => value + 1)}
       >
+        <CodexSubagentsCard
+          subagents={subagents}
+          onInspect={(sub) => setActiveSubagentId(sub.id)}
+        />
         <HumanRequests {...workspace} />
       </ConversationFeed>
       <div className="conversation-bottom">
@@ -175,6 +222,30 @@ export function SessionConversation({
                 : tr("恢复会话后即可继续对话", "Resume session to continue chatting")}
         </p>
       </div>
+      <SubagentWorkflowDrawer
+        open={Boolean(activeSubagentId)}
+        providerLabel="Codex"
+        items={codexDrawerItems}
+        selectedId={activeSubagentId}
+        onSelect={(id) => setActiveSubagentId(id)}
+        onClose={() => setActiveSubagentId(null)}
+        onRefresh={codexWorkflow.refresh}
+        onLoadMore={codexWorkflow.loadMore}
+        loading={codexWorkflow.loading}
+        error={codexWorkflow.error}
+        steps={codexWorkflow.steps}
+        hasMore={codexWorkflow.hasMore}
+        host={agent.host}
+        cwd={agent.cwd}
+        activeStatus={codexWorkflow.status}
+        activeModel={codexWorkflow.model}
+        activeTypeName={codexWorkflow.selected?.agentRole || ""}
+        activeRole={
+          codexWorkflow.selected?.agentNickname ||
+          codexWorkflow.selected?.agentPath ||
+          ""
+        }
+      />
     </section>
   );
 }

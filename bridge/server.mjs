@@ -1054,6 +1054,7 @@ const {
   setGpuUsageHistory: (next) => { gpuUsageHistory = next; },
   getHistoryIndex: () => historyIndex,
   setHistoryIndex: (next) => { historyIndex = next; },
+  enrichAgentRelations,
 });
 
 const {
@@ -3024,11 +3025,26 @@ const sessionCatalog = new SessionCatalog({ hosts: () => snapshot.hosts, run: ru
 const handleCatalog = catalogRoutes(sessionCatalog, { jsonResponse, readJsonBody, resolveCodex: (entry) => {
   const host = snapshot.hosts.find((item) => item.alias === entry.host);
   if (!host) throw new Error("设备不在当前配置中");
-  const agent = findAgent(entry.host, entry.sessionId) || historicalAgent(host, {
-    id: entry.sessionId, path: entry.path, cwd: entry.cwd, model: entry.model,
-    reasoningEffort: "", mtimeMs: Number(entry.updatedAt) || 0, firstUser: entry.title,
-    lastUser: entry.title, lastAssistant: "", userMessages: [entry.title], assistantMessages: [],
-  });
+  const existing =
+    findAgent(entry.host, entry.sessionId) ||
+    historicalSessions.get(sessionKey(entry.host, entry.sessionId));
+  const agent = enrichAgentRelations(
+    host,
+    existing ||
+      historicalAgent(host, {
+        id: entry.sessionId,
+        path: entry.path,
+        cwd: entry.cwd,
+        model: entry.model,
+        reasoningEffort: "",
+        mtimeMs: Number(entry.updatedAt) || 0,
+        firstUser: entry.title,
+        lastUser: entry.title,
+        lastAssistant: "",
+        userMessages: [entry.title],
+        assistantMessages: [],
+      }),
+  );
   historicalSessions.set(sessionKey(entry.host, entry.sessionId), agent);
   return agent;
 } });
@@ -3046,9 +3062,18 @@ process.once("exit", () => cliConversations.stop());
 const handleMaintenance = maintenanceRoutes(maintenance);
 const handleModels = modelRoutes(() => ({appServerManager, auditLifecycle, checkedProfileSlug, findAgent, hostRuntimeConfig, jsonResponse, listAuthProfiles, persistAppServerSessions, readInstalledModels, readJsonBody, selectTmuxModel, sessionProfileAssignment, sessionProfiles, sessionYolo, snapshot}));
 const localDialogue = localHistoryReader({ manager: appServerManager,
-  findRollout: (host, id) => findAgent(host, id)?.rollout || historicalSessions.get(sessionKey(host, id))?.rollout || sessionCatalog.get(JSON.stringify([host, "codex", id])),
+  findRollout: (host, id, subagentId) => {
+    const agent = findAgent(host, id) || historicalSessions.get(sessionKey(host, id));
+    if (subagentId) {
+      return agent?.subagents?.find((item) => item.id === subagentId) ||
+        snapshot.hosts.find((item) => item.alias === host)?.sessions?.find(
+          (item) => item.isSubagent && item.id === subagentId && item.parentThreadId === id,
+        ) || null;
+    }
+    return agent?.rollout || sessionCatalog.get(JSON.stringify([host, "codex", id]));
+  },
 });
-const handleDialogue = dialogueRoutes(() => ({localDialogue, DIALOGUE_PROBE, DIALOGUE_TIMEOUT_MS, RAW_CONTEXT_PROBE, cleanSshError, findAgent, historicalSessions, jsonResponse, readJsonBody, runSshCommand, sessionKey, shellQuote}));
+const handleDialogue = dialogueRoutes(() => ({localDialogue, DIALOGUE_PROBE, DIALOGUE_TIMEOUT_MS, RAW_CONTEXT_PROBE, cleanSshError, findAgent, getSnapshot: () => snapshot, historicalSessions, jsonResponse, readJsonBody, runSshCommand, sessionKey, shellQuote}));
 const handleRuntime = runtimeRoutes(() => ({hostRuntimeConfig, jsonResponse, readJsonBody, saveHostRuntimeConfig, snapshot}));
 const accountQuotas = createAccountQuotaService({
   appServerManager,

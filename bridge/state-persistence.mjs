@@ -58,6 +58,7 @@ export function createStatePersistence({
   getGpuUsageHistory,
   getHistoryIndex,
   setHistoryIndex,
+  enrichAgentRelations = null,
 }) {
   let stateWritePromise = Promise.resolve();
   let gpuUsageWritePromise = Promise.resolve();
@@ -291,10 +292,17 @@ export function createStatePersistence({
     for (const alias of aliases) {
       const entry = historyIndex.hosts[alias]?.orders?.[requestedOrder];
       if (!entry) continue;
+      const liveHost = snapshot.hosts.find((item) => item.alias === alias);
       const hostSessions = excludeActiveSessions(
         entry.sessions,
         activeSessions,
-      ).slice(0, limit);
+      )
+        .slice(0, limit)
+        .map((agent) =>
+          liveHost && enrichAgentRelations
+            ? enrichAgentRelations(liveHost, agent)
+            : agent,
+        );
       sessions.push(...hostSessions);
       hosts.push({
         host: alias,

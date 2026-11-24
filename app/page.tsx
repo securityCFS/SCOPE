@@ -48,6 +48,10 @@ function HomeShell() {
   const [section, setSection] = useState<Section>("manager");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [openCodexSubagent, setOpenCodexSubagent] = useState<{
+    agentId: string;
+    id: string;
+  } | null>(null);
   const [projectHost, setProjectHost] = useState("all");
   const rememberedSessions = useRef<Record<string, string>>({});
   const location = useConversationLocation({ workspace, catalog, section, setSection, projectHost, setProjectHost });
@@ -198,6 +202,18 @@ function HomeShell() {
             key={workspace.selectedAgentId || "empty"}
             workspace={navigationWorkspace}
             onTools={() => setToolsOpen(true)}
+            openSubagentId={
+              openCodexSubagent?.agentId === (workspace.selectedAgentId || "")
+                ? openCodexSubagent.id
+                : null
+            }
+            onOpenSubagent={(id) =>
+              setOpenCodexSubagent(
+                id
+                  ? { agentId: workspace.selectedAgentId || "", id }
+                  : null,
+              )
+            }
           />
         )}
       </div>
@@ -205,6 +221,12 @@ function HomeShell() {
         <WorkspaceTools
           workspace={workspace}
           onClose={() => setToolsOpen(false)}
+          onInspectSubagent={(id) =>
+            setOpenCodexSubagent({
+              agentId: workspace.selectedAgentId || "",
+              id,
+            })
+          }
         />
       )}
       {sshTerminalTarget && (

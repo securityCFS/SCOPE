@@ -1,4 +1,5 @@
 "use client";
+import type { SubagentWorkflowStep } from "@/components/subagent-workflow-drawer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { conversationRequest, type CatalogEntry } from "./use-session-catalog";
 
@@ -13,12 +14,20 @@ export type NativeHistoryMessage = {
 };
 export type NativeSubagent = {
   id: string;
+  agentId?: string;
+  toolUseId?: string;
+  taskId?: string;
   role: string;
   typeName?: string;
+  model?: string;
+  spawnDepth?: number | null;
   background?: boolean;
   status: string;
   lastAction?: string;
   updatedAt?: number | null;
+  hasWorkflow?: boolean;
+  steps?: SubagentWorkflowStep[];
+  partial?: string;
 };
 
 export type NativeHistory = {

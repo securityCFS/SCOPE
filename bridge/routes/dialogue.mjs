@@ -9,6 +9,7 @@ export function dialogueRoutes(context) {
       RAW_CONTEXT_PROBE,
       cleanSshError,
       findAgent,
+      getSnapshot,
       historicalSessions,
       jsonResponse,
       readJsonBody,
@@ -19,9 +20,18 @@ export function dialogueRoutes(context) {
     if (url.pathname === "/api/dialogue" && request.method === "POST") {
       try {
         const body = await readJsonBody(request);
+        const subagentId =
+          typeof body.subagentId === "string" ? body.subagentId.trim() : "";
         if (body.host === LOCAL_HOST && localDialogue) {
           const dialogue = await localDialogue(body);
-          jsonResponse(response, 200, { ok: true, host: body.host, sessionId: body.sessionId, loadedAt: new Date().toISOString(), ...dialogue });
+          jsonResponse(response, 200, {
+            ok: true,
+            host: body.host,
+            sessionId: body.sessionId,
+            ...(subagentId ? { subagentId } : {}),
+            loadedAt: new Date().toISOString(),
+            ...dialogue,
+          });
           return true;
         }
         const agent =
@@ -31,13 +41,47 @@ export function dialogueRoutes(context) {
           jsonResponse(response, 404, { error: "未找到对应的 rollout" });
           return true;
         }
-        const limit = Math.max(1, Math.min(100, Number(body.limit) || 10));
+        let targetRollout = agent.rollout;
+        let subagentMeta = null;
+        if (subagentId) {
+          const hostEntry = getSnapshot?.()?.hosts?.find(
+            (item) => item.alias === agent.host,
+          );
+          const parentId = agent.rollout.id || body.sessionId;
+          const foundSub =
+            (agent.subagents || []).find((item) => item.id === subagentId) ||
+            (hostEntry?.sessions || []).find(
+              (item) =>
+                item.isSubagent &&
+                item.id === subagentId &&
+                item.parentThreadId === parentId,
+            );
+          if (!foundSub?.path) {
+            jsonResponse(response, 404, { error: "未找到对应的子代理 rollout" });
+            return true;
+          }
+          targetRollout = foundSub;
+          subagentMeta = {
+            id: foundSub.id,
+            agentNickname: foundSub.agentNickname || "",
+            agentPath: foundSub.agentPath || "",
+            agentRole: foundSub.agentRole || "",
+            model: foundSub.model || "",
+            turnState: foundSub.turnState || "idle",
+            lastAction: foundSub.lastAction || "",
+            lastEventAt: foundSub.lastEventAt || null,
+          };
+        }
+        const limit = Math.max(
+          1,
+          Math.min(100, Number(body.limit) || (subagentId ? 40 : 10)),
+        );
         const before = Number.isFinite(Number(body.before))
           ? Math.max(0, Math.floor(Number(body.before)))
           : "";
         const command = [
           "python3 -",
-          shellQuote(agent.rollout.path),
+          shellQuote(targetRollout.path),
           shellQuote(String(limit)),
           shellQuote(String(before)),
           shellQuote(body.dialogueOnly ? "dialogue-only" : "full"),
@@ -62,6 +106,7 @@ export function dialogueRoutes(context) {
           ok: true,
           host: agent.host,
           sessionId: agent.rollout.id,
+          ...(subagentMeta ? { subagentId: subagentMeta.id, subagent: subagentMeta } : {}),
           loadedAt: new Date().toISOString(),
           ...dialogue,
         });

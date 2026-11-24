@@ -3,24 +3,133 @@ const isEn = process.env.SCOPE_PREVIEW_LOCALE === "en";
 const now = Date.now();
 const claudeSubagents = [
   {
-    id: "sub-lit-1",
+    id: "agent-sub-lit-1",
+    agentId: "agent-sub-lit-1",
     role: "Literature & Baseline Auditor",
-    typeName: "research",
+    typeName: "Explore",
+    model: "claude-sonnet",
+    spawnDepth: 1,
     background: true,
     status: "working",
-    lastAction: "grep_search",
+    lastAction: "Grep: tab:zeroshot-pixels",
+    hasWorkflow: true,
     updatedAt: now - 4000,
   },
   {
-    id: "sub-eval-2",
+    id: "agent-sub-eval-2",
+    agentId: "agent-sub-eval-2",
     role: "Checkpoint Metrics Collector",
     typeName: "general-purpose",
+    model: "claude-opus",
+    spawnDepth: 1,
     background: true,
-    status: "working",
-    lastAction: "Bash: eval_metrics.py",
+    status: "completed",
+    lastAction: "SubagentHandback",
+    hasWorkflow: true,
     updatedAt: now - 1500,
   },
 ];
+
+const claudeSubagentWorkflows = {
+  "agent-sub-lit-1": {
+    found: true,
+    provider: "claude",
+    subagentId: "agent-sub-lit-1",
+    role: "Literature & Baseline Auditor",
+    typeName: "Explore",
+    model: "claude-sonnet",
+    spawnDepth: 1,
+    status: "working",
+    version: "preview-wf-1",
+    truncated: false,
+    totalSteps: 4,
+    steps: [
+      {
+        id: "wf1-prompt",
+        kind: "prompt",
+        text: isEn
+          ? "Cross-check all four visual manipulation baselines in `paper/sections/experiments.tex` against `eval_metrics.py` and verify every citation label."
+          : "核对 `paper/sections/experiments.tex` 中四组视觉操作基线与 `eval_metrics.py` 的统计口径，并检查所有引用标签。",
+        timestamp: new Date(now - 24000).toISOString(),
+      },
+      {
+        id: "wf1-think",
+        kind: "thinking",
+        durationMs: 1850,
+        text: isEn
+          ? "First locate `tab:zeroshot-pixels` in the LaTeX source, then compare the reported success rates and VRAM numbers with the evaluation script output."
+          : "先在 LaTeX 源码中定位 `tab:zeroshot-pixels`，再逐项比对评测脚本导出的成功率与显存峰值。",
+        timestamp: new Date(now - 21000).toISOString(),
+      },
+      {
+        id: "wf1-tool-1",
+        kind: "tool",
+        toolName: "Grep",
+        summary: "tab:zeroshot-pixels",
+        inputPreview: JSON.stringify({ pattern: "tab:zeroshot-pixels", path: "paper/sections" }, null, 2),
+        output: "paper/sections/experiments.tex:48: \\label{tab:zeroshot-pixels}\npaper/sections/experiments.tex:61: Baseline & 66.2 & 41.8 \\\\\npaper/sections/experiments.tex:63: \\method{} & \\textbf{92.8} & \\textbf{27.6} \\\\",
+        status: "completed",
+        timestamp: new Date(now - 15000).toISOString(),
+      },
+      {
+        id: "wf1-tool-2",
+        kind: "tool",
+        toolName: "Read",
+        summary: "/workspace/research/eval_metrics.py",
+        inputPreview: JSON.stringify({ file_path: "/workspace/research/eval_metrics.py", offset: 18, limit: 30 }, null, 2),
+        output: "18: def aggregate_seeds(runs):\n19:     # Mean over all 5 evaluation seeds (0..4)\n20:     return mean(r.success_rate for r in runs)",
+        status: "running",
+        timestamp: new Date(now - 4000).toISOString(),
+      },
+    ],
+  },
+  "agent-sub-eval-2": {
+    found: true,
+    provider: "claude",
+    subagentId: "agent-sub-eval-2",
+    role: "Checkpoint Metrics Collector",
+    typeName: "general-purpose",
+    model: "claude-opus",
+    spawnDepth: 1,
+    status: "completed",
+    version: "preview-wf-2",
+    truncated: false,
+    totalSteps: 4,
+    steps: [
+      {
+        id: "wf2-prompt",
+        kind: "prompt",
+        text: isEn
+          ? "Run `eval_metrics.py --summary` across the 4× A100 checkpoints and hand back a verified comparison table."
+          : "在 4× A100 最新 checkpoint 上运行 `eval_metrics.py --summary` 并回传核对后的对比表格。",
+        timestamp: new Date(now - 42000).toISOString(),
+      },
+      {
+        id: "wf2-tool-1",
+        kind: "tool",
+        toolName: "Bash",
+        summary: "python3 eval_metrics.py --summary --seeds 0,1,2,3,4",
+        command: "python3 eval_metrics.py --summary --seeds 0,1,2,3,4",
+        output: "Loaded 5 seeds from /workspace/research/runs/latest\nBaseline: 66.2% (peak 41.8 GB)\nCosine LR: 79.5% (peak 38.2 GB)\nSCOPE Policy: 92.8% (peak 27.6 GB, -34.0% VRAM)",
+        status: "completed",
+        timestamp: new Date(now - 26000).toISOString(),
+      },
+      {
+        id: "wf2-handback",
+        kind: "tool",
+        toolName: "SubagentHandback",
+        summary: isEn ? "Verified 5-seed metrics & 34% VRAM reduction" : "已核实 5 个随机种子指标及 34% 显存下降",
+        inputPreview: JSON.stringify({
+          summary: isEn
+            ? "All 5 seeds match [eval_metrics.py](file:///workspace/research/eval_metrics.py#L18-L45):\n\n| Variant | Success (%) | Peak VRAM (GB) |\n| --- | ---: | ---: |\n| Baseline | 66.2 | 41.8 |\n| **SCOPE Policy** | **92.8** | **27.6** |\n\nVerified reduction: $\\Delta_{\\text{VRAM}} = (41.8 - 27.6) / 41.8 = 34.0\\%$."
+            : "5 组随机种子结果已与 [eval_metrics.py](file:///workspace/research/eval_metrics.py#L18-L45) 一致：\n\n| 实验方案 | 成功率 (%) | 显存峰值 (GB) |\n| --- | ---: | ---: |\n| Baseline | 66.2 | 41.8 |\n| **SCOPE Policy** | **92.8** | **27.6** |\n\n显存降幅验证：$\\Delta_{\\text{VRAM}} = (41.8 - 27.6) / 41.8 = 34.0\\%$。",
+        }),
+        status: "completed",
+        timestamp: new Date(now - 5000).toISOString(),
+      },
+    ],
+  },
+};
 const agySubagents = [
   {
     id: "agy-sub-1",
@@ -209,6 +318,17 @@ export function nativeConversationFixture(request, response, url, json) {
             { id: "opus", label: "Opus", efforts: ["low", "high"], supportsAutoMode: true },
           ],
     });
+    return true;
+  }
+  if (url.pathname === "/api/session-catalog/subagent-workflow") {
+    const subId = url.searchParams.get("subagentId") || "";
+    const workflow =
+      claudeSubagentWorkflows[subId] || Object.values(claudeSubagentWorkflows)[0];
+    if (!workflow) {
+      json(response, 404, { error: "Subagent workflow not found" });
+      return true;
+    }
+    json(response, 200, workflow);
     return true;
   }
   if (url.pathname === "/api/session-catalog/dialogue") {

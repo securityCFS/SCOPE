@@ -203,6 +203,89 @@ export function createConversationFixture(snapshot, notify) {
       timestamp: new Date(Date.now() - (40 - index) * 60000).toISOString(),
     })),
   );
+  const subagentDialogues = new Map();
+  const visionPlan = chats.get("lab-gpu:vision-plan");
+  if (visionPlan) {
+    const subId = "sub-kepler-audit";
+    visionPlan.agent.subagents = [
+      {
+        id: subId,
+        cwd: "/workspace/vision",
+        path: `/preview/${subId}.jsonl`,
+        model: "gpt-5-codex",
+        reasoningEffort: "medium",
+        firstUser: isEn
+          ? "Audit dataset split manifests and check for train/val leakage."
+          : "核查数据集划分清单并排查训练/验证集泄漏。",
+        lastUser: isEn
+          ? "Audit dataset split manifests and check for train/val leakage."
+          : "核查数据集划分清单并排查训练/验证集泄漏。",
+        lastAssistant: isEn
+          ? "Verified zero sample overlap across 12,480 train and 1,560 val items."
+          : "已确认 12,480 条训练样本与 1,560 条验证样本零重叠。",
+        lastAction: isEn ? "python3 scripts/verify_splits.py" : "python3 scripts/verify_splits.py",
+        userMessages: [],
+        assistantMessages: [],
+        turnState: "idle",
+        lastEventAt: new Date(Date.now() - 45000).toISOString(),
+        mtimeMs: Date.now() - 45000,
+        account: null,
+        tokenUsage: null,
+        isSubagent: true,
+        parentThreadId: "vision-plan",
+        agentNickname: "Kepler",
+        agentRole: "explorer",
+        agentPath: "/root/kepler",
+      },
+    ];
+    subagentDialogues.set(`lab-gpu:vision-plan:${subId}`, {
+      subagent: visionPlan.agent.subagents[0],
+      events: [
+        {
+          id: "sub-kepler-1",
+          kind: "user",
+          text: isEn
+            ? "Audit dataset split manifests under `/workspace/vision/manifests` and verify there is no train/val overlap."
+            : "核查 `/workspace/vision/manifests` 下的数据集划分清单，确认训练/验证集不存在样本重叠。",
+          title: "",
+          category: "dialogue",
+          timestamp: new Date(Date.now() - 120000).toISOString(),
+        },
+        {
+          id: "sub-kepler-2",
+          kind: "reasoning",
+          text: isEn
+            ? "Inspecting manifest checksums and comparing sample IDs across train, val, and test splits."
+            : "检查各划分清单的校验和，并比对 train / val / test 样本 ID 集合交集。",
+          title: isEn ? "Reasoning" : "思考摘要",
+          category: "operations",
+          timestamp: new Date(Date.now() - 95000).toISOString(),
+        },
+        {
+          id: "sub-kepler-3",
+          kind: "command",
+          toolName: "exec_command",
+          title: "exec_command",
+          command: "python3 scripts/verify_splits.py --manifest manifests/v2.json",
+          text: "python3 scripts/verify_splits.py --manifest manifests/v2.json",
+          output: "train=12480 val=1560 test=1560\noverlap(train, val)=0\noverlap(train, test)=0\nStatus: OK",
+          status: "completed",
+          category: "operations",
+          timestamp: new Date(Date.now() - 70000).toISOString(),
+        },
+        {
+          id: "sub-kepler-4",
+          kind: "assistant",
+          text: isEn
+            ? "Verified `manifests/v2.json` via [verify_splits.py](file:///workspace/vision/scripts/verify_splits.py#L1-L40): **0 overlap** across `train` (12,480), `val` (1,560), and `test` (1,560)."
+            : "已通过 [verify_splits.py](file:///workspace/vision/scripts/verify_splits.py#L1-L40) 完成核验：`train` (12,480)、`val` (1,560) 与 `test` (1,560) 之间 **0 重叠**。",
+          title: "",
+          category: "dialogue",
+          timestamp: new Date(Date.now() - 45000).toISOString(),
+        },
+      ],
+    });
+  }
   snapshot.summary.codex = chats.size;
   const event = (chat, kind, text) => {
     const timestamp = new Date().toISOString();
@@ -268,6 +351,46 @@ export function createConversationFixture(snapshot, notify) {
         request.method === "POST"
           ? await readBody(request)
           : Object.fromEntries(url.searchParams);
+      if (input.subagentId) {
+        const subRecord = subagentDialogues.get(
+          `${input.host}:${input.sessionId}:${input.subagentId}`,
+        );
+        if (!subRecord) {
+          json(response, 404, { error: "找不到预览子代理会话" });
+          return true;
+        }
+        const end =
+          input.before == null ? subRecord.events.length : Number(input.before);
+        const start = Math.max(0, end - (Number(input.limit) || 40));
+        const events = subRecord.events.slice(start, end);
+        json(response, 200, {
+          host: input.host,
+          sessionId: input.sessionId,
+          subagentId: subRecord.subagent.id,
+          subagent: {
+            id: subRecord.subagent.id,
+            agentNickname: subRecord.subagent.agentNickname,
+            agentPath: subRecord.subagent.agentPath,
+            agentRole: subRecord.subagent.agentRole,
+            model: subRecord.subagent.model,
+            turnState: subRecord.subagent.turnState,
+          },
+          path: subRecord.subagent.path,
+          events,
+          loadedAt: new Date().toISOString(),
+          totalLines: subRecord.events.length,
+          totalBytes: 0,
+          scannedBytes: 0,
+          counts: {},
+          toolEventCount: 1,
+          omittedToolEvents: 0,
+          hiddenReasoningCount: 0,
+          pageSize: 40,
+          hasMore: start > 0,
+          nextBefore: start > 0 ? start : null,
+        });
+        return true;
+      }
       const chat = chats.get(`${input.host}:${input.sessionId}`);
       if (!chat) {
         json(response, 404, { error: "找不到预览会话" });

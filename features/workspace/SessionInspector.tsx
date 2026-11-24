@@ -1,4 +1,6 @@
 "use client";
+import { useMemo, useState } from "react";
+import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
 import {
   absoluteTime,
   attachCommand,
@@ -43,12 +45,14 @@ import {
   SquareTerminal,
   Trash2,
 } from "lucide-react";
+import { CodexSubagentRows, toCodexDrawerItems } from "./CodexSubagentsPanel";
 import { DialogueTimeline } from "./DialogueTimeline";
 import { HumanRequests } from "./HumanRequests";
 import { RuntimeDetails } from "./RuntimeDetails";
 import { SessionComposer } from "./SessionComposer";
 import { SessionModelPanel } from "./SessionModelPanel";
 import { SessionSummaryPanel } from "./SessionSummaryPanel";
+import { useCodexSubagentWorkflow } from "./use-codex-subagent-workflow";
 import type { WorkspaceController } from "./use-workspace-controller";
 
 export function SessionInspector(
@@ -96,6 +100,29 @@ export function SessionInspector(
     selectedControlExpanded,
     compactSession,
   } = workspace;
+
+  const [openCodexSubagent, setOpenCodexSubagent] = useState<{
+    inspectorKey: string;
+    id: string;
+  } | null>(null);
+  const activeCodexSubagentId =
+    openCodexSubagent?.inspectorKey === selectedInspectorKey
+      ? openCodexSubagent.id
+      : null;
+  const selectedSubagents = useMemo(
+    () => selectedAgent?.subagents || [],
+    [selectedAgent?.subagents],
+  );
+  const codexWorkflow = useCodexSubagentWorkflow(
+    selectedAgent?.host || "",
+    selectedAgent?.rollout?.id || "",
+    selectedSubagents,
+    activeCodexSubagentId,
+  );
+  const codexDrawerItems = useMemo(
+    () => toCodexDrawerItems(selectedSubagents),
+    [selectedSubagents],
+  );
 
   return (
     <aside className="inspector" id="inspector-panel">
@@ -672,28 +699,21 @@ export function SessionInspector(
               </InspectorModule>
             )}
 
-            {(selectedAgent.subagents?.length || 0) > 0 && (
+            {selectedSubagents.length > 0 && (
               <InspectorModule
                 key={`${selectedInspectorKey}:subagents`}
                 title="当前子代理"
-                meta={`${selectedAgent.subagents?.length || 0} 个`}
+                meta={`${selectedSubagents.length} 个`}
               >
-                <div className="subagent-list">
-                  {selectedAgent.subagents?.map((subagent) => (
-                    <div key={subagent.id}>
-                      <strong>
-                        {subagent.agentNickname ||
-                          subagent.agentPath ||
-                          subagent.id.slice(0, 8)}
-                      </strong>
-                      <span>
-                        {subagent.lastAction ||
-                          subagent.lastAssistant ||
-                          "暂无活动摘要"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <CodexSubagentRows
+                  subagents={selectedSubagents}
+                  onInspect={(subagent) =>
+                    setOpenCodexSubagent({
+                      inspectorKey: selectedInspectorKey,
+                      id: subagent.id,
+                    })
+                  }
+                />
               </InspectorModule>
             )}
 
@@ -1041,6 +1061,32 @@ export function SessionInspector(
               </InspectorModule>
             ) : null}
           </div>
+          <SubagentWorkflowDrawer
+            open={Boolean(activeCodexSubagentId)}
+            providerLabel="Codex"
+            items={codexDrawerItems}
+            selectedId={activeCodexSubagentId}
+            onSelect={(id) =>
+              setOpenCodexSubagent({ inspectorKey: selectedInspectorKey, id })
+            }
+            onClose={() => setOpenCodexSubagent(null)}
+            onRefresh={codexWorkflow.refresh}
+            onLoadMore={codexWorkflow.loadMore}
+            loading={codexWorkflow.loading}
+            error={codexWorkflow.error}
+            steps={codexWorkflow.steps}
+            hasMore={codexWorkflow.hasMore}
+            host={selectedAgent.host}
+            cwd={selectedAgent.cwd}
+            activeStatus={codexWorkflow.status}
+            activeModel={codexWorkflow.model}
+            activeTypeName={codexWorkflow.selected?.agentRole || ""}
+            activeRole={
+              codexWorkflow.selected?.agentNickname ||
+              codexWorkflow.selected?.agentPath ||
+              ""
+            }
+          />
         </>
       ) : (
         <div className="no-selection">

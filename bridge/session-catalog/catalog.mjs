@@ -90,4 +90,21 @@ export class SessionCatalog {
     }
     return this.probe(entry.host, { operation: "dialogue", provider: entry.provider, path: entry.path });
   }
+  async subagentWorkflow(key, { subagentId, version } = {}) {
+    if (!subagentId || typeof subagentId !== "string") {
+      throw new Error("缺少子代理标识");
+    }
+    const entry = this.get(key);
+    if (!entry) throw new Error("未找到会话，请刷新扫描");
+    if (entry.provider !== "claude" || !entry.path) {
+      throw new Error("当前会话不支持 Claude 子代理工作流读取");
+    }
+    return this.probe(entry.host, {
+      operation: "subagent_workflow",
+      provider: "claude",
+      path: entry.path,
+      subagentId: subagentId.trim(),
+      ...(version ? { version: String(version) } : {}),
+    });
+  }
 }

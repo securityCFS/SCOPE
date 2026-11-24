@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Bot, KeyRound, LoaderCircle, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, ChevronRight, KeyRound, LoaderCircle, Square } from "lucide-react";
 import { visibleSpoolTurns } from "@/lib/native-history";
 import { useNativeHistory, type NativeSubagent } from "./use-native-history";
 import { NativeHistoryView } from "./NativeHistoryView";
@@ -8,6 +8,8 @@ import { useNativeScroll } from "./use-native-scroll";
 import { NativeModelControl } from "./NativeModelControl";
 import { NativeElicitation } from "./NativeElicitation";
 import { useSlashCommands } from "./use-slash-commands";
+import { useClaudeSubagentWorkflow } from "./use-claude-subagent-workflow";
+import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
 import {
   ComposerAttachmentButton,
   ComposerAttachmentInput,
@@ -62,29 +64,61 @@ function mergeNativeSubagents(
   liveSubs: NativeSubagent[] = [],
   preferLive: boolean,
 ): NativeSubagent[] {
-  const byId = new Map<string, NativeSubagent>();
+  const byKey = new Map<string, NativeSubagent>();
+  const keyFor = (item: NativeSubagent) => item.toolUseId || item.id;
   const ordered = preferLive
     ? [...historySubs, ...liveSubs]
     : [...liveSubs, ...historySubs];
   for (const item of ordered) {
     if (!item?.id) continue;
-    const prev = byId.get(item.id);
+    const key = keyFor(item);
+    const prev = byKey.get(key) || byKey.get(item.id);
     if (!prev) {
-      byId.set(item.id, item);
+      byKey.set(key, item);
       continue;
     }
     const prevAt = prev.updatedAt || 0;
     const nextAt = item.updatedAt || 0;
     const prevWorking = prev.status === "working";
     const nextWorking = item.status === "working";
-    if (nextAt > prevAt || (nextAt === prevAt && prevWorking && !nextWorking)) {
-      byId.set(item.id, { ...prev, ...item });
-    }
+    const newer = nextAt > prevAt || (nextAt === prevAt && prevWorking && !nextWorking);
+    const merged: NativeSubagent = newer
+      ? {
+          ...prev,
+          ...item,
+          agentId: item.agentId || prev.agentId,
+          toolUseId: item.toolUseId || prev.toolUseId,
+          model: item.model || prev.model,
+          spawnDepth: item.spawnDepth ?? prev.spawnDepth,
+          steps: item.steps?.length ? item.steps : prev.steps,
+          partial: item.partial || prev.partial,
+          hasWorkflow: Boolean(item.hasWorkflow || prev.hasWorkflow),
+        }
+      : {
+          ...item,
+          ...prev,
+          agentId: prev.agentId || item.agentId,
+          toolUseId: prev.toolUseId || item.toolUseId,
+          model: prev.model || item.model,
+          spawnDepth: prev.spawnDepth ?? item.spawnDepth,
+          steps: prev.steps?.length ? prev.steps : item.steps,
+          partial: prev.partial || item.partial,
+          hasWorkflow: Boolean(prev.hasWorkflow || item.hasWorkflow),
+        };
+    byKey.set(key, merged);
   }
-  return Array.from(byId.values());
+  return Array.from(byKey.values());
 }
 
-function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
+function NativeSubagentsPanel({
+  subagents,
+  canInspect,
+  onInspect,
+}: {
+  subagents: NativeSubagent[];
+  canInspect: boolean;
+  onInspect: (subagent: NativeSubagent) => void;
+}) {
   const { tr } = useLocale();
   if (!subagents.length) return null;
   const statusLabels: Record<string, string> = {
@@ -97,27 +131,48 @@ function NativeSubagentsPanel({ subagents }: { subagents: NativeSubagent[] }) {
   const finishedCount = subagents.length - workingList.length;
   const body = (
     <div className="native-subagents-list">
-      {subagents.map((item) => (
-        <div className="native-subagent-row" key={item.id}>
-          <div className="native-subagent-meta">
-            <span className={`native-subagent-badge is-${item.status || "working"}`}>
-              {item.status === "working" ? (
-                <LoaderCircle size={11} className="is-spinning" />
-              ) : (
-                <Bot size={11} />
+      {subagents.map((item) => {
+        const inner = (
+          <>
+            <div className="native-subagent-meta">
+              <span className={`native-subagent-badge is-${item.status || "working"}`}>
+                {item.status === "working" ? (
+                  <LoaderCircle size={11} className="is-spinning" />
+                ) : (
+                  <Bot size={11} />
+                )}
+                {statusLabels[item.status] || item.status}
+              </span>
+              <strong title={item.role}>{item.role}</strong>
+              {item.typeName && <small>{item.typeName}</small>}
+              {item.model && <small>{item.model}</small>}
+            </div>
+            <span className="native-subagent-right">
+              {item.lastAction && (
+                <span className="native-subagent-action" title={item.lastAction}>
+                  {item.lastAction}
+                </span>
               )}
-              {statusLabels[item.status] || item.status}
+              {canInspect && <ChevronRight size={13} />}
             </span>
-            <strong title={item.role}>{item.role}</strong>
-            {item.typeName && <small>{item.typeName}</small>}
+          </>
+        );
+        return canInspect ? (
+          <button
+            type="button"
+            className="native-subagent-row"
+            key={item.id}
+            onClick={() => onInspect(item)}
+            title={tr("点击查看子代理实际工作流", "Inspect subagent workflow")}
+          >
+            {inner}
+          </button>
+        ) : (
+          <div className="native-subagent-row" key={item.id}>
+            {inner}
           </div>
-          {item.lastAction && (
-            <span className="native-subagent-action" title={item.lastAction}>
-              {item.lastAction}
-            </span>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -185,6 +240,10 @@ export function NativeConversation({
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(Boolean(entry.managed));
+  const [openSubagent, setOpenSubagent] = useState<{
+    entryKey: string;
+    id: string;
+  } | null>(null);
   const composer = useRef<HTMLFormElement>(null);
   const { tr } = useLocale();
   const attach = useComposerAttachments({
@@ -275,6 +334,28 @@ export function NativeConversation({
   );
   const workingSubagentsCount = useMemo(
     () => subagents.filter((item) => item.status === "working").length,
+    [subagents],
+  );
+  const activeSubagentId =
+    openSubagent?.entryKey === entry.key ? openSubagent.id : null;
+  const claudeWorkflow = useClaudeSubagentWorkflow(
+    entry.key,
+    entry.provider,
+    subagents,
+    activeSubagentId,
+  );
+  const subagentDrawerItems = useMemo(
+    () =>
+      subagents.map((item) => ({
+        id: item.id,
+        label: item.role || item.id,
+        role: item.role,
+        typeName: item.typeName,
+        model: item.model,
+        spawnDepth: item.spawnDepth,
+        status: item.status,
+        lastAction: item.lastAction,
+      })),
     [subagents],
   );
   const refreshNativeHistory = nativeHistory.refresh;
@@ -390,17 +471,46 @@ export function NativeConversation({
             {isLocalReadOnly ? " · 本机只读" : ""}
           </small>
         </div>
-        {onAccounts && !isLocalReadOnly && (
+        {((entry.provider === "claude" && subagents.length > 0) ||
+          (onAccounts && !isLocalReadOnly)) && (
           <div className="conversation-header-actions">
-            <button
-              type="button"
-              className="session-info-trigger"
-              onClick={onAccounts}
-            >
-              <KeyRound size={14} />
-              <span>{tr("账号管理", "Accounts")}</span>
-              <QuotaInlineBadge quota={providerQuota} />
-            </button>
+            {entry.provider === "claude" && subagents.length > 0 && (
+              <button
+                type="button"
+                className="session-info-trigger"
+                onClick={() =>
+                  setOpenSubagent({
+                    entryKey: entry.key,
+                    id:
+                      subagents.find((item) => item.status === "working")?.id ||
+                      subagents[0].id,
+                  })
+                }
+                title={tr(
+                  "查看 Claude 子代理工作流",
+                  "Inspect Claude subagent workflows",
+                )}
+              >
+                <Bot size={14} />
+                <span>
+                  {tr(
+                    `子代理 · ${subagents.length}`,
+                    `Subagents · ${subagents.length}`,
+                  )}
+                </span>
+              </button>
+            )}
+            {onAccounts && !isLocalReadOnly && (
+              <button
+                type="button"
+                className="session-info-trigger"
+                onClick={onAccounts}
+              >
+                <KeyRound size={14} />
+                <span>{tr("账号管理", "Accounts")}</span>
+                <QuotaInlineBadge quota={providerQuota} />
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -471,7 +581,13 @@ export function NativeConversation({
               respond={(decision, content) => void control("permission", { requestId: request.id, decision, content })} />
             : <NativePermissionRequest key={request.id} request={request} provider={providerName} disabled={controlBusy || Boolean(pendingControl) || !canControl}
               respond={(decision, answers, optionId) => void control("permission", { requestId: request.id, decision, answers, optionId })} />)}
-          <NativeSubagentsPanel subagents={subagents} />
+          <NativeSubagentsPanel
+            subagents={subagents}
+            canInspect={entry.provider === "claude"}
+            onInspect={(item) =>
+              setOpenSubagent({ entryKey: entry.key, id: item.id })
+            }
+          />
           {working && (
             <details className="native-thinking">
               <summary>
@@ -615,6 +731,28 @@ export function NativeConversation({
               )}
         </p>
       </div>
+      <SubagentWorkflowDrawer
+        open={Boolean(activeSubagentId && entry.provider === "claude")}
+        providerLabel="Claude Code"
+        items={subagentDrawerItems}
+        selectedId={activeSubagentId}
+        onSelect={(id) => setOpenSubagent({ entryKey: entry.key, id })}
+        onClose={() => setOpenSubagent(null)}
+        onRefresh={claudeWorkflow.refresh}
+        loading={claudeWorkflow.loading}
+        error={claudeWorkflow.error}
+        steps={claudeWorkflow.steps}
+        partial={claudeWorkflow.partial}
+        totalSteps={claudeWorkflow.totalSteps}
+        truncated={claudeWorkflow.truncated}
+        host={entry.host}
+        cwd={entry.cwd}
+        activeStatus={claudeWorkflow.status}
+        activeModel={claudeWorkflow.model}
+        activeTypeName={claudeWorkflow.typeName}
+        activeSpawnDepth={claudeWorkflow.spawnDepth}
+        activeRole={claudeWorkflow.role}
+      />
     </section>
   );
 }

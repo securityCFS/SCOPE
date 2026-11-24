@@ -449,7 +449,8 @@ for filename in paths:
         or spawn.get("parent_thread_id")
         or "",
         "agentPath": spawn.get("agent_path") or "",
-        "agentNickname": spawn.get("agent_nickname") or "",
+        "agentNickname": spawn.get("agent_nickname") or meta.get("agent_nickname") or "",
+        "agentRole": spawn.get("agent_role") or meta.get("agent_role") or "",
         "isSubagent": bool(spawn or meta.get("parent_thread_id")),
         "cwd": meta.get("cwd") or "",
         "startedAt": meta.get("timestamp") or first_obj.get("timestamp"),
