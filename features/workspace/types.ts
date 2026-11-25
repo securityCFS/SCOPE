@@ -96,6 +96,7 @@ export type DialogueEvent = {
   output?: string;
   status?: string;
   turnId?: string;
+  agentPath?: string;
 };
 
 export type DialogueCategory = DialogueEvent["category"];

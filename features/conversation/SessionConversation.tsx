@@ -14,22 +14,27 @@ import { ComposerControls } from "./ComposerControls";
 import { bridgeUrl, managementKey } from "@/features/workspace/shared";
 import type { WorkspaceController } from "@/features/workspace/use-workspace-controller";
 import { useLocale } from "@/lib/i18n";
+import { useSubagentDisplayPrefs } from "@/lib/subagent-display-prefs";
 import { ConversationFeed } from "./ConversationFeed";
 
 export function SessionConversation({
   workspace,
   onTools,
-  openSubagentId,
+  openSubagent,
   onOpenSubagent,
 }: {
   workspace: WorkspaceController;
   onTools: () => void;
-  openSubagentId?: string | null;
-  onOpenSubagent?: (id: string | null) => void;
+  openSubagent?: { open: boolean; id: string | null };
+  onOpenSubagent?: (next: { open: boolean; id: string | null } | null) => void;
 }) {
   const { tr } = useLocale();
+  const { prefs: subagentPrefs } = useSubagentDisplayPrefs();
   const [stopping, setStopping] = useState(false);
-  const [localSubagentId, setLocalSubagentId] = useState<string | null>(null);
+  const [localSubagent, setLocalSubagent] = useState<{
+    open: boolean;
+    id: string | null;
+  } | null>(null);
   const {
     selectedAgent: agent,
     selectedDialogue: dialogue,
@@ -37,9 +42,11 @@ export function SessionConversation({
     selectedProject: project,
   } = workspace;
   const subagents = useMemo(() => agent?.subagents || [], [agent?.subagents]);
-  const activeSubagentId =
-    openSubagentId !== undefined ? openSubagentId : localSubagentId;
-  const setActiveSubagentId = onOpenSubagent || setLocalSubagentId;
+  const drawerState =
+    openSubagent !== undefined ? openSubagent : localSubagent;
+  const isDrawerOpen = Boolean(drawerState?.open);
+  const activeSubagentId = isDrawerOpen ? drawerState?.id ?? null : null;
+  const setDrawerState = onOpenSubagent || setLocalSubagent;
   const codexWorkflow = useCodexSubagentWorkflow(
     agent?.host || "",
     agent?.rollout?.id || "",
@@ -142,17 +149,17 @@ export function SessionConversation({
               </button>
             );
           })()}
-          {subagents.length > 0 && (
+          {subagentPrefs.showHeaderBadge && subagents.length > 0 && (
             <button
               type="button"
               className="session-info-trigger"
               onClick={() =>
-                setActiveSubagentId(
-                  subagents.find((item) => item.turnState === "working")?.id ||
-                    subagents[0].id,
-                )
+                setDrawerState({
+                  open: true,
+                  id: subagents.length === 1 ? subagents[0].id : null,
+                })
               }
-              title={tr("查看 Codex 子代理工作流", "Inspect Codex subagent workflows")}
+              title={tr("查看本会话所有 Codex 子代理与工作流", "View all Codex subagents and workflows")}
             >
               <Bot size={14} />
               <span>
@@ -188,11 +195,15 @@ export function SessionConversation({
         loadingMore={workspace.dialogueLoadingMore}
         onOlder={workspace.loadOlderDialogue}
         onRetry={() => workspace.setDialogueRefresh((value) => value + 1)}
+        subagents={subagents}
+        onInspectSubagent={(id) => setDrawerState({ open: true, id })}
       >
-        <CodexSubagentsCard
-          subagents={subagents}
-          onInspect={(sub) => setActiveSubagentId(sub.id)}
-        />
+        {subagentPrefs.showInlineCards && (
+          <CodexSubagentsCard
+            subagents={subagents}
+            onInspect={(sub) => setDrawerState({ open: true, id: sub.id })}
+          />
+        )}
         <HumanRequests {...workspace} />
       </ConversationFeed>
       <div className="conversation-bottom">
@@ -223,12 +234,13 @@ export function SessionConversation({
         </p>
       </div>
       <SubagentWorkflowDrawer
-        open={Boolean(activeSubagentId)}
+        open={isDrawerOpen}
         providerLabel="Codex"
         items={codexDrawerItems}
+        totalSubagents={codexDrawerItems.length}
         selectedId={activeSubagentId}
-        onSelect={(id) => setActiveSubagentId(id)}
-        onClose={() => setActiveSubagentId(null)}
+        onSelect={(id) => setDrawerState({ open: true, id })}
+        onClose={() => setDrawerState(null)}
         onRefresh={codexWorkflow.refresh}
         onLoadMore={codexWorkflow.loadMore}
         loading={codexWorkflow.loading}

@@ -25,6 +25,8 @@ export function toCodexDrawerItems(subagents: Rollout[]): SubagentDrawerItem[] {
     model: sub.model || "",
     status: codexSubagentStatus(sub),
     lastAction: sub.lastAction || sub.lastAssistant || sub.lastUser || "",
+    taskTitle: sub.firstUser ? sub.firstUser.split(/\r?\n/)[0].slice(0, 80) : "",
+    updatedAt: sub.mtimeMs || null,
   }));
 }
 

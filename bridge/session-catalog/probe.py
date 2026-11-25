@@ -6,9 +6,15 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 from urllib.parse import unquote, urlparse
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -27,23 +33,33 @@ def text(content):
         return ""
     return "\n".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") in ("text", "input_text", "output_text"))
 
-def records(filename, full=False):
+def records(filename, full=False, max_bytes=2_000_000):
     with open(filename, "rb") as handle:
+        size = os.fstat(handle.fileno()).st_size
         if full:
-            # Conversation pages read only a bounded tail; never load an entire log into memory.
-            size = os.fstat(handle.fileno()).st_size
-            handle.seek(max(0, size - 2_000_000))
-            if handle.tell():
+            # Stream line-by-line over a bounded tail; skip oversized debug/request blobs before json.loads.
+            if size > max_bytes:
+                handle.seek(size - max_bytes)
                 handle.readline()
-            data = handle.read(2_000_000)
-        else:
-            data = handle.read(24_000)
-            size = os.fstat(handle.fileno()).st_size
-            if size > 24_000:
-                data = data.rsplit(b"\n", 1)[0] + b"\n"
-                handle.seek(max(24_000, size - 24_000))
-                handle.readline()
-                data += handle.read(24_000)
+            for line in handle:
+                if not line.strip():
+                    continue
+                head = line[:160]
+                if b'"type":"api-request' in head or b'"type": "api-request' in head or b'"type":"data-flow-records' in head or b'"type": "data-flow-records' in head:
+                    continue
+                try:
+                    value = json.loads(line)
+                    if isinstance(value, dict):
+                        yield value
+                except (ValueError, UnicodeError):
+                    pass
+            return
+        data = handle.read(24_000)
+        if size > 24_000:
+            data = data.rsplit(b"\n", 1)[0] + b"\n"
+            handle.seek(max(24_000, size - 24_000))
+            handle.readline()
+            data += handle.read(24_000)
     for line in data.splitlines():
         try:
             value = json.loads(line)
@@ -139,19 +155,309 @@ def extract_tool_result_text(content, limit=6000):
         return clip_text(json.dumps(content, ensure_ascii=False).replace("\x00", ""), limit)
     return "", False
 
-def claude_subagents(filename, now_ts):
+AGENT_MSG_RE = re.compile(r'<agent-message\s+from="([^"]+)"[^>]*>([\s\S]*?)</agent-message>')
+TASK_NOTIF_RE = re.compile(r'<task-notification>([\s\S]*?)</task-notification>')
+
+def _xml_tag(body, tag):
+    m = re.search(rf'<{tag}>([\s\S]*?)</{tag}>', body)
+    return m.group(1).strip() if m else ""
+
+def parse_claude_agent_message(raw_text):
+    if not isinstance(raw_text, str) or "<agent-message" not in raw_text:
+        return None
+    m = AGENT_MSG_RE.search(raw_text)
+    if not m:
+        return None
+    sender = m.group(1).strip()[:120]
+    body = m.group(2).strip()
+    is_handback = "[Subagent hand-back]" in body[:200]
+    if is_handback:
+        marker = "The report follows:"
+        idx = body.find(marker)
+        if idx >= 0:
+            body = body[idx + len(marker):].lstrip("\r\n")
+            body = "\n".join(line[2:] if line.startswith("  ") else line for line in body.splitlines()).strip()
+    first_line = next((ln.strip().lstrip("#*- ").strip() for ln in body.splitlines() if ln.strip()), "")[:110]
+    return {
+        "from": sender,
+        "kind": "handback" if is_handback else "message",
+        "summary": first_line,
+        "text": body[:16_000],
+    }
+
+def parse_claude_task_notification(raw_text):
+    if not isinstance(raw_text, str) or "<task-notification>" not in raw_text:
+        return None
+    m = TASK_NOTIF_RE.search(raw_text)
+    if not m:
+        return None
+    inner = m.group(1)
+    task_id = _xml_tag(inner, "task-id")
+    tool_use_id = _xml_tag(inner, "tool-use-id")
+    status = _xml_tag(inner, "status") or "completed"
+    summary = _xml_tag(inner, "summary")
+    result = _xml_tag(inner, "result")
+    return {
+        "taskId": task_id,
+        "toolUseId": tool_use_id,
+        "status": status,
+        "summary": summary[:160],
+        "text": (result or summary)[:12_000],
+    }
+
+UUID_RE = re.compile(r"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")
+
+def collect_tmux_ttys():
+    if os.name == "nt":
+        return set()
+    try:
+        proc = subprocess.run(
+            ["tmux", "list-panes", "-a", "-F", "#{pane_tty}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=1.5,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return set()
+
+def scope_lock_active(provider, sid):
+    if fcntl is None or not sid:
+        return False
+    lock_file = Path.home() / ".local/state/scope" / f"{provider}-sessions" / f"{sid}.lock"
+    if not lock_file.is_file():
+        return False
+    try:
+        with lock_file.open("r") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+                return False
+    except OSError:
+        return False
+
+def _read_proc_cmdline(pid):
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+        return [part for part in raw.decode("utf-8", errors="replace").split("\0") if part]
+    except OSError:
+        return []
+
+def _read_proc_ppid(pid):
+    try:
+        stat_txt = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+        rparen = stat_txt.rfind(")")
+        if rparen < 0:
+            return 0
+        fields = stat_txt[rparen + 2:].split()
+        return int(fields[1]) if len(fields) > 1 else 0
+    except (OSError, ValueError):
+        return 0
+
+def pid_tty_and_scope(pid, tmux_ttys):
+    if os.name == "nt" or not pid or pid <= 0:
+        return "", False, False
+    args = _read_proc_cmdline(pid)
+    is_scope = False
+    if "--input-format" in args and "stream-json" in args:
+        is_scope = True
+    elif len(args) >= 2 and Path(args[0]).name == "agy" and args[1] == "acp":
+        is_scope = True
+    if not is_scope:
+        cur = pid
+        for _ in range(5):
+            ppid = _read_proc_ppid(cur)
+            if ppid <= 1 or ppid == cur:
+                break
+            pargs = " ".join(_read_proc_cmdline(ppid))
+            if (
+                ".local/state/scope/runs" in pargs
+                or "claude-interactive" in pargs
+                or "antigravity-interactive" in pargs
+                or "native-session-state" in pargs
+            ):
+                is_scope = True
+                break
+            cur = ppid
+    full_tty = ""
+    short_tty = ""
+    try:
+        link = os.readlink(f"/proc/{pid}/fd/0")
+        if link.startswith("/dev/pts/") or link.startswith("/dev/tty"):
+            full_tty = link
+            short_tty = link[len("/dev/"):]
+    except OSError:
+        pass
+    return short_tty, bool(full_tty and full_tty in tmux_ttys), is_scope
+
+def _format_lock_reason(tty, pid, in_tmux):
+    where = f"tmux ({tty})" if (in_tmux and tty) else (tty or "远端终端")
+    return f"外部终端占用 ({where} · PID {pid})" if pid else f"外部终端占用 ({where})"
+
+def detect_claude_external_locks(tmux_ttys, target_sid=None):
+    if os.name == "nt":
+        return {}
+    locks = {}
+    registry = Path(roots["claude"]).parent / "sessions"
+    if registry.is_dir():
+        for entry in registry.glob("*.json"):
+            try:
+                record = json.loads(entry.read_text(encoding="utf-8", errors="replace"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(record, dict):
+                continue
+            sid = str(record.get("sessionId") or "")
+            if not sid or (target_sid and sid != target_sid):
+                continue
+            try:
+                pid = int(record.get("pid") or 0)
+            except (TypeError, ValueError):
+                continue
+            if pid <= 0:
+                continue
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                continue
+            if scope_lock_active("claude", sid):
+                continue
+            tty, in_tmux, is_scope = pid_tty_and_scope(pid, tmux_ttys)
+            if is_scope:
+                continue
+            locks[sid] = {
+                "locked": True,
+                "pid": pid,
+                "tty": tty,
+                "inTmux": in_tmux,
+                "entrypoint": str(record.get("entrypoint") or "cli")[:40],
+                "status": str(record.get("status") or "active")[:40],
+                "name": str(record.get("name") or "")[:80],
+                "reason": _format_lock_reason(tty, pid, in_tmux),
+            }
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        for cmd_file in proc_root.glob("[0-9]*/cmdline"):
+            try:
+                pid = int(cmd_file.parent.name)
+                args = [p for p in cmd_file.read_bytes().decode("utf-8", errors="replace").split("\0") if p]
+            except (OSError, ValueError):
+                continue
+            if not args or not any("claude" in Path(a).name for a in args[:2]):
+                continue
+            for idx, arg in enumerate(args):
+                if arg in ("--resume", "--session-id", "-r") and idx + 1 < len(args):
+                    sid = args[idx + 1]
+                    if not UUID_RE.fullmatch(sid) or sid in locks or (target_sid and sid != target_sid):
+                        continue
+                    if scope_lock_active("claude", sid):
+                        continue
+                    tty, in_tmux, is_scope = pid_tty_and_scope(pid, tmux_ttys)
+                    if is_scope:
+                        continue
+                    locks[sid] = {
+                        "locked": True,
+                        "pid": pid,
+                        "tty": tty,
+                        "inTmux": in_tmux,
+                        "entrypoint": "cli",
+                        "status": "active",
+                        "reason": _format_lock_reason(tty, pid, in_tmux),
+                    }
+    return locks
+
+def detect_agy_external_locks(tmux_ttys, target_sid=None):
+    if os.name == "nt":
+        return {}
+    locks = {}
+    locked_sids = set()
+    presence_dir = Path(roots["antigravity"]) / "presence"
+    if fcntl is not None and presence_dir.is_dir():
+        candidates = [presence_dir / f"{target_sid}.lock"] if target_sid else list(presence_dir.glob("*.lock"))
+        for lock_file in candidates:
+            if not lock_file.is_file():
+                continue
+            sid = lock_file.stem
+            try:
+                with lock_file.open("r") as handle:
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        locked_sids.add(sid)
+                    else:
+                        fcntl.flock(handle, fcntl.LOCK_UN)
+            except OSError:
+                continue
+    pid_by_sid = {}
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        for cmd_file in proc_root.glob("[0-9]*/cmdline"):
+            try:
+                pid = int(cmd_file.parent.name)
+                args = [p for p in cmd_file.read_bytes().decode("utf-8", errors="replace").split("\0") if p]
+            except (OSError, ValueError):
+                continue
+            if not args or not any(Path(a).name == "agy" or "antigravity" in Path(a).name for a in args[:2]):
+                continue
+            for idx, arg in enumerate(args):
+                if arg in ("--conversation", "-c") and idx + 1 < len(args):
+                    sid = args[idx + 1]
+                    if (not target_sid or sid == target_sid) and sid not in pid_by_sid:
+                        pid_by_sid[sid] = pid
+                        locked_sids.add(sid)
+            fd_dir = cmd_file.parent / "fd"
+            try:
+                for fd_link in fd_dir.iterdir():
+                    try:
+                        target = os.readlink(str(fd_link))
+                    except OSError:
+                        continue
+                    if "/antigravity-cli/presence/" in target and target.endswith(".lock"):
+                        sid = Path(target).stem
+                        if not target_sid or sid == target_sid:
+                            pid_by_sid[sid] = pid
+                            locked_sids.add(sid)
+            except OSError:
+                continue
+    for sid in locked_sids:
+        if scope_lock_active("antigravity", sid):
+            continue
+        pid = pid_by_sid.get(sid, 0)
+        tty, in_tmux, is_scope = pid_tty_and_scope(pid, tmux_ttys) if pid else ("", False, False)
+        if is_scope:
+            continue
+        locks[sid] = {
+            "locked": True,
+            "pid": pid or None,
+            "tty": tty,
+            "inTmux": in_tmux,
+            "entrypoint": "cli",
+            "status": "active",
+            "reason": _format_lock_reason(tty, pid, in_tmux),
+        }
+    return locks
+
+def claude_subagents(filename, now_ts, limit=60):
     sub_dir = Path(filename).with_suffix("") / "subagents"
     if not sub_dir.is_dir():
-        return []
+        return [], 0
     files = []
     for child in sub_dir.glob("agent-*.jsonl"):
         try:
-            files.append((child.stat().st_mtime, child))
+            st = child.stat()
+            files.append((st.st_mtime, st.st_size, child))
         except OSError:
             continue
+    total_count = len(files)
     files.sort(key=lambda item: item[0])
     result = []
-    for mtime, child in files[-24:]:
+    for mtime, size, child in files[-limit:]:
         meta, _ = read_claude_subagent_meta(child)
         role = str(meta.get("description") or "").strip()[:120]
         type_name = str(meta.get("agentType") or "subagent")[:60]
@@ -162,50 +468,51 @@ def claude_subagents(filename, now_ts):
         background = meta.get("requestShape") != "foreground"
         last_action = ""
         stop_reason = None
-        try:
-            with child.open("rb") as handle:
-                size = os.fstat(handle.fileno()).st_size
-                head = handle.read(min(8_192, size)) if not role else b""
-                if size <= 16_384:
-                    handle.seek(0)
-                    tail = handle.read(16_384)
-                else:
-                    handle.seek(max(0, size - 16_384))
-                    tail = handle.read(16_384)
-            if size > 16_384 and b"\n" in tail:
-                tail = tail.split(b"\n", 1)[1]
-            if not role and head:
-                for raw_line in head.splitlines():
+        need_tail = (not role) or (finished is not True) or (not model)
+        if need_tail:
+            try:
+                with child.open("rb") as handle:
+                    head = handle.read(min(8_192, size)) if not role else b""
+                    if size <= 16_384:
+                        handle.seek(0)
+                        tail = handle.read(16_384)
+                    else:
+                        handle.seek(max(0, size - 16_384))
+                        tail = handle.read(16_384)
+                if size > 16_384 and b"\n" in tail:
+                    tail = tail.split(b"\n", 1)[1]
+                if not role and head:
+                    for raw_line in head.splitlines():
+                        try:
+                            row = json.loads(raw_line)
+                        except (ValueError, UnicodeError):
+                            continue
+                        if isinstance(row, dict) and row.get("type") == "user":
+                            val = text((row.get("message") or {}).get("content")).strip()
+                            if val:
+                                role = val.splitlines()[0][:120]
+                                break
+                for raw_line in tail.splitlines():
+                    if b'"type":"api-request' in raw_line or b'"type": "api-request' in raw_line:
+                        continue
                     try:
                         row = json.loads(raw_line)
                     except (ValueError, UnicodeError):
                         continue
-                    if isinstance(row, dict) and row.get("type") == "user":
-                        val = text((row.get("message") or {}).get("content")).strip()
-                        if val:
-                            role = val.splitlines()[0][:120]
-                            break
-            for raw_line in tail.splitlines():
-                if b'"type":"api-request' in raw_line or b'"type": "api-request' in raw_line:
-                    continue
-                try:
-                    row = json.loads(raw_line)
-                except (ValueError, UnicodeError):
-                    continue
-                if not isinstance(row, dict):
-                    continue
-                msg = row.get("message") if isinstance(row.get("message"), dict) else {}
-                if "stop_reason" in msg:
-                    stop_reason = msg.get("stop_reason")
-                if not model and isinstance(msg.get("model"), str):
-                    model = msg["model"][:80]
-                if isinstance(msg.get("content"), list):
-                    for blk in msg["content"]:
-                        if isinstance(blk, dict) and blk.get("type") == "tool_use" and blk.get("name"):
-                            summary = summarize_tool_input(blk["name"], blk.get("input"))
-                            last_action = f"{blk['name']} · {summary}"[:96] if summary else str(blk["name"])[:80]
-        except OSError:
-            continue
+                    if not isinstance(row, dict):
+                        continue
+                    msg = row.get("message") if isinstance(row.get("message"), dict) else {}
+                    if "stop_reason" in msg:
+                        stop_reason = msg.get("stop_reason")
+                    if not model and isinstance(msg.get("model"), str):
+                        model = msg["model"][:80]
+                    if isinstance(msg.get("content"), list):
+                        for blk in msg["content"]:
+                            if isinstance(blk, dict) and blk.get("type") == "tool_use" and blk.get("name"):
+                                summary = summarize_tool_input(blk["name"], blk.get("input"))
+                                last_action = f"{blk['name']} · {summary}"[:96] if summary else str(blk["name"])[:80]
+            except OSError:
+                continue
         if finished is True:
             working = False
         elif finished is False:
@@ -221,6 +528,7 @@ def claude_subagents(filename, now_ts):
             "status": "working" if working else "completed",
             "lastAction": last_action or ("运行中" if working else "已完成"),
             "updatedAt": int(mtime * 1000),
+            "sizeBytes": size,
             "hasWorkflow": True,
         }
         if tool_use_id:
@@ -230,7 +538,7 @@ def claude_subagents(filename, now_ts):
         if spawn_depth is not None:
             entry["spawnDepth"] = spawn_depth
         result.append(entry)
-    return result
+    return result, total_count
 
 def resolve_claude_subagent_file(sub_dir, subagent_id):
     if not isinstance(subagent_id, str) or not subagent_id:
@@ -315,16 +623,17 @@ def claude_subagent_workflow(parent_filename, subagent_id, known_version=None):
             if rtype == "user":
                 if isinstance(content, str):
                     val = content.strip()
-                    if val and not row.get("isMeta") and not prompt_captured:
+                    if val and not row.get("isMeta"):
+                        is_first = not prompt_captured
                         prompt_captured = True
-                        if not role:
+                        if is_first and not role:
                             role = val.splitlines()[0][:160]
                         clipped, trunc = clip_text(val, 16_000)
                         step_seq += 1
                         steps.append({
                             "id": f"prompt-{step_seq}",
                             "kind": "prompt",
-                            "title": "子代理任务",
+                            "title": "子代理任务" if is_first else "主会话追加指令",
                             "text": clipped,
                             "truncated": trunc,
                             "timestamp": ts,
@@ -361,18 +670,19 @@ def claude_subagent_workflow(parent_filename, subagent_id, known_version=None):
                                 })
                         elif btype in ("text", "input_text") and isinstance(blk.get("text"), str):
                             plain_parts.append(blk["text"])
-                    if plain_parts and not row.get("isMeta") and not prompt_captured:
+                    if plain_parts and not row.get("isMeta"):
                         val = "\n".join(plain_parts).strip()
                         if val:
+                            is_first = not prompt_captured
                             prompt_captured = True
-                            if not role:
+                            if is_first and not role:
                                 role = val.splitlines()[0][:160]
                             clipped, trunc = clip_text(val, 16_000)
                             step_seq += 1
                             steps.append({
                                 "id": f"prompt-{step_seq}",
                                 "kind": "prompt",
-                                "title": "子代理任务",
+                                "title": "子代理任务" if is_first else "主会话追加指令",
                                 "text": clipped,
                                 "truncated": trunc,
                                 "timestamp": ts,
@@ -606,17 +916,226 @@ elif config.get("operation") == "dialogue":
     if provider not in ("codex", "claude") or os.path.commonpath([root, filename]) != root or not filename.endswith(".jsonl"):
         raise ValueError("不支持读取这个会话路径")
     messages = []
-    for row in records(filename, full=True):
-        message = row.get("payload", {}) if provider == "codex" and row.get("type") == "response_item" else row.get("message", {}) if provider == "claude" else {}
+    subs = []
+    total_subs = 0
+    subs_by_tool = {}
+    subs_by_agent = {}
+    seen_agent_msgs = set()
+    spawned_tool_meta = {}
+    session_id = Path(filename).stem
+    if provider == "claude":
+        subs, total_subs = claude_subagents(filename, time.time(), limit=60)
+        for s in subs:
+            if s.get("toolUseId"):
+                subs_by_tool[s["toolUseId"]] = s
+            aid = s.get("agentId") or s.get("id") or ""
+            if aid:
+                subs_by_agent[aid] = s
+                if aid.startswith("agent-"):
+                    subs_by_agent[aid[len("agent-"):]] = s
+    current_task = ""
+    turn_index = 0
+    max_tail = 24_000_000 if provider == "claude" else 2_000_000
+
+    def emit_claude_agent_message(raw_str, ts_val):
+        parsed = parse_claude_agent_message(raw_str)
+        if not parsed:
+            return False
+        dedup_key = (parsed["from"], parsed["text"][:140])
+        if dedup_key in seen_agent_msgs:
+            return True
+        seen_agent_msgs.add(dedup_key)
+        matched = subs_by_agent.get(parsed["from"]) or subs_by_agent.get(f"agent-{parsed['from']}")
+        peer_name = matched.get("role") if matched else parsed["from"]
+        sub_id = (matched.get("agentId") or matched.get("id")) if matched else ""
+        messages.append({
+            "id": f"agent-in-{len(messages)}-{parsed['from'][:16]}",
+            "role": "agent_interaction",
+            "direction": "inbound",
+            "interactionKind": parsed["kind"],
+            "peerId": parsed["from"],
+            "peerName": peer_name,
+            "subagentId": sub_id,
+            "summary": parsed["summary"],
+            "text": parsed["text"],
+            **({"createdAt": ts_val} if ts_val else {}),
+        })
+        return True
+
+    for row in records(filename, full=True, max_bytes=max_tail):
+        if provider == "claude" and isinstance(row.get("sessionId"), str) and row.get("sessionId"):
+            session_id = row["sessionId"]
+        ts = row.get("timestamp")
+        rtype = row.get("type")
+        if provider == "claude":
+            if rtype == "queue-operation" and row.get("operation") == "enqueue":
+                emit_claude_agent_message(row.get("content"), ts)
+                continue
+            if rtype == "attachment":
+                att = row.get("attachment")
+                if isinstance(att, dict) and att.get("type") == "queued_command":
+                    emit_claude_agent_message(att.get("prompt"), ts)
+                continue
+        message = row.get("payload", {}) if provider == "codex" and rtype == "response_item" else row.get("message", {}) if provider == "claude" else {}
         if not isinstance(message, dict):
             continue
         role = message.get("role")
-        value = text(message.get("content"))
-        if role in ("user", "assistant") and value:
-            messages.append({"role": role, "text": value[:30_000]})
-    payload = {"messages": messages[-100:], "limited": os.path.getsize(filename) > 2_000_000 or len(messages) > 100}
+        content = message.get("content")
+        value = text(content)
+        if role == "user":
+            if provider == "claude":
+                if value and emit_claude_agent_message(value, ts):
+                    continue
+                if value:
+                    notif = parse_claude_task_notification(value)
+                    if notif:
+                        matched = subs_by_tool.get(notif["toolUseId"]) if notif.get("toolUseId") else None
+                        messages.append({
+                            "id": f"task-notif-{len(messages)}-{notif['taskId'] or notif['toolUseId']}",
+                            "role": "agent_interaction",
+                            "direction": "inbound",
+                            "interactionKind": "notification",
+                            "peerId": notif["taskId"] or notif["toolUseId"],
+                            "peerName": (matched.get("role") if matched else "") or notif["taskId"] or "后台任务",
+                            "subagentId": (matched.get("agentId") or matched.get("id")) if matched else "",
+                            "status": notif["status"],
+                            "summary": notif["summary"],
+                            "text": notif["text"],
+                            **({"createdAt": ts} if ts else {}),
+                        })
+                        continue
+                if isinstance(content, list):
+                    for blk in content:
+                        if not isinstance(blk, dict) or blk.get("type") != "tool_result":
+                            continue
+                        tid = str(blk.get("tool_use_id") or "")
+                        if tid not in spawned_tool_meta and tid not in subs_by_tool:
+                            continue
+                        out_txt, _ = extract_tool_result_text(blk.get("content"), 12_000)
+                        if not out_txt.strip():
+                            continue
+                        if "was delivered to you as a message from" in out_txt[:260]:
+                            continue
+                        matched = subs_by_tool.get(tid) or spawned_tool_meta.get(tid) or {}
+                        sub_id = matched.get("agentId") or matched.get("id") or ""
+                        peer_name = matched.get("role") or "Subagent"
+                        first_ln = next((ln.strip().lstrip("#*- ").strip() for ln in out_txt.splitlines() if ln.strip()), "")[:110]
+                        messages.append({
+                            "id": f"agent-res-{len(messages)}-{tid[:16]}",
+                            "role": "agent_interaction",
+                            "direction": "inbound",
+                            "interactionKind": "handback",
+                            "peerId": sub_id or tid,
+                            "peerName": peer_name,
+                            "subagentId": sub_id,
+                            "status": "failed" if blk.get("is_error") else "completed",
+                            "summary": first_ln,
+                            "text": out_txt,
+                            **({"createdAt": ts} if ts else {}),
+                        })
+            if value:
+                if provider == "claude" and not row.get("isMeta") and not value.lstrip().startswith("<"):
+                    turn_index += 1
+                    current_task = value.strip().splitlines()[0][:90]
+                messages.append({"role": role, "text": value[:30_000], **({"createdAt": ts} if ts else {})})
+        elif role == "assistant":
+            if value:
+                messages.append({"role": role, "text": value[:30_000], **({"createdAt": ts} if ts else {})})
+            if provider == "claude" and isinstance(content, list):
+                spawned = []
+                outbound_msgs = []
+                for blk in content:
+                    if not isinstance(blk, dict) or blk.get("type") != "tool_use":
+                        continue
+                    bname = blk.get("name")
+                    tid = str(blk.get("id") or "")
+                    inp = blk.get("input") if isinstance(blk.get("input"), dict) else {}
+                    if bname == "SendMessage":
+                        to_target = str(inp.get("to") or inp.get("recipient") or "").strip()[:120]
+                        msg_body = str(inp.get("message") or inp.get("content") or "").strip()
+                        msg_summary = str(inp.get("summary") or "").strip()[:120]
+                        if to_target or msg_body:
+                            matched = subs_by_agent.get(to_target) or subs_by_agent.get(f"agent-{to_target}")
+                            outbound_msgs.append({
+                                "id": f"agent-out-{len(messages)}-{tid or len(outbound_msgs)}",
+                                "role": "agent_interaction",
+                                "direction": "outbound",
+                                "interactionKind": "message",
+                                "peerId": to_target,
+                                "peerName": (matched.get("role") if matched else "") or to_target,
+                                "subagentId": (matched.get("agentId") or matched.get("id")) if matched else "",
+                                "summary": msg_summary or (msg_body.splitlines()[0][:100] if msg_body else ""),
+                                "text": msg_body[:12_000],
+                                **({"createdAt": ts} if ts else {}),
+                            })
+                        continue
+                    if bname not in ("Agent", "Task"):
+                        continue
+                    matched = subs_by_tool.get(tid)
+                    s_name = str(inp.get("name") or inp.get("description") or "").strip()[:120]
+                    s_type = str(inp.get("subagent_type") or "subagent")[:60]
+                    s_model = str(inp.get("model") or "")[:80]
+                    s_prompt = str(inp.get("prompt") or "").strip()[:480]
+                    if matched is not None:
+                        if current_task and not matched.get("taskTitle"):
+                            matched["taskTitle"] = current_task
+                        if turn_index and not matched.get("turnIndex"):
+                            matched["turnIndex"] = turn_index
+                        if ts and not matched.get("spawnedAt"):
+                            matched["spawnedAt"] = ts
+                        item_ref = dict(matched)
+                        if s_name and item_ref.get("role", "").startswith("Subagent "):
+                            item_ref["role"] = s_name
+                        if s_prompt:
+                            item_ref["promptPreview"] = s_prompt
+                        spawned.append(item_ref)
+                        if tid:
+                            spawned_tool_meta[tid] = item_ref
+                    elif tid or s_name:
+                        item_ref = {
+                            "id": tid or f"spawn-{turn_index}-{len(spawned)}",
+                            "toolUseId": tid,
+                            "role": s_name or "Subagent",
+                            "typeName": s_type,
+                            "model": s_model,
+                            "background": bool(inp.get("run_in_background", True)),
+                            "status": "completed",
+                            "lastAction": "已完成",
+                            "hasWorkflow": bool(tid),
+                            "taskTitle": current_task,
+                            "turnIndex": turn_index,
+                            "spawnedAt": ts,
+                            **({"promptPreview": s_prompt} if s_prompt else {}),
+                        }
+                        spawned.append(item_ref)
+                        if tid:
+                            spawned_tool_meta[tid] = item_ref
+                if spawned:
+                    if messages and messages[-1].get("role") == "subagent_group" and messages[-1].get("turnIndex") == turn_index:
+                        existing_ids = {s.get("toolUseId") or s.get("id") for s in messages[-1]["subagents"]}
+                        for sp in spawned:
+                            k = sp.get("toolUseId") or sp.get("id")
+                            if k not in existing_ids:
+                                messages[-1]["subagents"].append(sp)
+                                existing_ids.add(k)
+                    else:
+                        messages.append({
+                            "id": f"subgrp-{turn_index}-{spawned[0].get('id', '')}",
+                            "role": "subagent_group",
+                            "text": "",
+                            "taskTitle": current_task,
+                            "turnIndex": turn_index,
+                            "subagents": spawned,
+                            **({"createdAt": ts} if ts else {}),
+                        })
+                messages.extend(outbound_msgs)
+    payload = {"messages": messages[-120:], "limited": os.path.getsize(filename) > max_tail or len(messages) > 120}
     if provider == "claude":
-        payload["subagents"] = claude_subagents(filename, time.time())
+        payload["subagents"] = list(reversed(subs))
+        payload["totalSubagents"] = total_subs
+        tmux_ttys = collect_tmux_ttys()
+        ext_lock = detect_claude_external_locks(tmux_ttys, target_sid=session_id).get(session_id)
+        payload["externalLock"] = ext_lock
     print(json.dumps(payload, ensure_ascii=False))
 else:
     cache_file = Path.home() / ".cache" / "scope" / "session-catalog-v1.json"
@@ -626,6 +1145,9 @@ else:
         cache = {}
     entries, errors, next_cache = [], [], {}
     now_ts = time.time()
+    tmux_ttys = collect_tmux_ttys()
+    claude_locks = detect_claude_external_locks(tmux_ttys)
+    agy_locks = detect_agy_external_locks(tmux_ttys)
     for provider in ("codex", "claude"):
         for filename in glob.iglob(os.path.join(roots[provider], "**", "*.jsonl"), recursive=True):
             if provider == "claude" and "subagents" in Path(filename).parts:
@@ -639,10 +1161,15 @@ else:
                 saved = cache.get(filename)
                 item = dict(saved["item"]) if saved and saved.get("stamp") == stamp else metadata(provider, filename)
                 next_cache[filename] = {"stamp": stamp, "item": item}
-                if provider == "claude" and recent and sub_dir and sub_dir.is_dir():
-                    active = sum(1 for sub in claude_subagents(filename, now_ts) if sub["status"] == "working")
-                    if active > 0:
-                        item = {**item, "activeSubagents": active}
+                if provider == "claude":
+                    if recent and sub_dir and sub_dir.is_dir():
+                        sub_list, _ = claude_subagents(filename, now_ts, limit=32)
+                        active = sum(1 for sub in sub_list if sub["status"] == "working")
+                        if active > 0:
+                            item = {**item, "activeSubagents": active}
+                    ext = claude_locks.get(item.get("sessionId"))
+                    if ext:
+                        item = {**item, "externalLock": ext}
                 entries.append(item)
             except (OSError, ValueError, TypeError) as error:
                 errors.append(f"{provider}: {type(error).__name__}")
@@ -655,7 +1182,11 @@ else:
         item["cwd"] = label.get("cwd") or item["cwd"]
         item["model"] = label.get("model") or item["model"]
     try:
-        entries.extend(agy_entries())
+        for agy_item in agy_entries():
+            ext = agy_locks.get(agy_item.get("sessionId"))
+            if ext:
+                agy_item["externalLock"] = ext
+            entries.append(agy_item)
     except (sqlite3.Error, ValueError, TypeError) as error:
         errors.append("antigravity: " + str(error))
     for item in entries:

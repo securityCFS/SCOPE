@@ -19,20 +19,79 @@ test("Claude probe reads .meta.json and streams subagent workflow with cache, to
   const subDir = path.join(projectDir, sessionId, "subagents");
   await mkdir(subDir, { recursive: true });
 
+  const subagentId = "agent-abc12345";
+  const toolUseId = "toolu_01TestSubagentCall";
   const parentPath = path.join(projectDir, `${sessionId}.jsonl`);
   await writeFile(
     parentPath,
-    JSON.stringify({
-      type: "user",
-      sessionId,
-      cwd: "/workspace/demo",
-      timestamp: "2026-11-24T10:00:00Z",
-      message: { role: "user", content: "Inspect codebase with a subagent" },
-    }) + "\n",
+    [
+      {
+        type: "user",
+        sessionId,
+        cwd: "/workspace/demo",
+        timestamp: "2026-11-24T10:00:00Z",
+        message: { role: "user", content: "Inspect codebase with a subagent" },
+      },
+      {
+        type: "assistant",
+        sessionId,
+        timestamp: "2026-11-24T10:00:01Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: toolUseId,
+              name: "Agent",
+              input: {
+                description: "Audit config files",
+                subagent_type: "Explore",
+                prompt: "Find all timeout settings in bridge/",
+              },
+            },
+            {
+              type: "tool_use",
+              id: "toolu_01SendMsg",
+              name: "SendMessage",
+              input: {
+                to: "abc12345",
+                summary: "Follow-up focus on SSH timeout",
+                message: "Also verify SSH connect timeout in transport.",
+              },
+            },
+          ],
+        },
+      },
+      {
+        type: "queue-operation",
+        operation: "enqueue",
+        timestamp: "2026-11-24T10:00:10Z",
+        content:
+          '<agent-message from="abc12345">\n[Subagent hand-back] Preamble text. The report follows:\n  Found 2 timeout constants.\n  - SSH_TIMEOUT_MS\n</agent-message>',
+      },
+      {
+        type: "attachment",
+        timestamp: "2026-11-24T10:00:11Z",
+        attachment: {
+          type: "queued_command",
+          prompt:
+            '<agent-message from="abc12345">\n[Subagent hand-back] Preamble text. The report follows:\n  Found 2 timeout constants.\n  - SSH_TIMEOUT_MS\n</agent-message>',
+        },
+      },
+      {
+        type: "user",
+        sessionId,
+        timestamp: "2026-11-24T10:00:12Z",
+        message: {
+          role: "user",
+          content:
+            "<task-notification>\n<task-id>bg123</task-id>\n<status>completed</status>\n<summary>Background verification done</summary>\n</task-notification>",
+        },
+      },
+    ]
+      .map((row) => JSON.stringify(row))
+      .join("\n") + "\n",
   );
-
-  const subagentId = "agent-abc12345";
-  const toolUseId = "toolu_01TestSubagentCall";
   await writeFile(
     path.join(subDir, `${subagentId}.meta.json`),
     JSON.stringify({
@@ -172,15 +231,39 @@ test("Claude probe reads .meta.json and streams subagent workflow with cache, to
     provider: "claude",
     path: parentPath,
   });
+  assert.equal(parentDialogue.totalSubagents, 1);
   assert.equal(parentDialogue.subagents.length, 1);
   assert.equal(parentDialogue.subagents[0].id, subagentId);
   assert.equal(parentDialogue.subagents[0].toolUseId, toolUseId);
   assert.equal(parentDialogue.subagents[0].typeName, "Explore");
   assert.equal(parentDialogue.subagents[0].role, "Audit config files");
+  assert.equal(parentDialogue.subagents[0].taskTitle, "Inspect codebase with a subagent");
   assert.equal(parentDialogue.subagents[0].model, "claude-sonnet");
   assert.equal(parentDialogue.subagents[0].spawnDepth, 1);
   assert.equal(parentDialogue.subagents[0].status, "completed");
   assert.equal(parentDialogue.subagents[0].hasWorkflow, true);
+  const inlineGroups = parentDialogue.messages.filter(
+    (m) => m.role === "subagent_group",
+  );
+  assert.equal(inlineGroups.length, 1);
+  assert.equal(inlineGroups[0].taskTitle, "Inspect codebase with a subagent");
+  assert.equal(inlineGroups[0].subagents.length, 1);
+  assert.equal(inlineGroups[0].subagents[0].agentId, subagentId);
+  assert.match(inlineGroups[0].subagents[0].promptPreview, /timeout settings/);
+
+  const interactions = parentDialogue.messages.filter(
+    (m) => m.role === "agent_interaction",
+  );
+  assert.equal(interactions.length, 3); // outbound SendMessage + deduped inbound handback + task-notification
+  assert.equal(interactions[0].direction, "outbound");
+  assert.equal(interactions[0].subagentId, subagentId);
+  assert.equal(interactions[0].peerName, "Audit config files");
+  assert.equal(interactions[1].direction, "inbound");
+  assert.equal(interactions[1].interactionKind, "handback");
+  assert.equal(interactions[1].subagentId, subagentId);
+  assert.equal(interactions[1].text, "Found 2 timeout constants.\n- SSH_TIMEOUT_MS");
+  assert.equal(interactions[2].interactionKind, "notification");
+  assert.equal(interactions[2].summary, "Background verification done");
 
   // 2. Workflow fetched by agentId strips blobs/base64, truncates huge tool output, matches errors
   const wf = runProbe({

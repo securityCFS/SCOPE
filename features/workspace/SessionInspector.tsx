@@ -103,12 +103,11 @@ export function SessionInspector(
 
   const [openCodexSubagent, setOpenCodexSubagent] = useState<{
     inspectorKey: string;
-    id: string;
+    id: string | null;
   } | null>(null);
-  const activeCodexSubagentId =
-    openCodexSubagent?.inspectorKey === selectedInspectorKey
-      ? openCodexSubagent.id
-      : null;
+  const isCodexDrawerOpen =
+    openCodexSubagent?.inspectorKey === selectedInspectorKey;
+  const activeCodexSubagentId = isCodexDrawerOpen ? openCodexSubagent.id : null;
   const selectedSubagents = useMemo(
     () => selectedAgent?.subagents || [],
     [selectedAgent?.subagents],
@@ -1062,9 +1061,10 @@ export function SessionInspector(
             ) : null}
           </div>
           <SubagentWorkflowDrawer
-            open={Boolean(activeCodexSubagentId)}
+            open={isCodexDrawerOpen}
             providerLabel="Codex"
             items={codexDrawerItems}
+            totalSubagents={codexDrawerItems.length}
             selectedId={activeCodexSubagentId}
             onSelect={(id) =>
               setOpenCodexSubagent({ inspectorKey: selectedInspectorKey, id })

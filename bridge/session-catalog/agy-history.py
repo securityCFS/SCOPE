@@ -4,8 +4,17 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import time
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 MAX_BYTES = 2_000_000
 MAX_ROWS = 100
@@ -190,16 +199,146 @@ def extract_subagents(root, filename):
     return result
 
 
+def _scope_agy_lock_active(sid):
+    if fcntl is None or not sid:
+        return False
+    lock_file = Path.home() / ".local/state/scope/antigravity-sessions" / f"{sid}.lock"
+    if not lock_file.is_file():
+        return False
+    try:
+        with lock_file.open("r") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+                return False
+    except OSError:
+        return False
+
+
+def _read_proc_cmdline(pid):
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+        return [part for part in raw.decode("utf-8", errors="replace").split("\0") if part]
+    except OSError:
+        return []
+
+
+def _read_proc_ppid(pid):
+    try:
+        txt = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+        rparen = txt.rfind(")")
+        if rparen < 0:
+            return 0
+        fields = txt[rparen + 2:].split()
+        return int(fields[1]) if len(fields) > 1 else 0
+    except (OSError, ValueError):
+        return 0
+
+
+def detect_agy_external_lock(sid):
+    if os.name == "nt" or not sid or _scope_agy_lock_active(sid):
+        return None
+    presence_locked = False
+    lock_file = Path.home() / ".gemini/antigravity-cli/presence" / f"{sid}.lock"
+    if fcntl is not None and lock_file.is_file():
+        try:
+            with lock_file.open("r") as handle:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    presence_locked = True
+                else:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+        except OSError:
+            pass
+    holder_pid = 0
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        for cmd_file in proc_root.glob("[0-9]*/cmdline"):
+            try:
+                pid = int(cmd_file.parent.name)
+                args = [p for p in cmd_file.read_bytes().decode("utf-8", errors="replace").split("\0") if p]
+            except (OSError, ValueError):
+                continue
+            if not args or not any(Path(a).name == "agy" or "antigravity" in Path(a).name for a in args[:2]):
+                continue
+            matched = any(args[i] in ("--conversation", "-c") and i + 1 < len(args) and args[i + 1] == sid for i in range(len(args)))
+            if not matched:
+                try:
+                    for fd_link in (cmd_file.parent / "fd").iterdir():
+                        try:
+                            target = os.readlink(str(fd_link))
+                        except OSError:
+                            continue
+                        if target.endswith(f"/antigravity-cli/presence/{sid}.lock"):
+                            matched = True
+                            break
+                except OSError:
+                    pass
+            if matched:
+                holder_pid = pid
+                break
+    if not presence_locked and not holder_pid:
+        return None
+    is_scope = False
+    tty = ""
+    in_tmux = False
+    if holder_pid:
+        args = _read_proc_cmdline(holder_pid)
+        if len(args) >= 2 and Path(args[0]).name == "agy" and args[1] == "acp":
+            is_scope = True
+        if not is_scope:
+            cur = holder_pid
+            for _ in range(5):
+                ppid = _read_proc_ppid(cur)
+                if ppid <= 1 or ppid == cur:
+                    break
+                pargs = " ".join(_read_proc_cmdline(ppid))
+                if ".local/state/scope/runs" in pargs or "antigravity-interactive" in pargs or "native-session-state" in pargs:
+                    is_scope = True
+                    break
+                cur = ppid
+        if is_scope:
+            return None
+        try:
+            link = os.readlink(f"/proc/{holder_pid}/fd/0")
+            if link.startswith("/dev/pts/") or link.startswith("/dev/tty"):
+                tty = link[len("/dev/"):]
+                try:
+                    proc = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_tty}"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=1.5)
+                    if proc.returncode == 0 and link in proc.stdout.splitlines():
+                        in_tmux = True
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        except OSError:
+            pass
+    where = f"tmux ({tty})" if (in_tmux and tty) else (tty or "远端终端")
+    reason = f"外部终端占用 ({where} · PID {holder_pid})" if holder_pid else f"外部终端占用 ({where})"
+    return {
+        "locked": True,
+        "pid": holder_pid or None,
+        "tty": tty,
+        "inTmux": in_tmux,
+        "entrypoint": "cli",
+        "status": "active",
+        "reason": reason,
+    }
+
+
 def read_history(config):
     sid = config.get("sessionId", "")
     if not isinstance(sid, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}", sid):
         raise ValueError("Invalid AGY session ID")
+    ext_lock = detect_agy_external_lock(sid)
     root = (Path.home() / ".gemini/antigravity-cli/brain").resolve()
     folder = root / sid / ".system_generated/logs"
     candidates = [folder / "transcript_full.jsonl", folder / "transcript.jsonl"]
     filename = next((p for p in candidates if p.is_file()), None)
     if filename is None:
-        return {"messages": [], "subagents": [], "summaryOnly": True, "reason": "此会话尚无可读取的文本历史"}
+        return {"messages": [], "subagents": [], "externalLock": ext_lock, "summaryOnly": True, "reason": "此会话尚无可读取的文本历史"}
     if root not in filename.resolve().parents:
         raise ValueError("AGY history path escapes its history directory")
     with filename.open("rb") as handle:
@@ -238,7 +377,7 @@ def read_history(config):
         current = os.fstat(handle.fileno())
         if (stamp.st_mtime_ns, stamp.st_size) != (current.st_mtime_ns, current.st_size):
             raise ValueError("AGY 历史正在更新，请稍后刷新")
-    return {"messages": [item for _, item in selected], "subagents": extract_subagents(root, filename), "summaryOnly": False,
+    return {"messages": [item for _, item in selected], "subagents": extract_subagents(root, filename), "externalLock": ext_lock, "summaryOnly": False,
             "source": filename.name, "version": version, "reset": reset,
             "nextBefore": next_before if next_before > 0 else None,
             "limited": skipped or any(item.get("truncated") for _, item in selected) or (not selected and start > 0)}

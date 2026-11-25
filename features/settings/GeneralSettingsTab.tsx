@@ -1,13 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
-import { List, Pencil, RefreshCw, Save, Sliders, User } from "lucide-react";
+import { Bot, List, Pencil, RefreshCw, Save, Sliders, User } from "lucide-react";
 import { ChoiceMenu } from "@/components/choice-menu";
+import { SubagentDisplayToggles } from "@/components/subagent-display-toggles";
 import type { WorkbenchConfig, WorkbenchState } from "@/features/command-center/types";
 import type { Host, ModelOption } from "@/features/workspace/types";
 import { bridgeUrl } from "@/features/workspace/shared";
 import { LOCAL_HOST, hostLabel } from "@/lib/execution-host";
 import { EFFORT_LABELS } from "@/lib/model-effort";
 import { useLocale } from "@/lib/i18n";
+import {
+  isDefaultSubagentDisplayPrefs,
+  useSubagentDisplayPrefs,
+} from "@/lib/subagent-display-prefs";
 
 export function GeneralSettingsTab({
   draft,
@@ -25,6 +30,11 @@ export function GeneralSettingsTab({
   onSaveOperatorName?: (name: string) => Promise<void>;
 }) {
   const { tr } = useLocale();
+  const {
+    prefs: subagentPrefs,
+    resetPrefs: resetSubagentPrefs,
+  } = useSubagentDisplayPrefs();
+  const isDefaultSubagentPrefs = isDefaultSubagentDisplayPrefs(subagentPrefs);
   const [nameEdit, setNameEdit] = useState<{ base: string; value: string } | null>(null);
   const nameDraft = nameEdit?.base === operatorName ? nameEdit.value : operatorName;
   const setNameDraft = (value: string) => setNameEdit({ base: operatorName, value });
@@ -447,6 +457,33 @@ export function GeneralSettingsTab({
           />
           {tr("暂停派发新的队列任务", "Pause new queued task dispatches")}
         </label>
+      </div>
+
+      <div className="settings-card">
+        <div className="settings-card-head">
+          <div>
+            <h2>
+              <Bot size={16} />
+              {tr("子代理显示设置", "Subagent Display")}
+            </h2>
+            <p>
+              {tr(
+                "控制 Claude Code 与 Codex 会话中子代理派发卡片、主/子会话互动消息和顶栏入口的显示方式（即时生效，保存在当前浏览器本地）。",
+                "Control how subagent spawn cards, parent ↔ subagent interaction messages, and header shortcuts appear in Claude Code & Codex conversations (applies immediately in this browser).",
+              )}
+            </p>
+          </div>
+          {!isDefaultSubagentPrefs && (
+            <button
+              type="button"
+              className="center-secondary"
+              onClick={() => resetSubagentPrefs()}
+            >
+              {tr("恢复默认", "Reset defaults")}
+            </button>
+          )}
+        </div>
+        <SubagentDisplayToggles variant="settings" />
       </div>
     </div>
   );

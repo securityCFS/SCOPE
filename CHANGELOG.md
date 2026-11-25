@@ -2,6 +2,27 @@
 
 All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in this file.
 
+## [0.2.2] — 2026-11-25
+
+### Added
+
+- **Parent ↔ Subsession Bidirectional Interaction Timeline (Claude Code & Codex)**:
+  - Surfaces dispatched task instructions (`promptPreview`), subagent handback reports (`SubagentHandback` / `<agent-message>`), cross-session `SendMessage` / `send_message` / `send_input` / `wait_agent` exchanges, and `<task-notification>` / `<subagent_notification>` cards chronologically inside the conversation feed with clean Markdown rendering, deduplication, encrypted payload handling, and one-click **Inspect workflow** drawer links.
+  - Displays follow-up parent prompts (`Follow-up prompt from parent`) inside the subagent workflow drawer and resolves native disk subagents cleanly for SCOPE-launched `cli:` Claude Code sessions.
+- **Session Subagents Directory & Inline Per-Task Cards**:
+  - Upgrades the right slide-over drawer into a dual-mode **Session Subagents Directory Overview** (with search and per-task grouping) ↔ **Step-by-Step Workflow Detail** (`All subagents` back button, dropdown switcher, prev/next arrows, step category filters, and Expand/Collapse all).
+  - Renders inline **`Spawned N subagents`** cards directly inside each task turn showing exact subagent names, types, models, statuses, and dispatched prompt previews.
+- **External Terminal Lock Detection & Read-Only Mode (Claude Code & Antigravity)**:
+  - Detects active non-SCOPE, non-tmux terminal sessions via `~/.claude/sessions/*.json` + `/proc` + `tmux` (Claude Code) and `~/.gemini/antigravity-cli/presence/*.lock` `fcntl.flock` + `/proc/<pid>/fd` (Antigravity).
+  - Marks externally locked sessions with a sidebar **`TTY`** badge (disabling archive), an amber header lock pill (`Terminal locked · pts/N`), a read-only banner with **Check unlock**, disabled composer input, and 4-second live tail auto-refresh while locked.
+- **Subagent Display Toggles (Sliding Switch UI)**:
+  - Adds four instant-apply `localStorage`-persisted display switches (`Inline spawn cards`, `Parent ↔ subagent feed`, `Auto-expand handbacks`, `Header shortcut badge`) with custom theme-aware sliding toggle switches in both **Settings → General → Subagent Display** and the drawer header **`Display`** tray.
+
+### Fixed
+
+- **Subagent Workflow Drawer Scrolling**: Fixed a flexbox shrinking bug in `.subagent-drawer-body` that squished long 60–160+ step timelines into overlapping slivers instead of scrolling smoothly.
+- **Large Claude History Streaming**: Raised the tail streaming budget in `probe.py` to 24 MB while skipping oversized `api-request*` / `data-flow-records` payloads so long sessions retain complete subagent discovery and interaction history.
+
 ## [0.2.1] — 2026-11-24
 
 ### Added

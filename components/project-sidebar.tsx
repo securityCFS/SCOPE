@@ -326,7 +326,8 @@ export function ProjectSidebar({
                             disabled={
                               archiveBusy ||
                               !session.sessionId ||
-                              session.status === "working"
+                              session.status === "working" ||
+                              Boolean(session.externalTerminal)
                             }
                             onClick={() => onArchive(project, session)}
                           >

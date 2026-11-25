@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Bot, ChevronRight, KeyRound, LoaderCircle, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, ChevronRight, KeyRound, LoaderCircle, Lock, RefreshCw, Square } from "lucide-react";
 import { visibleSpoolTurns } from "@/lib/native-history";
 import { useNativeHistory, type NativeSubagent } from "./use-native-history";
-import { NativeHistoryView } from "./NativeHistoryView";
+import { InlineTaskSubagentGroup, NativeHistoryView } from "./NativeHistoryView";
 import { useNativeScroll } from "./use-native-scroll";
 import { NativeModelControl } from "./NativeModelControl";
 import { NativeElicitation } from "./NativeElicitation";
@@ -17,6 +17,7 @@ import {
   useComposerAttachments,
 } from "./use-composer-attachments";
 import { useLocale } from "@/lib/i18n";
+import { useSubagentDisplayPrefs } from "@/lib/subagent-display-prefs";
 import {
   NativePermissionControl,
   type NativePermission,
@@ -112,15 +113,20 @@ function mergeNativeSubagents(
 
 function NativeSubagentsPanel({
   subagents,
+  totalCount,
   canInspect,
   onInspect,
+  onOpenDirectory,
 }: {
   subagents: NativeSubagent[];
+  totalCount?: number;
   canInspect: boolean;
   onInspect: (subagent: NativeSubagent) => void;
+  onOpenDirectory?: () => void;
 }) {
   const { tr } = useLocale();
   if (!subagents.length) return null;
+  const total = Math.max(totalCount || 0, subagents.length);
   const statusLabels: Record<string, string> = {
     working: tr("工作中", "Working"),
     completed: tr("已完成", "Done"),
@@ -205,13 +211,27 @@ function NativeSubagentsPanel({
       <summary className="native-subagents-head">
         <Bot size={13} />
         <span>
-          {tr(
-            `子代理记录 · ${subagents.length} 个已完成`,
-            `Subagent history · ${subagents.length} completed`,
-          )}
+          {total > subagents.length
+            ? tr(
+                `本会话共新建 ${total} 个子代理（展开最近 ${subagents.length} 个）`,
+                `${total} subagents created in this session (showing latest ${subagents.length})`,
+              )
+            : tr(
+                `本会话子代理 · ${subagents.length} 个已完成`,
+                `Session subagents · ${subagents.length} completed`,
+              )}
         </span>
       </summary>
       {body}
+      {canInspect && onOpenDirectory && total > subagents.length && (
+        <button
+          type="button"
+          className="native-task-subagents-more"
+          onClick={onOpenDirectory}
+        >
+          {tr(`在右侧总览查看全部 ${total} 个子代理 →`, `Browse all ${total} subagents in drawer →`)}
+        </button>
+      )}
     </details>
   );
 }
@@ -242,10 +262,11 @@ export function NativeConversation({
   const [loading, setLoading] = useState(Boolean(entry.managed));
   const [openSubagent, setOpenSubagent] = useState<{
     entryKey: string;
-    id: string;
+    id: string | null;
   } | null>(null);
   const composer = useRef<HTMLFormElement>(null);
   const { tr } = useLocale();
+  const { prefs: subagentPrefs } = useSubagentDisplayPrefs();
   const attach = useComposerAttachments({
     host: entry.host,
     scope: entry.key,
@@ -336,10 +357,28 @@ export function NativeConversation({
     () => subagents.filter((item) => item.status === "working").length,
     [subagents],
   );
-  const activeSubagentId =
-    openSubagent?.entryKey === entry.key ? openSubagent.id : null;
+  const totalSubagentsCount = Math.max(
+    nativeHistory.history?.totalSubagents || 0,
+    subagents.length,
+  );
+  const isLocalReadOnly = entry.host === LOCAL_HOST;
+  const externalLock = nativeHistory.history
+    ? nativeHistory.history.externalLock || null
+    : entry.externalLock || null;
+  const isExternalLocked =
+    Boolean(externalLock?.locked) && !working && !isLocalReadOnly;
+  const isComposerReadOnly = isLocalReadOnly || isExternalLocked;
+  const resolvedSessionId = conversation?.sessionId || entry.sessionId;
+  const resolvedCatalogKey =
+    (entry.provider === "claude" || entry.provider === "antigravity") &&
+    resolvedSessionId
+      ? JSON.stringify([entry.host, entry.provider, resolvedSessionId])
+      : entry.key;
+  const isDrawerOpen =
+    openSubagent?.entryKey === entry.key && entry.provider === "claude";
+  const activeSubagentId = isDrawerOpen ? openSubagent.id : null;
   const claudeWorkflow = useClaudeSubagentWorkflow(
-    entry.key,
+    resolvedCatalogKey,
     entry.provider,
     subagents,
     activeSubagentId,
@@ -355,19 +394,31 @@ export function NativeConversation({
         spawnDepth: item.spawnDepth,
         status: item.status,
         lastAction: item.lastAction,
+        taskTitle: item.taskTitle,
+        updatedAt: item.updatedAt,
       })),
     [subagents],
   );
   const refreshNativeHistory = nativeHistory.refresh;
   useEffect(() => {
-    if (working || workingSubagentsCount === 0 || !nativeHistory.available) {
+    if (
+      working ||
+      (workingSubagentsCount === 0 && !isExternalLocked) ||
+      !nativeHistory.available
+    ) {
       return;
     }
     const timer = setInterval(() => {
       if (!document.hidden) void refreshNativeHistory();
     }, 4000);
     return () => clearInterval(timer);
-  }, [working, workingSubagentsCount, nativeHistory.available, refreshNativeHistory]);
+  }, [
+    working,
+    workingSubagentsCount,
+    isExternalLocked,
+    nativeHistory.available,
+    refreshNativeHistory,
+  ]);
   const { scroll, content, onScroll, toBottom, older, atBottom } = useNativeScroll({
     history: nativeHistory.history,
     turns: conversation?.turns,
@@ -393,7 +444,7 @@ export function NativeConversation({
   async function send() {
     if (slash.handleLocal()) return;
     const hasContent = Boolean(draft.trim() || attach.readyTokens.length > 0);
-    if (!hasContent || attach.hasUnready || controlBusy || pendingControl || (working && !canControl) || entry.host === LOCAL_HOST || !entry.cwd)
+    if (!hasContent || attach.hasUnready || controlBusy || pendingControl || (working && !canControl) || isComposerReadOnly || !entry.cwd)
       return;
     if (working && canControl) {
       if (await control("message", { prompt: draft, attachments: attach.readyTokens })) {
@@ -427,7 +478,6 @@ export function NativeConversation({
       setSending(false);
     }
   }
-  const isLocalReadOnly = entry.host === LOCAL_HOST;
   const [providerQuotaState, setProviderQuotaState] = useState<{
     key: string;
     quota: AccountQuota | null;
@@ -468,34 +518,63 @@ export function NativeConversation({
             title={`${hostLabel(entry.host)} · ${entry.cwd || "未记录工作目录"}`}
           >
             {hostLabel(entry.host)} · {entry.cwd || "未记录工作目录"}
-            {isLocalReadOnly ? " · 本机只读" : ""}
+            {isLocalReadOnly
+              ? " · 本机只读"
+              : isExternalLocked
+                ? tr(
+                    ` · 外部终端 (${externalLock?.tty || (externalLock?.pid ? `PID ${externalLock.pid}` : "只读")}) · 持续监控`,
+                    ` · External terminal (${externalLock?.tty || (externalLock?.pid ? `PID ${externalLock.pid}` : "read-only")}) · Watching`,
+                  )
+                : ""}
           </small>
         </div>
-        {((entry.provider === "claude" && subagents.length > 0) ||
+        {(isExternalLocked ||
+          (subagentPrefs.showHeaderBadge &&
+            entry.provider === "claude" &&
+            totalSubagentsCount > 0) ||
           (onAccounts && !isLocalReadOnly)) && (
           <div className="conversation-header-actions">
-            {entry.provider === "claude" && subagents.length > 0 && (
+            {isExternalLocked && (
+              <span
+                className="native-lock-pill"
+                title={
+                  externalLock?.reason ||
+                  tr("外部终端占用锁定，只读监控中", "Locked by external terminal (read-only)")
+                }
+              >
+                <Lock size={12} />
+                {tr(
+                  externalLock?.tty
+                    ? `终端锁定 · ${externalLock.tty}`
+                    : "外部终端锁定",
+                  externalLock?.tty
+                    ? `Terminal lock · ${externalLock.tty}`
+                    : "Terminal locked",
+                )}
+              </span>
+            )}
+            {subagentPrefs.showHeaderBadge &&
+              entry.provider === "claude" &&
+              totalSubagentsCount > 0 && (
               <button
                 type="button"
                 className="session-info-trigger"
                 onClick={() =>
                   setOpenSubagent({
                     entryKey: entry.key,
-                    id:
-                      subagents.find((item) => item.status === "working")?.id ||
-                      subagents[0].id,
+                    id: subagents.length === 1 ? subagents[0].id : null,
                   })
                 }
                 title={tr(
-                  "查看 Claude 子代理工作流",
-                  "Inspect Claude subagent workflows",
+                  "查看本会话所有子代理与实际工作流",
+                  "View all subagents and inspect workflows",
                 )}
               >
                 <Bot size={14} />
                 <span>
                   {tr(
-                    `子代理 · ${subagents.length}`,
-                    `Subagents · ${subagents.length}`,
+                    `子代理 · ${totalSubagentsCount}`,
+                    `Subagents · ${totalSubagentsCount}`,
                   )}
                 </span>
               </button>
@@ -526,24 +605,52 @@ export function NativeConversation({
           <NativeHistoryView
             host={entry.host}
             cwd={entry.cwd}
+            canInspectSubagent={entry.provider === "claude"}
+            onInspectSubagent={(item) =>
+              setOpenSubagent({
+                entryKey: entry.key,
+                id: item.agentId || item.id,
+              })
+            }
             value={{
               ...nativeHistory,
               earlier: () => older(nativeHistory.earlier),
             }}
           />
-          {(entry.provider === "antigravity"
-            ? visibleSpoolTurns(
-                nativeHistory.history?.messages || [],
-                conversation?.turns || [],
-              )
-            : conversation?.turns || []
+          {visibleSpoolTurns(
+            nativeHistory.history?.messages || [],
+            conversation?.turns || [],
           ).map((turn) => (
               <div className="native-turn" key={turn.id}>
                 <div className="native-message user">
                   <MarkdownBody value={turn.prompt} remoteHost={entry.host} remoteCwd={entry.cwd} />
                 </div>
                 {turn.truncated && <p className="native-note">过程记录较长，仅显示最近部分；完整记录保留在原生会话中。</p>}
-                <NativeLiveEvents events={turn.events || []} partial={turn.partial} host={entry.host} cwd={entry.cwd} />
+                <NativeLiveEvents
+                  events={turn.events || []}
+                  partial={turn.partial}
+                  host={entry.host}
+                  cwd={entry.cwd}
+                  subagents={subagents}
+                  canInspectSubagent={entry.provider === "claude"}
+                  onInspectSubagent={(subId) =>
+                    setOpenSubagent({ entryKey: entry.key, id: subId })
+                  }
+                />
+                {subagentPrefs.showInlineCards &&
+                  turn.subagents &&
+                  turn.subagents.length > 0 && (
+                  <InlineTaskSubagentGroup
+                    subagents={turn.subagents}
+                    canInspect={entry.provider === "claude"}
+                    onInspect={(item) =>
+                      setOpenSubagent({
+                        entryKey: entry.key,
+                        id: item.agentId || item.id,
+                      })
+                    }
+                  />
+                )}
                 {turn.status === "stopped" && <p className="native-note">已停止，保留已产生的消息和操作记录。</p>}
                 {turn.text && !turn.events?.some(event => event.kind === "assistant") && (
                   <div className="native-message assistant">
@@ -581,13 +688,31 @@ export function NativeConversation({
               respond={(decision, content) => void control("permission", { requestId: request.id, decision, content })} />
             : <NativePermissionRequest key={request.id} request={request} provider={providerName} disabled={controlBusy || Boolean(pendingControl) || !canControl}
               respond={(decision, answers, optionId) => void control("permission", { requestId: request.id, decision, answers, optionId })} />)}
-          <NativeSubagentsPanel
-            subagents={subagents}
-            canInspect={entry.provider === "claude"}
-            onInspect={(item) =>
-              setOpenSubagent({ entryKey: entry.key, id: item.id })
-            }
-          />
+          {subagentPrefs.showInlineCards &&
+            (workingSubagentsCount > 0 ||
+            (subagents.length > 0 &&
+              !nativeHistory.history?.messages?.some(
+                (m) => m.role === "subagent_group",
+              ))) && (
+            <NativeSubagentsPanel
+              subagents={
+                workingSubagentsCount > 0
+                  ? subagents.filter((item) => item.status === "working")
+                  : subagents.slice(0, 6)
+              }
+              totalCount={totalSubagentsCount}
+              canInspect={entry.provider === "claude"}
+              onInspect={(item) =>
+                setOpenSubagent({
+                  entryKey: entry.key,
+                  id: item.agentId || item.id,
+                })
+              }
+              onOpenDirectory={() =>
+                setOpenSubagent({ entryKey: entry.key, id: null })
+              }
+            />
+          )}
           {working && (
             <details className="native-thinking">
               <summary>
@@ -627,6 +752,31 @@ export function NativeConversation({
       )}
     </div>
     <div className="native-compose-wrap">
+        {isExternalLocked && (
+          <div className="native-lock-banner" role="status">
+            <div className="native-lock-banner-main">
+              <Lock size={14} />
+              <span>
+                {tr(
+                  `该 ${providerName} 会话当前正由外部终端（${externalLock?.inTmux ? `tmux ${externalLock.tty || ""}` : externalLock?.tty || "非 tmux 终端"}${externalLock?.pid ? ` · PID ${externalLock.pid}` : ""}）占用，已只读锁定并每 4 秒自动同步。请先正常退出原终端后再由 SCOPE 接管发送。`,
+                  `This ${providerName} session is locked by an external terminal (${externalLock?.inTmux ? `tmux ${externalLock.tty || ""}` : externalLock?.tty || "non-tmux"}${externalLock?.pid ? ` · PID ${externalLock.pid}` : ""}). Read-only live monitoring every 4s — exit the original terminal to take over here.`,
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="native-lock-banner-btn"
+              disabled={nativeHistory.busy}
+              onClick={() => void nativeHistory.refresh()}
+            >
+              <RefreshCw
+                size={12}
+                className={nativeHistory.busy ? "is-spinning" : ""}
+              />
+              {tr("检查解锁", "Check status")}
+            </button>
+          </div>
+        )}
         <form
           ref={composer}
           className="native-composer"
@@ -652,12 +802,17 @@ export function NativeConversation({
             placeholder={
               isLocalReadOnly
                 ? tr("本机历史记录仅支持只读查看", "Local history is read-only")
-                : !entry.cwd
-                  ? tr("缺少工作目录，暂无法继续发送", "Working directory is required")
-                  : tr("继续对话…（支持拖拽或粘贴附件）", "Continue conversation… (drop or paste files)")
+                : isExternalLocked
+                  ? tr(
+                      "原外部终端占用中（只读锁定）· 请在原终端继续或退出后接管",
+                      "Locked by external terminal (read-only) · Reply in original terminal or exit it to take over",
+                    )
+                  : !entry.cwd
+                    ? tr("缺少工作目录，暂无法继续发送", "Working directory is required")
+                    : tr("继续对话…（支持拖拽或粘贴附件）", "Continue conversation… (drop or paste files)")
             }
             rows={2}
-            disabled={isLocalReadOnly || !entry.cwd}
+            disabled={isComposerReadOnly || !entry.cwd}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onPaste={attach.onPaste}
@@ -681,7 +836,7 @@ export function NativeConversation({
             <ComposerAttachmentButton
               compact
               uploading={attach.uploading}
-              disabled={isLocalReadOnly || !entry.cwd || (working && !canControl)}
+              disabled={isComposerReadOnly || !entry.cwd || (working && !canControl)}
               onClick={attach.openPicker}
             />
             <NativePermissionControl autoSupported={autoSupported}
@@ -689,7 +844,7 @@ export function NativeConversation({
               compact
               value={permissionMode}
               onChange={setPermissionMode}
-              disabled={working || isLocalReadOnly}
+              disabled={working || isComposerReadOnly}
             />
             <NativeModelControl onAutoSupportChange={setAutoSupported}
               effort={effort}
@@ -699,7 +854,7 @@ export function NativeConversation({
               provider={entry.provider}
               value={model}
               onChange={setModel}
-              disabled={working || isLocalReadOnly}
+              disabled={working || isComposerReadOnly}
             />
             {canControl && <button className="native-stop" type="button" aria-label={`停止 ${providerName}`} title="停止当前 SCOPE 任务" disabled={controlBusy || Boolean(pendingControl)} onClick={() => void control("stop")}><Square size={14} /></button>}
             <button
@@ -711,7 +866,7 @@ export function NativeConversation({
                 Boolean(pendingControl) ||
                 (!draft.trim() && attach.attachments.length === 0) ||
                 attach.hasUnready ||
-                isLocalReadOnly ||
+                isComposerReadOnly ||
                 !entry.cwd
               }
             >
@@ -725,16 +880,22 @@ export function NativeConversation({
                 "本机历史只读 · 新建 Claude / Antigravity 会话请选择远程设备",
                 "Local history is read-only · Choose a remote host for new Claude / Antigravity sessions",
               )
-            : tr(
-                `${permissionMode === "full" ? "完全访问 · 跳过权限审批 · " : ""}Enter 发送 · Shift + Enter 换行${working && !conversation?.interactive ? " · 回复在本轮结束后显示" : ""}`,
-                `${permissionMode === "full" ? "Full access · Skipping approvals · " : ""}Enter to send · Shift + Enter for newline${working && !conversation?.interactive ? " · Reply displays after turn finishes" : ""}`,
-              )}
+            : isExternalLocked
+              ? tr(
+                  "正在只读监控外部终端会话 · 原终端退出后自动解锁发送",
+                  "Watching external terminal session (read-only) · Unlocks automatically after terminal exits",
+                )
+              : tr(
+                  `${permissionMode === "full" ? "完全访问 · 跳过权限审批 · " : ""}Enter 发送 · Shift + Enter 换行${working && !conversation?.interactive ? " · 回复在本轮结束后显示" : ""}`,
+                  `${permissionMode === "full" ? "Full access · Skipping approvals · " : ""}Enter to send · Shift + Enter for newline${working && !conversation?.interactive ? " · Reply displays after turn finishes" : ""}`,
+                )}
         </p>
       </div>
       <SubagentWorkflowDrawer
-        open={Boolean(activeSubagentId && entry.provider === "claude")}
+        open={isDrawerOpen}
         providerLabel="Claude Code"
         items={subagentDrawerItems}
+        totalSubagents={totalSubagentsCount}
         selectedId={activeSubagentId}
         onSelect={(id) => setOpenSubagent({ entryKey: entry.key, id })}
         onClose={() => setOpenSubagent(null)}

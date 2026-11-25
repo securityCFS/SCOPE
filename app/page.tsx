@@ -50,7 +50,7 @@ function HomeShell() {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [openCodexSubagent, setOpenCodexSubagent] = useState<{
     agentId: string;
-    id: string;
+    id: string | null;
   } | null>(null);
   const [projectHost, setProjectHost] = useState("all");
   const rememberedSessions = useRef<Record<string, string>>({});
@@ -202,15 +202,15 @@ function HomeShell() {
             key={workspace.selectedAgentId || "empty"}
             workspace={navigationWorkspace}
             onTools={() => setToolsOpen(true)}
-            openSubagentId={
+            openSubagent={
               openCodexSubagent?.agentId === (workspace.selectedAgentId || "")
-                ? openCodexSubagent.id
-                : null
+                ? { open: true, id: openCodexSubagent.id }
+                : { open: false, id: null }
             }
-            onOpenSubagent={(id) =>
+            onOpenSubagent={(next) =>
               setOpenCodexSubagent(
-                id
-                  ? { agentId: workspace.selectedAgentId || "", id }
+                next?.open
+                  ? { agentId: workspace.selectedAgentId || "", id: next.id }
                   : null,
               )
             }

@@ -1,8 +1,11 @@
 "use client";
 import {
   ArrowDown,
+  ArrowDownLeft,
+  ArrowUpRight,
   Check,
   ChevronDown,
+  ChevronRight,
   Copy,
   LoaderCircle,
 } from "lucide-react";
@@ -10,7 +13,182 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ActivityDisclosure } from "./ActivityDisclosure";
 import { conversationEntries } from "@/lib/conversation";
 import { MarkdownBody } from "@/features/workspace/shared";
-import type { DialogueEvent } from "@/features/workspace/types";
+import type { DialogueEvent, Rollout } from "@/features/workspace/types";
+import { useLocale } from "@/lib/i18n";
+import { useSubagentDisplayPrefs } from "@/lib/subagent-display-prefs";
+
+const CODEX_SUBAGENT_TOOLS = new Set([
+  "spawn_agent",
+  "send_message",
+  "send_input",
+  "wait_agent",
+  "close_agent",
+]);
+
+function isCodexSubagentInteraction(event: DialogueEvent): boolean {
+  return (
+    event.category === "subagent" ||
+    (event.kind === "tool" && CODEX_SUBAGENT_TOOLS.has(event.toolName || ""))
+  );
+}
+
+function matchCodexSubagent(
+  subagents: Rollout[],
+  hint: string,
+): Rollout | null {
+  if (!hint || !subagents.length) return null;
+  const norm = hint.trim().toLowerCase();
+  return (
+    subagents.find((sub) => {
+      const candidates = [
+        sub.id,
+        sub.agentNickname || "",
+        sub.agentPath || "",
+        (sub.agentPath || "").split("/").pop() || "",
+      ];
+      return candidates.some(
+        (c) => c && (c.toLowerCase() === norm || c.toLowerCase().includes(norm)),
+      );
+    }) || null
+  );
+}
+
+function CodexSubagentInteractionCard({
+  event,
+  subagents,
+  host,
+  cwd,
+  defaultOpen = false,
+  onInspectSubagent,
+}: {
+  event: DialogueEvent;
+  subagents: Rollout[];
+  host: string;
+  cwd: string;
+  defaultOpen?: boolean;
+  onInspectSubagent?: (id: string) => void;
+}) {
+  const { tr } = useLocale();
+  const tool = event.toolName || "";
+  const isOutbound =
+    tool === "spawn_agent" || tool === "send_message" || tool === "send_input";
+  let targetHint = event.agentPath || "";
+  let bodyText = event.text || event.output || "";
+  let encryptedNote = false;
+
+  if (tool && event.text) {
+    try {
+      const parsed = JSON.parse(event.text) as Record<string, unknown>;
+      targetHint = String(
+        parsed.target ||
+          parsed.task_name ||
+          parsed.agent_path ||
+          parsed.nickname ||
+          parsed.id ||
+          targetHint,
+      );
+      const msg = parsed.message || parsed.input || parsed.prompt;
+      if (typeof msg === "string" && msg.trim()) {
+        if (msg.startsWith("gAAAAAB") && msg.length > 60) {
+          encryptedNote = true;
+          bodyText = event.output || "";
+        } else {
+          bodyText = msg;
+        }
+      }
+    } catch {
+      // keep raw text
+    }
+  }
+
+  const matched = matchCodexSubagent(subagents, targetHint);
+  const peerLabel =
+    matched?.agentNickname ||
+    targetHint ||
+    event.title ||
+    tr("子代理", "Subagent");
+  const badgeLabel =
+    tool === "spawn_agent"
+      ? tr("主会话 → 新建子代理", "Main → Spawn")
+      : isOutbound
+        ? tr("主会话 → 子代理", "Main → Subagent")
+        : tool === "wait_agent"
+          ? tr("等待子代理返回", "Wait subagent")
+          : tr("子代理回传 → 主会话", "Subagent → Main");
+  const preview = encryptedNote
+    ? tr(
+        "已加密协作载荷 · 点击右侧“查看工作流”在子代理会话阅读完整明文",
+        "Encrypted handoff payload · Click Workflow to read plaintext inside subagent",
+      )
+    : (bodyText || event.output || "")
+        .split(/\r?\n/)
+        .find((ln) => ln.trim()) || "";
+
+  return (
+    <details
+      className={`agent-interaction-card ${isOutbound ? "is-outbound" : "is-inbound"}`}
+      open={defaultOpen}
+    >
+      <summary>
+        <span className="agent-interaction-left">
+          <span className="agent-interaction-badge">
+            {isOutbound ? (
+              <ArrowUpRight size={11} />
+            ) : (
+              <ArrowDownLeft size={11} />
+            )}
+            {badgeLabel}
+          </span>
+          <span className="agent-interaction-peer" title={peerLabel}>
+            {peerLabel}
+          </span>
+          {preview && (
+            <span className="agent-interaction-preview" title={preview}>
+              {preview}
+            </span>
+          )}
+        </span>
+        <span className="agent-interaction-right">
+          {matched && onInspectSubagent && (
+            <button
+              type="button"
+              className="agent-interaction-jump"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onInspectSubagent(matched.id);
+              }}
+            >
+              {tr("查看工作流", "Workflow")}
+              <ChevronRight size={11} />
+            </button>
+          )}
+          <ChevronRight size={13} />
+        </span>
+      </summary>
+      {(bodyText || event.output || encryptedNote) && (
+        <div className="agent-interaction-body">
+          {encryptedNote && (
+            <p className="native-note" style={{ marginTop: 0 }}>
+              {tr(
+                "Codex 在父会话中加密存储了该条协作消息载荷；点击上方“查看工作流”可直接查看子代理侧的明文指令与执行过程。",
+                "Codex encrypted this handoff payload in the parent rollout; click Workflow above to read the plaintext prompt and steps inside the subagent.",
+              )}
+            </p>
+          )}
+          {bodyText && (
+            <MarkdownBody value={bodyText} remoteHost={host} remoteCwd={cwd} />
+          )}
+          {event.output && event.output !== bodyText && (
+            <pre className="subagent-step-pre" style={{ marginTop: 8 }}>
+              {event.output}
+            </pre>
+          )}
+        </div>
+      )}
+    </details>
+  );
+}
 
 export function ConversationFeed({
   events,
@@ -23,6 +201,8 @@ export function ConversationFeed({
   loadingMore,
   onOlder,
   onRetry,
+  subagents = [],
+  onInspectSubagent,
   children,
   sentAt,
 }: {
@@ -36,10 +216,13 @@ export function ConversationFeed({
   loadingMore: boolean;
   onOlder: () => Promise<void>;
   onRetry: () => void;
+  subagents?: Rollout[];
+  onInspectSubagent?: (id: string) => void;
   children?: React.ReactNode;
   sentAt?: number;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
+  const { prefs: subagentPrefs } = useSubagentDisplayPrefs();
   const content = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const anchor = useRef<{ height: number; top: number } | null>(null);
@@ -127,24 +310,58 @@ export function ConversationFeed({
               <p>发送一条消息，开始这个项目的工作。</p>
             </div>
           )}
-          {entries.map((entry, index) =>
-            entry.type === "message" ? (
-              <Message
-                key={entry.id}
-                event={entry.event as DialogueEvent}
-                host={host}
-                cwd={cwd}
-              />
-            ) : (
-              <ActivityDisclosure
-                key={entry.id}
-                events={entry.events}
-                active={working && index === entries.length - 1}
-                host={host}
-                cwd={cwd}
-              />
-            ),
-          )}
+          {entries.map((entry, index) => {
+            if (entry.type === "message") {
+              return (
+                <Message
+                  key={entry.id}
+                  event={entry.event as DialogueEvent}
+                  host={host}
+                  cwd={cwd}
+                />
+              );
+            }
+            const segments: Array<
+              | { kind: "interaction"; event: DialogueEvent }
+              | { kind: "activity"; events: DialogueEvent[] }
+            > = [];
+            for (const ev of entry.events as DialogueEvent[]) {
+              if (isCodexSubagentInteraction(ev)) {
+                segments.push({ kind: "interaction", event: ev });
+              } else {
+                const prev = segments.at(-1);
+                if (prev?.kind === "activity") prev.events.push(ev);
+                else segments.push({ kind: "activity", events: [ev] });
+              }
+            }
+            return segments.map((seg, segIdx) =>
+              seg.kind === "interaction" ? (
+                subagentPrefs.showInteractions ? (
+                  <CodexSubagentInteractionCard
+                    key={`${seg.event.id}:${subagentPrefs.autoExpandInteractions ? "1" : "0"}`}
+                    event={seg.event}
+                    subagents={subagents}
+                    host={host}
+                    cwd={cwd}
+                    defaultOpen={subagentPrefs.autoExpandInteractions}
+                    onInspectSubagent={onInspectSubagent}
+                  />
+                ) : null
+              ) : (
+                <ActivityDisclosure
+                  key={`${entry.id}:${segIdx}`}
+                  events={seg.events}
+                  active={
+                    working &&
+                    index === entries.length - 1 &&
+                    segIdx === segments.length - 1
+                  }
+                  host={host}
+                  cwd={cwd}
+                />
+              ),
+            );
+          })}
           {error && (
             <div className="conversation-error" role="alert">
               <span>{error}</span>

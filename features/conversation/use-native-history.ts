@@ -3,6 +3,17 @@ import type { SubagentWorkflowStep } from "@/components/subagent-workflow-drawer
 import { useCallback, useEffect, useRef, useState } from "react";
 import { conversationRequest, type CatalogEntry } from "./use-session-catalog";
 
+export type ExternalLockInfo = {
+  locked: boolean;
+  pid?: number | null;
+  tty?: string;
+  inTmux?: boolean;
+  entrypoint?: string;
+  status?: string;
+  name?: string;
+  reason?: string;
+};
+
 export type NativeHistoryMessage = {
   id?: string;
   role: string;
@@ -11,6 +22,16 @@ export type NativeHistoryMessage = {
   title?: string;
   createdAt?: string;
   truncated?: boolean;
+  taskTitle?: string;
+  turnIndex?: number;
+  subagents?: NativeSubagent[];
+  direction?: "inbound" | "outbound";
+  interactionKind?: "handback" | "message" | "notification";
+  peerId?: string;
+  peerName?: string;
+  subagentId?: string;
+  status?: string;
+  summary?: string;
 };
 export type NativeSubagent = {
   id: string;
@@ -24,7 +45,12 @@ export type NativeSubagent = {
   background?: boolean;
   status: string;
   lastAction?: string;
+  promptPreview?: string;
   updatedAt?: number | null;
+  spawnedAt?: string | null;
+  taskTitle?: string;
+  turnIndex?: number;
+  sizeBytes?: number;
   hasWorkflow?: boolean;
   steps?: SubagentWorkflowStep[];
   partial?: string;
@@ -33,6 +59,8 @@ export type NativeSubagent = {
 export type NativeHistory = {
   messages: NativeHistoryMessage[];
   subagents?: NativeSubagent[];
+  totalSubagents?: number;
+  externalLock?: ExternalLockInfo | null;
   summary?: string;
   summaryOnly?: boolean;
   reason?: string;
@@ -48,7 +76,7 @@ export function useNativeHistory(
 ) {
   const nativeId = sessionId || entry.sessionId;
   const key =
-    entry.provider === "antigravity" && nativeId
+    (entry.provider === "antigravity" || entry.provider === "claude") && nativeId
       ? JSON.stringify([entry.host, entry.provider, nativeId])
       : entry.key.startsWith("cli:")
         ? ""
