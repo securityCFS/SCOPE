@@ -10,6 +10,8 @@ import { NativeElicitation } from "./NativeElicitation";
 import { useSlashCommands } from "./use-slash-commands";
 import { useClaudeSubagentWorkflow } from "./use-claude-subagent-workflow";
 import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
+import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
+import { MessageCopyButton } from "@/components/message-copy-button";
 import {
   ComposerAttachmentButton,
   ComposerAttachmentInput,
@@ -622,8 +624,16 @@ export function NativeConversation({
             conversation?.turns || [],
           ).map((turn) => (
               <div className="native-turn" key={turn.id}>
-                <div className="native-message user">
-                  <MarkdownBody value={turn.prompt} remoteHost={entry.host} remoteCwd={entry.cwd} />
+                <div className="native-message-block is-user">
+                  <div className="native-message user">
+                    <CollapsibleUserMessage
+                      value={turn.prompt}
+                      remoteHost={entry.host}
+                      remoteCwd={entry.cwd}
+                      surface="hover"
+                    />
+                  </div>
+                  <MessageCopyButton text={turn.prompt} align="end" />
                 </div>
                 {turn.truncated && <p className="native-note">过程记录较长，仅显示最近部分；完整记录保留在原生会话中。</p>}
                 <NativeLiveEvents
@@ -653,8 +663,11 @@ export function NativeConversation({
                 )}
                 {turn.status === "stopped" && <p className="native-note">已停止，保留已产生的消息和操作记录。</p>}
                 {turn.text && !turn.events?.some(event => event.kind === "assistant") && (
-                  <div className="native-message assistant">
-                    <MarkdownBody value={turn.text} remoteHost={entry.host} remoteCwd={entry.cwd} />
+                  <div className="native-message-block is-assistant">
+                    <div className="native-message assistant">
+                      <MarkdownBody value={turn.text} remoteHost={entry.host} remoteCwd={entry.cwd} />
+                    </div>
+                    <MessageCopyButton text={turn.text} align="start" />
                   </div>
                 )}
                 {turn.error && (

@@ -3,14 +3,14 @@ import {
   ArrowDown,
   ArrowDownLeft,
   ArrowUpRight,
-  Check,
   ChevronDown,
   ChevronRight,
-  Copy,
   LoaderCircle,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ActivityDisclosure } from "./ActivityDisclosure";
+import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
+import { MessageCopyButton } from "@/components/message-copy-button";
 import { conversationEntries } from "@/lib/conversation";
 import { MarkdownBody } from "@/features/workspace/shared";
 import type { DialogueEvent, Rollout } from "@/features/workspace/types";
@@ -396,8 +396,6 @@ function Message({
   host: string;
   cwd: string;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
   const progress = event.kind === "assistant" && event.phase === "commentary";
   return (
     <article className={`conversation-message message-${event.kind}${progress ? " message-progress" : ""}`}>
@@ -407,27 +405,24 @@ function Message({
         </span>
       )}
       <div className="conversation-message-body">
-        <MarkdownBody value={event.text} remoteHost={host} remoteCwd={cwd} />
+        {event.kind === "user" ? (
+          <CollapsibleUserMessage
+            value={event.text}
+            remoteHost={host}
+            remoteCwd={cwd}
+            surface="panel-2"
+          />
+        ) : (
+          <MarkdownBody value={event.text} remoteHost={host} remoteCwd={cwd} />
+        )}
       </div>
-      {!progress && <div className="conversation-message-actions">
-        <button
-          aria-label="复制消息"
-          title={event.timestamp || "复制消息"}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(event.text);
-              setCopied(true);
-              setCopyError(false);
-            } catch {
-              setCopyError(true);
-            }
-          }}
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied && "已复制"}
-        </button>
-        {copyError && <small role="status">复制失败，请选中文本复制</small>}
-      </div>}
+      {!progress && (
+        <MessageCopyButton
+          text={event.text}
+          title={event.timestamp || undefined}
+          align={event.kind === "user" ? "end" : "start"}
+        />
+      )}
     </article>
   );
 }

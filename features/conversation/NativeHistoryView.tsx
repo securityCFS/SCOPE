@@ -8,6 +8,8 @@ import {
   ChevronRight,
   LoaderCircle,
 } from "lucide-react";
+import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
+import { MessageCopyButton } from "@/components/message-copy-button";
 import { MarkdownBody } from "@/features/workspace/shared";
 import { useLocale } from "@/lib/i18n";
 import { useSubagentDisplayPrefs } from "@/lib/subagent-display-prefs";
@@ -324,11 +326,28 @@ export function NativeHistoryView({
             </details>
           ) : (
             message.text && (
-              <div className={`native-message ${message.role}`}>
-                <MarkdownBody
-                  value={message.text}
-                  remoteHost={host}
-                  remoteCwd={cwd}
+              <div
+                className={`native-message-block ${message.role === "user" ? "is-user" : "is-assistant"}`}
+              >
+                <div className={`native-message ${message.role}`}>
+                  {message.role === "user" ? (
+                    <CollapsibleUserMessage
+                      value={message.text}
+                      remoteHost={host}
+                      remoteCwd={cwd}
+                      surface="hover"
+                    />
+                  ) : (
+                    <MarkdownBody
+                      value={message.text}
+                      remoteHost={host}
+                      remoteCwd={cwd}
+                    />
+                  )}
+                </div>
+                <MessageCopyButton
+                  text={message.text}
+                  align={message.role === "user" ? "end" : "start"}
                 />
               </div>
             )

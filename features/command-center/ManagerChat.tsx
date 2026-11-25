@@ -1,4 +1,6 @@
 "use client";
+import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
+import { MessageCopyButton } from "@/components/message-copy-button";
 import { MarkdownBody } from "@/features/workspace/shared";
 import { managerPlans } from "@/lib/manager-plan";
 import {
@@ -161,7 +163,12 @@ export function ManagerChat({
                   }
                 />
               )}
-            <MarkdownBody value={message.text} />
+            {message.role === "user" ? (
+              <CollapsibleUserMessage value={message.text} surface="panel-2" />
+            ) : (
+              <MarkdownBody value={message.text} />
+            )}
+            <MessageCopyButton text={message.text} align="start" />
             {message.role === "assistant" &&
               onDraft && managerPlans(message.text).map((plan, index) => (
                 <button

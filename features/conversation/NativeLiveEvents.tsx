@@ -1,5 +1,7 @@
 "use client";
 import { ArrowDownLeft, ArrowUpRight, ChevronRight } from "lucide-react";
+import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
+import { MessageCopyButton } from "@/components/message-copy-button";
 import { MarkdownBody } from "@/features/workspace/shared";
 import { useLocale } from "@/lib/i18n";
 import { useSubagentDisplayPrefs } from "@/lib/subagent-display-prefs";
@@ -238,14 +240,33 @@ export function NativeLiveEvents({
         return (
           <div
             key={index}
-            className={`native-message ${event.kind === "user" ? "user" : "assistant"}`}
+            className={`native-message-block ${event.kind === "user" ? "is-user" : "is-assistant"}`}
           >
-            {event.kind === "user" && <small>追加消息 · 已接收</small>}
-            <MarkdownBody
-              value={event.text || ""}
-              remoteHost={host}
-              remoteCwd={cwd}
-            />
+            <div
+              className={`native-message ${event.kind === "user" ? "user" : "assistant"}`}
+            >
+              {event.kind === "user" && <small>追加消息 · 已接收</small>}
+              {event.kind === "user" ? (
+                <CollapsibleUserMessage
+                  value={event.text || ""}
+                  remoteHost={host}
+                  remoteCwd={cwd}
+                  surface="hover"
+                />
+              ) : (
+                <MarkdownBody
+                  value={event.text || ""}
+                  remoteHost={host}
+                  remoteCwd={cwd}
+                />
+              )}
+            </div>
+            {event.text && (
+              <MessageCopyButton
+                text={event.text}
+                align={event.kind === "user" ? "end" : "start"}
+              />
+            )}
           </div>
         );
       })}
