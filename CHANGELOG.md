@@ -2,6 +2,13 @@
 
 All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in this file.
 
+## [0.2.3] — 2026-11-25
+
+### Added
+
+- **Collapsible Long User Messages**: Long user-sent prompts (rendered height `> 216px`) across **Codex**, **Claude Code**, **Antigravity**, and **Manager Chat** now auto-collapse to a clean 5–6 line preview (`156px`) with a smooth bottom gradient fade and one-click **Expand · N lines / chars** / **Collapse** pill button, leaving short messages completely untouched.
+- **Unified One-Click Message Copy**: Added a shared copy button beneath user and assistant messages across **Claude Code**, **Antigravity**, **Codex**, and **Manager Chat**, with 1.8s **Copied** auto-reset and a `document.execCommand("copy")` fallback for non-HTTPS LAN access.
+
 ## [0.2.2] — 2026-11-25
 
 ### Added
