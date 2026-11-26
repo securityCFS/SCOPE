@@ -168,7 +168,7 @@ export function WorkspaceTopbar({
         )}
         <button
           type="button"
-          className="theme-toggle"
+          className="theme-toggle topbar-lang-toggle"
           style={{ width: "auto", padding: "0 8px", fontSize: 11, fontWeight: 600 }}
           aria-label={locale === "zh-CN" ? "Switch to English" : "切换为中文"}
           title={locale === "zh-CN" ? "Switch to English" : "切换为中文"}
@@ -178,7 +178,7 @@ export function WorkspaceTopbar({
         </button>
         <button
           type="button"
-          className="theme-toggle"
+          className="theme-toggle topbar-theme-toggle"
           aria-label={uiTheme === "dark" ? tr("切换到浅色主题", "Switch to light theme") : tr("切换到深色主题", "Switch to dark theme")}
           title={uiTheme === "dark" ? tr("切换到浅色主题", "Switch to light theme") : tr("切换到深色主题", "Switch to dark theme")}
           onClick={toggleUiTheme}
@@ -240,10 +240,12 @@ export function WorkspaceTopbar({
         )}
         <button
           className="new-task-button"
+          aria-label={tr("新建会话", "New session")}
+          title={tr("新建会话", "New session")}
           onClick={() => openNewTask(selectedProject)}
         >
-          <Plus size={15} />
-          {tr("新建会话", "New session")}
+          <Plus size={16} />
+          <span>{tr("新建会话", "New session")}</span>
         </button>
         <details className="topbar-more">
           <summary aria-label={tr("更多工具", "More tools")}>

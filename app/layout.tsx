@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
@@ -12,6 +12,13 @@ import "../components/project-filters.css";
 import "../features/workspace/submission-dialog.css";
 import "../features/workspace/bridge-connection.css";
 import "./components/ssh-terminal.css";
+import "./mobile-responsive.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,7 +48,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description,
-    icons: { icon: "/scope-logo.svg" },
+    icons: { icon: "/scope-logo.svg", apple: "/scope-logo.svg" },
+    appleWebApp: {
+      capable: true,
+      title: "SCOPE",
+      statusBarStyle: "default",
+    },
     openGraph: {
       title,
       description,

@@ -219,9 +219,11 @@ export function ProjectSidebar({
                 <button
                   type="button"
                   className="project-nav-select"
+                  aria-expanded={Boolean(open)}
                   onClick={() => {
-                    setExpanded((value) => ({ ...value, [project.key]: true }));
-                    onSelect(project);
+                    const nextOpen = !open;
+                    setExpanded((value) => ({ ...value, [project.key]: nextOpen }));
+                    if (nextOpen) onSelect(project);
                   }}
                   title={`${hostLabel(project.host)} · ${project.cwd}`}
                 >

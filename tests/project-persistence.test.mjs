@@ -45,7 +45,7 @@ test("pinned projects survive bridge restart and preserve unrelated state", { ti
   let bridge;
   t.after(async () => {
     if (bridge) await stop(bridge.child);
-    if (path.dirname(dir) === path.resolve(tmpdir()) && path.basename(dir).startsWith("scope-project-test-")) await rm(dir, { recursive: true, force: true });
+    if (path.dirname(dir) === path.resolve(tmpdir()) && path.basename(dir).startsWith("scope-project-test-")) await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
   const config = path.join(dir, "ssh-config");
   await writeFile(config, "# no hosts\n");

@@ -129,17 +129,22 @@ export function HostNavigation({
         busyKey={projectBusyKey}
         onSelect={(project) => chooseProject(project)}
         onTogglePin={(project) => void toggleProjectPin(project)}
-        onSelectSession={selectProjectSession}
+        onSelectSession={(project, session) => {
+          selectProjectSession(project, session);
+          setMobileHostsOpen(false);
+        }}
         archiveBusy={!!archives.busy || !!sessionCatalog?.archiveBusy}
         onArchive={(project, session) =>
           ["claude", "antigravity"].includes(session.provider || "") ? void sessionCatalog?.archiveNative(session.id, "archive") : void archives.change(project.host, session.sessionId, "archive")
         }
         onNewTask={(project) => {
           chooseProject(project);
+          setMobileHostsOpen(false);
           openNewTask(project);
         }}
         onHistory={(project) => {
           chooseProject(project, "history");
+          setMobileHostsOpen(false);
           void loadHistoryCache(undefined, project.host);
         }}
         scanning={Boolean(sessionCatalog?.scanning)}
