@@ -1,8 +1,12 @@
 {
-  "name": "scope-agent-workbench",
+  "name": "@godchaser/scope",
   "version": "0.2.3",
+  "author": {
+    "name": "godchaser",
+    "url": "https://github.com/securityCFS"
+  },
   "description": "SCOPE: One monitor for all agent sessions — unified web workbench for coding agents across local and SSH GPU hosts",
-  "homepage": "https://github.com/securityCFS/SCOPE#readme",
+  "homepage": "https://securitycfs.github.io/SCOPE/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/securityCFS/SCOPE.git"

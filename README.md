@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/scope-agent-workbench"><img src="https://img.shields.io/npm/v/scope-agent-workbench.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@godchaser/scope"><img src="https://img.shields.io/npm/v/%40godchaser%2Fscope.svg" alt="npm version" /></a>
   <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
   <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
@@ -94,13 +94,13 @@ flowchart LR
 
 ```sh
 # Install globally
-npm install -g scope-agent-workbench
+npm install -g @godchaser/scope
 scope
 
 # Or run directly without cloning
-npx scope-agent-workbench
+npx @godchaser/scope
 # Try zero-SSH interactive preview immediately:
-npx scope-agent-workbench preview --en
+npx @godchaser/scope preview --en
 ```
 
 ### Option B: Clone & Run from Source
