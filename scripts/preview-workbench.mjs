@@ -607,6 +607,56 @@ const preview = createServer(async (request, response) => {
           },
         });
       }
+      if (url.pathname === "/api/port-forwards") {
+        const host = url.searchParams.get("host") || "lab-gpu";
+        return jsonResponse(response, 200, {
+          host,
+          autoForward: false,
+          scannedAt: new Date().toISOString(),
+          error: null,
+          forwards:
+            host === "lab-gpu"
+              ? [
+                  {
+                    host: "lab-gpu",
+                    remotePort: 6006,
+                    localPort: 6006,
+                    localUrl: "http://127.0.0.1:6006",
+                    status: "connected",
+                    label: "TensorBoard",
+                    auto: false,
+                    connectedAt: new Date().toISOString(),
+                    lastError: null,
+                  },
+                ]
+              : [],
+          discovered:
+            host === "lab-gpu"
+              ? [
+                  {
+                    port: 6006,
+                    bind: "127.0.0.1",
+                    pid: 42018,
+                    procName: "tensorboard",
+                    label: "TensorBoard",
+                    cmdline: "tensorboard --logdir runs/ --port 6006",
+                    cwd: "/workspace/vision",
+                    inProject: true,
+                  },
+                  {
+                    port: 7860,
+                    bind: "127.0.0.1",
+                    pid: 42105,
+                    procName: "python",
+                    label: "Gradio",
+                    cmdline: "python app.py --port 7860",
+                    cwd: "/workspace/vision",
+                    inProject: true,
+                  },
+                ]
+              : [],
+        });
+      }
       if (url.pathname === "/api/models")
         return jsonResponse(response, 200, {
           models: [

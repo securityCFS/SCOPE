@@ -36,6 +36,8 @@ import { sessionDeliveryRoutes } from "./routes/session-delivery.mjs";
 import { RemoteTunnelManager } from "./remote-bootstrap/tunnels.mjs";
 import { RemoteBootstrapService } from "./remote-bootstrap/service.mjs";
 import { remoteBootstrapRoutes } from "./remote-bootstrap/routes.mjs";
+import { PortForwardManager } from "./port-forwards/manager.mjs";
+import { portForwardRoutes } from "./port-forwards/routes.mjs";
 import { PROFILE_LIST_PROBE, PROFILE_WRITE_PROBE, PROFILE_CANCEL_PROBE, PROFILE_DELETE_PROBE, REMOTE_PROBE, DIALOGUE_PROBE, RAW_CONTEXT_PROBE, TAKEOVER_PROBE, APP_SERVER_WRITER_PROBE } from './probes/index.mjs';
 import { REMOTE_DIRECTORY_PROBE } from "./workbench/directory-probe.mjs";
 import { spawn } from "node:child_process";
@@ -3116,6 +3118,16 @@ const handleRemoteBootstrap = remoteBootstrapRoutes({
   readJsonBody,
   jsonResponse,
 });
+const portForwardManager = await new PortForwardManager({
+  stateDir: STATE_DIR,
+  getHost: (alias) => snapshot.hosts.find((host) => host.alias === alias),
+  runSsh: runSshCommand,
+}).load();
+const handlePortForwards = portForwardRoutes({
+  portForwards: portForwardManager,
+  readJsonBody,
+  jsonResponse,
+});
 const handlePlugins = pluginRoutes(plugins);
 // Compatibility facade: both old and new endpoints share the plugin store.
 const handleSubmissionSettings = submissionSettingsRoutes({
@@ -3236,11 +3248,13 @@ const handleSessionDelivery = sessionDeliveryRoutes(() => ({
   streamAttachmentToHost,
 }));
 process.once("exit", () => tunnelManager.stop());
+process.once("exit", () => portForwardManager.stop());
 process.once("exit", () => plugins.stop());
 process.once("exit", () => workbench.stop());
 const server = createServer(requestHandler(async (request, response, url) => {
   if (await handleEmail(request, response, url)) return;
   if (await handleRemoteBootstrap(request, response, url)) return;
+  if (await handlePortForwards(request, response, url)) return;
   if (await handlePlugins(request, response, url)) return;
   if (await handleSubmissionSettings(request, response, url)) return;
   if (await handleCatalog(request, response, url)) return;
@@ -3314,6 +3328,13 @@ server.listen(PORT, HOST, () => {
     })
     .catch((error) => console.error(error));
   setInterval(() => scanAll().catch(() => {}), POLL_MS).unref();
+  setInterval(() => {
+    for (const host of portForwardManager.autoForwardHosts) {
+      if (snapshot.hosts.find((item) => item.alias === host && item.reachable)) {
+        portForwardManager.scan(host).catch(() => {});
+      }
+    }
+  }, 15_000).unref();
   startIdleSessionReaper(appServerManager, {
     timeoutMs: () => {
       const envVal = process.env.SCOPE_SESSION_IDLE_MINUTES;

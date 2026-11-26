@@ -17,6 +17,7 @@ import type {
 import {
   Activity,
   AlertTriangle,
+  Cable,
   Check,
   ChevronRight,
   CirclePause,
@@ -672,6 +673,108 @@ export function RemoteMarkdownFileLink({
   );
 }
 
+function RemoteMarkdownPortLink({
+  host,
+  port,
+  protocol,
+  pathAndQuery,
+  href,
+  className = "",
+  children,
+}: {
+  host: string;
+  port: number;
+  protocol: string;
+  pathAndQuery: string;
+  href: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [state, setState] = useState<"idle" | "opening" | "ready" | "error">("idle");
+  const [forwardedUrl, setForwardedUrl] = useState("");
+  const [error, setError] = useState("");
+
+  async function forwardAndOpen() {
+    if (state === "opening") return;
+    if (forwardedUrl) {
+      window.open(forwardedUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      try {
+        popup.opener = null;
+      } catch {
+        /* ignore */
+      }
+    }
+    setState("opening");
+    setError("");
+    try {
+      const response = await fetch(bridgeUrl("/api/port-forwards/forward"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, remotePort: port }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.forward?.localPort) {
+        throw new Error(data?.error || "SSH 端口转发失败");
+      }
+      const nextUrl = `${protocol}//127.0.0.1:${data.forward.localPort}${pathAndQuery}`;
+      setForwardedUrl(nextUrl);
+      setState("ready");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("scope:port-forwards-changed", { detail: { host } }),
+        );
+      }
+      if (popup && !popup.closed) {
+        popup.location.href = nextUrl;
+      } else {
+        window.open(nextUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (openError) {
+      if (popup && !popup.closed) popup.close();
+      setError(
+        openError instanceof Error ? openError.message : "SSH 端口转发失败",
+      );
+      setState("error");
+    }
+  }
+
+  const title =
+    state === "error"
+      ? error
+      : forwardedUrl
+        ? `已转发 ${host}:${port} → ${forwardedUrl}（点击打开）`
+        : `点击一键通过 SSH 转发 ${host}:${port} 并在本地浏览器打开 (${href})`;
+
+  return (
+    <button
+      type="button"
+      className={`remote-markdown-link ${state === "error" ? "has-error" : ""} ${className}`.trim()}
+      title={title}
+      aria-label={title}
+      aria-busy={state === "opening"}
+      onClick={(event) => {
+        event.stopPropagation();
+        void forwardAndOpen();
+      }}
+    >
+      <span>{children}</span>
+      {state === "opening" ? (
+        <LoaderCircle aria-hidden="true" size={11} className="is-spinning" />
+      ) : state === "error" ? (
+        <AlertTriangle aria-hidden="true" size={11} />
+      ) : state === "ready" ? (
+        <ExternalLink aria-hidden="true" size={11} />
+      ) : (
+        <Cable aria-hidden="true" size={11} />
+      )}
+    </button>
+  );
+}
+
 export function MarkdownBody({
   value,
   className = "",
@@ -690,6 +793,7 @@ export function MarkdownBody({
       remoteHost={remoteHost}
       remoteCwd={remoteCwd}
       RemoteFileLink={RemoteMarkdownFileLink}
+      RemotePortLink={RemoteMarkdownPortLink}
     />
   );
 }

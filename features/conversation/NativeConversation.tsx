@@ -12,6 +12,7 @@ import { useClaudeSubagentWorkflow } from "./use-claude-subagent-workflow";
 import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
 import { CollapsibleUserMessage } from "@/components/collapsible-user-message";
 import { MessageCopyButton } from "@/components/message-copy-button";
+import { PortForwardsPopover } from "@/components/port-forwards-popover";
 import {
   ComposerAttachmentButton,
   ComposerAttachmentInput,
@@ -531,6 +532,7 @@ export function NativeConversation({
           </small>
         </div>
         {(isExternalLocked ||
+          !isLocalReadOnly ||
           (subagentPrefs.showHeaderBadge &&
             entry.provider === "claude" &&
             totalSubagentsCount > 0) ||
@@ -554,6 +556,9 @@ export function NativeConversation({
                     : "Terminal locked",
                 )}
               </span>
+            )}
+            {!isLocalReadOnly && (
+              <PortForwardsPopover host={entry.host} cwd={entry.cwd} />
             )}
             {subagentPrefs.showHeaderBadge &&
               entry.provider === "claude" &&

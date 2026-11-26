@@ -3,6 +3,7 @@ import { hostLabel } from "@/lib/execution-host";
 import { useMemo, useState } from "react";
 import { Bot, Info, LoaderCircle, MessageSquare, Pin, Plus, Square } from "lucide-react";
 import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
+import { PortForwardsPopover } from "@/components/port-forwards-popover";
 import {
   CodexSubagentsCard,
   toCodexDrawerItems,
@@ -167,6 +168,7 @@ export function SessionConversation({
               </span>
             </button>
           )}
+          <PortForwardsPopover host={agent.host} cwd={agent.cwd} />
           <button
             type="button"
             className="session-info-trigger"

@@ -11,12 +11,18 @@ import { isVideoSource } from "../lib/markdown-images.js";
 import { markdownUrlTransform } from "../lib/markdown-url.js";
 import { normalizeLatexDelimiters, normalizeMarkdownMedia } from "../lib/markdown-math.js";
 import { remoteFileTargetFromMarkdownHref } from "../lib/remote-links.js";
+import { remotePortTargetFromMarkdownHref } from "../lib/remote-ports.js";
 import { useLocale } from "@/lib/i18n";
 
 type RemoteLinkProps = {
   host: string; cwd: string; remotePath: string;
   line: number | null; column: number | null;
   className?: string; children: ReactNode;
+};
+
+type RemotePortLinkProps = {
+  host: string; port: number; protocol: string; pathAndQuery: string;
+  href: string; className?: string; children: ReactNode;
 };
 
 export function MarkdownVideo({ src, label }: { src: string; label?: ReactNode }) {
@@ -48,10 +54,11 @@ function MarkdownImage({ src, alt, title }: { src: string; alt?: string; title?:
 }
 
 export const MarkdownContent = memo(function MarkdownContent({
-  value, className = "", remoteHost, remoteCwd, RemoteFileLink,
+  value, className = "", remoteHost, remoteCwd, RemoteFileLink, RemotePortLink,
 }: {
   value: string; className?: string; remoteHost?: string; remoteCwd?: string;
   RemoteFileLink: ComponentType<RemoteLinkProps>;
+  RemotePortLink?: ComponentType<RemotePortLinkProps>;
 }) {
   // ReactMarkdown treats these callbacks as component TYPES. Recreating them
   // on snapshot/clock updates unmounts <video>, resetting playback and requests.
@@ -76,6 +83,23 @@ export const MarkdownContent = memo(function MarkdownContent({
       : <MarkdownImage key={String(src)} src={typeof src === "string" ? src : ""} alt={alt} title={title} />,
     a: ({ href, children, node: _node, className: linkClassName, ...props }) => {
       if (href && isVideoSource(href)) return <MarkdownVideo key={href} src={href} label={children} />;
+      if (remoteHost && remoteHost !== "@local" && RemotePortLink) {
+        const portTarget = remotePortTargetFromMarkdownHref(href);
+        if (portTarget) {
+          return (
+            <RemotePortLink
+              className={linkClassName}
+              host={remoteHost}
+              port={portTarget.port}
+              protocol={portTarget.protocol}
+              pathAndQuery={portTarget.pathAndQuery}
+              href={href || ""}
+            >
+              {children}
+            </RemotePortLink>
+          );
+        }
+      }
       const target = remoteFileTargetFromMarkdownHref(href, remoteCwd);
       if (remoteHost && target) {
         const parent = target.path.slice(0, target.path.lastIndexOf("/")) || "/";
@@ -83,7 +107,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       }
       return <a {...props} className={linkClassName} href={href}>{children}</a>;
     },
-  }), [remoteHost, remoteCwd, RemoteFileLink]);
+  }), [remoteHost, remoteCwd, RemoteFileLink, RemotePortLink]);
   const urlTransform = useMemo(() => (url: string, key: string) =>
     markdownUrlTransform(url, key, remoteHost, remoteCwd), [remoteHost, remoteCwd]);
   return <div className={`markdown-body ${className}`.trim()}>
