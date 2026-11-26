@@ -1,0 +1,43 @@
+name: Publish GitHub Pages (gh-pages)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "site/**"
+      - "docs/assets/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "gh-pages"
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble static site
+        run: |
+          rm -rf _site
+          mkdir -p _site/assets
+          cp -r site/* _site/
+          cp docs/assets/scope-preview-*.png docs/assets/scope-demo-*.gif _site/assets/
+          touch _site/.nojekyll
+      - name: Push assembled site to gh-pages branch
+        run: |
+          AUTH_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          cd _site
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(pages): publish SCOPE homepage from ${GITHUB_SHA::7}"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push --force origin gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
