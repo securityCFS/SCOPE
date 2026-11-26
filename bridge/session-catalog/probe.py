@@ -372,28 +372,46 @@ def detect_claude_external_locks(tmux_ttys, target_sid=None):
                     }
     return locks
 
+def agy_roots():
+    items = [("", Path(roots["antigravity"]))]
+    profiles_dir = Path.home() / ".agy-profiles"
+    if profiles_dir.is_dir():
+        try:
+            for child in sorted(profiles_dir.iterdir(), key=lambda p: p.name):
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                if not re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", child.name):
+                    continue
+                candidate = child / ".gemini/antigravity-cli"
+                if candidate.is_dir():
+                    items.append((child.name, candidate))
+        except OSError:
+            pass
+    return items
+
 def detect_agy_external_locks(tmux_ttys, target_sid=None):
     if os.name == "nt":
         return {}
     locks = {}
     locked_sids = set()
-    presence_dir = Path(roots["antigravity"]) / "presence"
-    if fcntl is not None and presence_dir.is_dir():
-        candidates = [presence_dir / f"{target_sid}.lock"] if target_sid else list(presence_dir.glob("*.lock"))
-        for lock_file in candidates:
-            if not lock_file.is_file():
-                continue
-            sid = lock_file.stem
-            try:
-                with lock_file.open("r") as handle:
-                    try:
-                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    except BlockingIOError:
-                        locked_sids.add(sid)
-                    else:
-                        fcntl.flock(handle, fcntl.LOCK_UN)
-            except OSError:
-                continue
+    for _, agy_root in agy_roots():
+        presence_dir = agy_root / "presence"
+        if fcntl is not None and presence_dir.is_dir():
+            candidates = [presence_dir / f"{target_sid}.lock"] if target_sid else list(presence_dir.glob("*.lock"))
+            for lock_file in candidates:
+                if not lock_file.is_file():
+                    continue
+                sid = lock_file.stem
+                try:
+                    with lock_file.open("r") as handle:
+                        try:
+                            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        except BlockingIOError:
+                            locked_sids.add(sid)
+                        else:
+                            fcntl.flock(handle, fcntl.LOCK_UN)
+                except OSError:
+                    continue
     pid_by_sid = {}
     proc_root = Path("/proc")
     if proc_root.is_dir():
@@ -830,46 +848,49 @@ def agy_active_subagents(brain_root, transcript_file, now_ts):
         return 0
 
 def agy_entries():
-    filename = os.path.join(roots["antigravity"], "conversation_summaries.db")
-    if not os.path.exists(filename):
-        return []
-    connection = sqlite3.connect(Path(filename).resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
-    try:
-        rows = connection.execute("SELECT conversation_id,title,preview,workspace_uris,last_modified_time FROM conversation_summaries").fetchall()
-        result = []
-        now_ts = time.time()
-        brain_root = (Path(roots["antigravity"]) / "brain").resolve()
-        for sid, title, preview, workspaces, updated in rows:
-            try:
-                workspaces = json.loads(workspaces or "[]")
-            except ValueError:
-                workspaces = [workspaces] if workspaces else []
-            if isinstance(workspaces, str):
-                workspaces = [workspaces]
-            workspace = next((value for value in workspaces if isinstance(value, str)), "")
-            cwd = unquote(urlparse(workspace).path) if workspace.startswith("file:") else workspace
-            if os.name == "nt" and len(cwd) > 2 and cwd[0] == "/" and cwd[2] == ":":
-                cwd = cwd[1:]
-            item = {"provider": "antigravity", "sessionId": sid, "cwd": cwd, "title": (title or preview or sid)[:160], "preview": (preview or "")[:1000], "model": "", "updatedAt": str(updated or ""), "path": filename}
-            # Metadata only: scans never transfer conversation bodies.
-            if isinstance(sid, str) and sid and all(c.isalnum() or c in "-_" for c in sid):
-                folder = Path(roots["antigravity"]) / "brain" / sid / ".system_generated/logs"
-                for name in ("transcript_full.jsonl", "transcript.jsonl"):
-                    try:
-                        tf = folder / name
-                        stat = tf.stat()
-                        item["historyVersion"] = f"{name}:{stat.st_mtime_ns}:{stat.st_size}"
-                        if now_ts - stat.st_mtime < 600:
-                            active = agy_active_subagents(brain_root, tf, now_ts)
-                            if active > 0:
-                                item["activeSubagents"] = active
-                        break
-                    except OSError:
-                        continue
-            result.append(item)
-        return result
-    finally:
-        connection.close()
+    result = []
+    now_ts = time.time()
+    for profile_name, agy_root in agy_roots():
+        filename = str(agy_root / "conversation_summaries.db")
+        if not os.path.exists(filename):
+            continue
+        connection = sqlite3.connect(Path(filename).resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
+        try:
+            rows = connection.execute("SELECT conversation_id,title,preview,workspace_uris,last_modified_time FROM conversation_summaries").fetchall()
+            brain_root = (agy_root / "brain").resolve()
+            for sid, title, preview, workspaces, updated in rows:
+                try:
+                    workspaces = json.loads(workspaces or "[]")
+                except ValueError:
+                    workspaces = [workspaces] if workspaces else []
+                if isinstance(workspaces, str):
+                    workspaces = [workspaces]
+                workspace = next((value for value in workspaces if isinstance(value, str)), "")
+                cwd = unquote(urlparse(workspace).path) if workspace.startswith("file:") else workspace
+                if os.name == "nt" and len(cwd) > 2 and cwd[0] == "/" and cwd[2] == ":":
+                    cwd = cwd[1:]
+                item = {"provider": "antigravity", "sessionId": sid, "cwd": cwd, "title": (title or preview or sid)[:160], "preview": (preview or "")[:1000], "model": "", "updatedAt": str(updated or ""), "path": filename}
+                if profile_name:
+                    item["profile"] = profile_name
+                # Metadata only: scans never transfer conversation bodies.
+                if isinstance(sid, str) and sid and all(c.isalnum() or c in "-_" for c in sid):
+                    folder = agy_root / "brain" / sid / ".system_generated/logs"
+                    for name in ("transcript_full.jsonl", "transcript.jsonl"):
+                        try:
+                            tf = folder / name
+                            stat = tf.stat()
+                            item["historyVersion"] = f"{name}:{stat.st_mtime_ns}:{stat.st_size}"
+                            if now_ts - stat.st_mtime < 600:
+                                active = agy_active_subagents(brain_root, tf, now_ts)
+                                if active > 0:
+                                    item["activeSubagents"] = active
+                            break
+                        except OSError:
+                            continue
+                result.append(item)
+        finally:
+            connection.close()
+    return result
 
 def codex_labels():
     root = Path(roots["codex"]).parent

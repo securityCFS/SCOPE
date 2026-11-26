@@ -38,11 +38,31 @@ def _clean_arg(value):
         return text[1:-1].strip()
     return text
 
+def _agy_home():
+    profile = str(config.get("agyProfile") or "").strip()
+    if profile and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", profile) and profile not in (".", ".."):
+        return Path.home() / ".agy-profiles" / profile
+    return Path.home()
+
+def _agy_env():
+    profile = str(config.get("agyProfile") or "").strip()
+    if not (profile and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", profile) and profile not in (".", "..")):
+        return None
+    agy_home = Path.home() / ".agy-profiles" / profile
+    env = dict(os.environ)
+    for k in ("DBUS_SESSION_BUS_ADDRESS", "ANTIGRAVITY_APP_DATA_DIR", "ANTIGRAVITY_AGENTAPI_EXE", "ANTIGRAVITY_SOURCE_METADATA"):
+        env.pop(k, None)
+    env["HOME"] = str(agy_home)
+    env["XDG_CONFIG_HOME"] = str(agy_home / ".config")
+    env["XDG_CACHE_HOME"] = str(agy_home / ".cache")
+    env["AGY_PROFILE"] = profile
+    return env
+
 def sync_brain_subagents():
     sid = state.get("sessionId")
     if not isinstance(sid, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}", sid):
         return
-    brain_root = (Path.home() / ".gemini/antigravity-cli/brain").resolve()
+    brain_root = (_agy_home() / ".gemini/antigravity-cli/brain").resolve()
     logs = brain_root / sid / ".system_generated/logs"
     parent_file = next((p for p in (logs / "transcript_full.jsonl", logs / "transcript.jsonl") if p.is_file()), None)
     if parent_file is None or brain_root not in parent_file.resolve().parents:
@@ -275,7 +295,7 @@ if config["permissionMode"] in ("workspace", "auto"): args.append("--sandbox")
 if config["permissionMode"] == "full": args.append("--dangerously-skip-permissions")
 try:
     with (root / "agy-stderr").open("wb") as errors:
-        child = subprocess.Popen(args, cwd=config["cwd"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors, start_new_session=True)
+        child = subprocess.Popen(args, cwd=config["cwd"], env=_agy_env(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors, start_new_session=True)
         selector = selectors.DefaultSelector(); selector.register(child.stdout, selectors.EVENT_READ)
         call("initialize", {"protocolVersion": 1, "clientInfo": {"name": "scope", "version": "0.2.0"},
                             "clientCapabilities": {"elicitation": {"form": {}}}}, "initialize")

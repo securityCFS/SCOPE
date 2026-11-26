@@ -312,6 +312,7 @@ export type Host = {
   defaultCwd?: string;
   alias: string;
   reachable: boolean;
+  nativeCliSupported?: boolean;
   latencyMs: number;
   error: string | null;
   inventoryError?: string | null;
@@ -668,6 +669,8 @@ export type AntigravityAuthStatus = {
   authMethod: string;
   defaultModel: string;
   useG1Credits: boolean;
+  profile?: string;
+  profiles?: AntigravityAuthStatus[];
   quota?: AccountQuota | null;
   quotaError?: string | null;
   error: string | null;

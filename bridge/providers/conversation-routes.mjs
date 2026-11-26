@@ -10,7 +10,14 @@ export function cliConversationRoutes(service, { readJsonBody, jsonResponse, mod
           ? { commands: session?.commands || [], ...(!session ? {notice:"AGY 首轮连接后显示原生命令与技能；也可直接输入已有命令，由原生协议校验。"} : {}) }
           : {commands: await commands.list(host, provider, cwd, url.searchParams.get("refresh") === "1")});
       } else if (url.pathname === "/api/cli-conversations/models" && request.method === "GET") {
-        jsonResponse(response, 200, { models: await models.list(url.searchParams.get("host"), url.searchParams.get("provider"), url.searchParams.get("refresh") === "1") });
+        jsonResponse(response, 200, {
+          models: await models.list(
+            url.searchParams.get("host"),
+            url.searchParams.get("provider"),
+            url.searchParams.get("refresh") === "1",
+            { agyProfile: url.searchParams.get("agyProfile") || "" },
+          ),
+        });
       } else if (url.pathname === "/api/cli-conversations" && request.method === "GET") {
         const key = url.searchParams.get("key");
         const result = key ? await service.read(key) : { entries: service.entries() };

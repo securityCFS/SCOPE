@@ -61,6 +61,7 @@ type Conversation = CatalogEntry & {
   status: string;
   permissionMode?: NativePermission;
   effort?: string;
+  agyProfile?: string;
 };
 
 function mergeNativeSubagents(
@@ -241,10 +242,12 @@ function NativeSubagentsPanel({
 
 export function NativeConversation({
   entry,
+  localCliSupported = false,
   onChanged,
   onAccounts,
 }: {
   entry: CatalogEntry;
+  localCliSupported?: boolean;
   onChanged: () => void;
   onAccounts?: () => void;
 }) {
@@ -275,8 +278,13 @@ export function NativeConversation({
     scope: entry.key,
     onError: setError,
   });
+  const isLocalReadOnly = entry.host === LOCAL_HOST && !localCliSupported;
+  const activeAgyProfile =
+    entry.provider === "antigravity"
+      ? conversation?.agyProfile || entry.profile || ""
+      : "";
   const slash = useSlashCommands({provider:entry.provider,host:entry.host,cwd:entry.cwd,sessionId:entry.sessionId,
-    draft,setDraft,disabled:entry.host === LOCAL_HOST,liveCommands:conversation?.commands,
+    draft,setDraft,disabled:isLocalReadOnly,liveCommands:conversation?.commands,
     onLocal: name => {
       if (name === "stop") { void control("stop"); return; }
       const button = composer.current?.querySelector<HTMLButtonElement>(name === "permissions" ? '.native-permission-control button' : '.native-model-trigger');
@@ -364,7 +372,6 @@ export function NativeConversation({
     nativeHistory.history?.totalSubagents || 0,
     subagents.length,
   );
-  const isLocalReadOnly = entry.host === LOCAL_HOST;
   const externalLock = nativeHistory.history
     ? nativeHistory.history.externalLock || null
     : entry.externalLock || null;
@@ -468,6 +475,7 @@ export function NativeConversation({
           model,
           effort,
           permissionMode,
+          ...(activeAgyProfile ? { agyProfile: activeAgyProfile } : {}),
         },
       );
       setConversation(result);
@@ -485,7 +493,9 @@ export function NativeConversation({
     key: string;
     quota: AccountQuota | null;
   } | null>(null);
-  const quotaScopeKey = !isLocalReadOnly ? `${entry.host}:${entry.provider}` : "";
+  const quotaScopeKey = !isLocalReadOnly
+    ? `${entry.host}:${entry.provider}:${activeAgyProfile}`
+    : "";
   useEffect(() => {
     if (!quotaScopeKey) return;
     const controller = new AbortController();
@@ -497,15 +507,21 @@ export function NativeConversation({
         if (!response.ok) return;
         const data = (await response.json()) as ProviderAuthStatusesResponse;
         if (controller.signal.aborted) return;
+        const matchedAgy =
+          activeAgyProfile
+            ? data.antigravity?.profiles?.find(
+                (p) => p.profile === activeAgyProfile,
+              ) || data.antigravity
+            : data.antigravity;
         const nextQuota =
           entry.provider === "claude"
             ? data.claude?.quota || null
-            : data.antigravity?.quota || null;
+            : matchedAgy?.quota || null;
         setProviderQuotaState({ key: quotaScopeKey, quota: nextQuota });
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [entry.host, entry.provider, quotaScopeKey]);
+  }, [entry.host, entry.provider, activeAgyProfile, quotaScopeKey]);
   const providerQuota =
     providerQuotaState?.key === quotaScopeKey ? providerQuotaState.quota : null;
   const providerName = entry.provider === "claude" ? "Claude" : "Antigravity";
@@ -520,7 +536,10 @@ export function NativeConversation({
           <small
             title={`${hostLabel(entry.host)} · ${entry.cwd || "未记录工作目录"}`}
           >
-            {hostLabel(entry.host)} · {entry.cwd || "未记录工作目录"}
+            {hostLabel(entry.host)}
+            {activeAgyProfile ? ` (${activeAgyProfile})` : ""}
+            {" · "}
+            {entry.cwd || "未记录工作目录"}
             {isLocalReadOnly
               ? " · 本机只读"
               : isExternalLocked
@@ -532,7 +551,7 @@ export function NativeConversation({
           </small>
         </div>
         {(isExternalLocked ||
-          !isLocalReadOnly ||
+          entry.host !== LOCAL_HOST ||
           (subagentPrefs.showHeaderBadge &&
             entry.provider === "claude" &&
             totalSubagentsCount > 0) ||
@@ -557,7 +576,7 @@ export function NativeConversation({
                 )}
               </span>
             )}
-            {!isLocalReadOnly && (
+            {entry.host !== LOCAL_HOST && (
               <PortForwardsPopover host={entry.host} cwd={entry.cwd} />
             )}
             {subagentPrefs.showHeaderBadge &&
@@ -865,6 +884,8 @@ export function NativeConversation({
               disabled={working || isComposerReadOnly}
             />
             <NativeModelControl onAutoSupportChange={setAutoSupported}
+              allowLocal={localCliSupported}
+              agyProfile={activeAgyProfile}
               effort={effort}
               onEffortChange={setEffort}
               compact

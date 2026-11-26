@@ -238,11 +238,34 @@ def _read_proc_ppid(pid):
         return 0
 
 
-def detect_agy_external_lock(sid):
+def _resolve_agy_base(profile, sid):
+    if isinstance(profile, str):
+        p = profile.strip()
+        if p and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", p) and p not in (".", ".."):
+            return (Path.home() / ".agy-profiles" / p / ".gemini/antigravity-cli").resolve()
+    default_base = (Path.home() / ".gemini/antigravity-cli").resolve()
+    if (default_base / "brain" / sid).exists():
+        return default_base
+    profiles_dir = Path.home() / ".agy-profiles"
+    if profiles_dir.is_dir():
+        try:
+            for child in sorted(profiles_dir.iterdir(), key=lambda item: item.name):
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                candidate = (child / ".gemini/antigravity-cli").resolve()
+                if (candidate / "brain" / sid).exists():
+                    return candidate
+        except OSError:
+            pass
+    return default_base
+
+
+def detect_agy_external_lock(sid, agy_base=None):
     if os.name == "nt" or not sid or _scope_agy_lock_active(sid):
         return None
     presence_locked = False
-    lock_file = Path.home() / ".gemini/antigravity-cli/presence" / f"{sid}.lock"
+    base = agy_base or (Path.home() / ".gemini/antigravity-cli")
+    lock_file = base / "presence" / f"{sid}.lock"
     if fcntl is not None and lock_file.is_file():
         try:
             with lock_file.open("r") as handle:
@@ -332,8 +355,9 @@ def read_history(config):
     sid = config.get("sessionId", "")
     if not isinstance(sid, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}", sid):
         raise ValueError("Invalid AGY session ID")
-    ext_lock = detect_agy_external_lock(sid)
-    root = (Path.home() / ".gemini/antigravity-cli/brain").resolve()
+    agy_base = _resolve_agy_base(config.get("profile") or "", sid)
+    ext_lock = detect_agy_external_lock(sid, agy_base)
+    root = (agy_base / "brain").resolve()
     folder = root / sid / ".system_generated/logs"
     candidates = [folder / "transcript_full.jsonl", folder / "transcript.jsonl"]
     filename = next((p for p in candidates if p.is_file()), None)

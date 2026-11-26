@@ -4,6 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CliConversations } from "../bridge/providers/conversations.mjs";
+import { agyProfileEnvPrefix, normalizeAgyProfile } from "../bridge/providers/native-models.mjs";
+import { createHostCommand } from "../bridge/transport/host-command.mjs";
 
 async function service(t, overrides = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), "scope-native-"));
@@ -267,4 +269,51 @@ test("native conversations track active and finished background subagents", asyn
   const completed = await client.read(conv.key);
   assert.equal(completed.subagents[0].status, "completed");
   assert.equal(client.entries()[0].activeSubagents, 0);
+});
+
+test("native conversations allow @local when allowLocal is enabled and propagate isolated agyProfile", async (t) => {
+  const { client, calls } = await service(t);
+  client.allowLocal = true;
+  client.hosts = () => [{ alias: "@local", reachable: true }, { alias: "test-host", reachable: true }];
+  const localClaude = await client.send({
+    host: "@local",
+    cwd: "/home/user/project",
+    provider: "claude",
+    prompt: "check local status",
+  });
+  assert.equal(localClaude.host, "@local");
+  assert.equal(calls[0].task.host, "@local");
+  assert.equal(calls[0].task.provider, "claude");
+
+  const localAgy2 = await client.send({
+    host: "@local",
+    cwd: "/home/user/project",
+    provider: "antigravity",
+    agyProfile: "acc2",
+    prompt: "hello agy2",
+  });
+  assert.equal(localAgy2.agyProfile, "acc2");
+  assert.equal(calls[1].task.agyProfile, "acc2");
+  assert.equal(client.entries().find((e) => e.key === localAgy2.key)?.profile, "acc2");
+
+  await assert.rejects(
+    client.send({ host: "@local", cwd: "/home/user/project", provider: "antigravity", agyProfile: "../bad", prompt: "x" }),
+    /无效/,
+  );
+  assert.equal(normalizeAgyProfile("default"), "");
+  assert.equal(normalizeAgyProfile("acc2"), "acc2");
+  assert.match(agyProfileEnvPrefix("acc2"), /AGY_PROFILE='acc2'/);
+  assert.ok(!agyProfileEnvPrefix("acc2").includes(";"));
+
+  const remoteSeen = [];
+  const runner = createHostCommand(
+    async (alias, cmd) => {
+      remoteSeen.push([alias, cmd]);
+      return { code: 0, stdout: "ok", stderr: "" };
+    },
+    { allowLocal: false },
+  );
+  await runner("gpu-1", "echo hi");
+  assert.deepEqual(remoteSeen, [["gpu-1", "echo hi"]]);
+  await assert.rejects(runner("@local", "echo hi"), /远端/);
 });

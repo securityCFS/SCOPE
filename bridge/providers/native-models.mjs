@@ -15,26 +15,48 @@ export function parseNativeModels(output) {
     ).values(),
   ];
 }
+const AGY_PROFILE_RE = /^[a-zA-Z0-9._-]{1,64}$/;
+
+export function normalizeAgyProfile(value) {
+  const text = String(value || "").trim();
+  if (!text || text === "default") return "";
+  if (!AGY_PROFILE_RE.test(text) || text === "." || text === "..") {
+    throw new Error("无效的 Antigravity 账号配置名");
+  }
+  return text;
+}
+
+export function agyProfileEnvPrefix(profile) {
+  const name = normalizeAgyProfile(profile);
+  if (!name) return "";
+  const quoted = shellQuote(name);
+  return `env -u ANTIGRAVITY_APP_DATA_DIR -u ANTIGRAVITY_AGENTAPI_EXE -u ANTIGRAVITY_SOURCE_METADATA HOME="$HOME/.agy-profiles/"${quoted} XDG_CONFIG_HOME="$HOME/.agy-profiles/"${quoted}"/.config" XDG_CACHE_HOME="$HOME/.agy-profiles/"${quoted}"/.cache" AGY_PROFILE=${quoted} `;
+}
+
 export class NativeModels {
-  constructor({ run, hosts, settings }) {
-    Object.assign(this, { run, hosts, settings });
+  constructor({ run, hosts, settings, allowLocal = false }) {
+    Object.assign(this, { run, hosts, settings, allowLocal });
     this.cache = new Map();
     this.pending = new Map();
   }
-  async list(host, provider, force = false) {
+  async list(host, provider, force = false, { agyProfile = "" } = {}) {
     if (!["antigravity", "claude"].includes(provider))
       throw new Error("此 Agent 暂无可读取的模型目录，请填写 CLI 模型名称");
+    const localAllowed = this.allowLocal && host === "@local";
+    const hostEntry = this.hosts().find((item) => item.alias === host);
     if (
-      !this.hosts().some((item) => item.alias === host && item.reachable) ||
-      host === "@local"
+      (!hostEntry?.reachable && !localAllowed) ||
+      (host === "@local" && !this.allowLocal)
     )
       throw new Error("请选择在线远程设备");
+    const profile = provider === "antigravity" ? normalizeAgyProfile(agyProfile) : "";
     const config = this.settings(provider, host) || {};
     const key = JSON.stringify([
       host,
       provider,
       config.executable,
       config.preLaunchCommand,
+      profile,
     ]);
     const cached = this.cache.get(key);
     if (!force && cached && Date.now() - cached.at < 300000)
@@ -43,9 +65,11 @@ export class NativeModels {
     const request = (async () => {
       const setup = String(config.preLaunchCommand || "").trim();
       const probe = provider === "claude" ? Buffer.from(await readFile(new URL("./claude-capabilities.py", import.meta.url))).toString("base64") : "";
+      const agyExe = shellQuote(config.executable || "agy");
+      const agyEnv = agyProfileEnvPrefix(profile);
       const command = provider === "claude"
         ? `python3 -c ${shellQuote(`import base64;exec(base64.b64decode('${probe}'))`)} ${shellQuote(config.executable || "claude")}`
-        : `${shellQuote(config.executable || "agy")} models && ${shellQuote(config.executable || "agy")} --help 2>&1 && ${shellQuote(config.executable || "agy")} --mode auto --sandbox -p /effort --output-format json 2>&1`;
+        : `${agyEnv}${agyExe} models && ${agyEnv}${agyExe} --help 2>&1 && ${agyEnv}${agyExe} --mode auto --sandbox -p /effort --output-format json 2>&1`;
       const bootstrap = setup ? `${setup}\nscope_proxy_status=$?\nif [ "$scope_proxy_status" -ne 0 ]; then exit "$scope_proxy_status"; fi\n` : "";
       const script = `${bootstrap}${command}`;
       const result = await this.run(
@@ -68,9 +92,9 @@ export class NativeModels {
     this.pending.set(key, request);
     return request;
   }
-  async validate(host, provider, model) {
+  async validate(host, provider, model, options = {}) {
     if (provider !== "antigravity" || !model) return;
-    if (!(await this.list(host, provider)).some((item) => item.id === model))
+    if (!(await this.list(host, provider, false, options)).some((item) => item.id === model))
       throw new Error("该设备不支持所选 AGY 模型，请刷新模型列表后重选");
   }
   async validateClaudeOptions(host, model, effort, permissionMode) {
@@ -80,8 +104,8 @@ export class NativeModels {
     if (effort && !selected.efforts.includes(effort)) throw new Error("该 Claude 模型不支持所选推理强度");
     if (permissionMode === "auto" && !selected.supportsAutoMode) throw new Error("该 Claude 模型未报告 auto 权限支持，请换模型或权限模式");
   }
-  async validateAgyOptions(host, model, effort, permissionMode) {
-    const models = await this.list(host, "antigravity");
+  async validateAgyOptions(host, model, effort, permissionMode, options = {}) {
+    const models = await this.list(host, "antigravity", false, options);
     const selected = models.find(item => item.id === model);
     if (permissionMode === "auto" && !models[0]?.supportsAutoMode)
       throw new Error("远端 AGY 当前账号或 CLI 不支持 auto；请选择默认权限或工作区编辑，不会静默退回其他模式");

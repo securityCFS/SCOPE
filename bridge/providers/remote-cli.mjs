@@ -45,7 +45,15 @@ export function remoteCliAdapter(runSsh, { hostPreLaunch } = {}) {
             ? antigravityInteractiveCommand(effectiveTask, effectiveProvider)
             : claudeInteractiveCommand(effectiveTask, effectiveProvider))
         : cliCommand(effectiveTask, effectiveProvider);
-      if (["claude", "antigravity"].includes(effectiveTask.provider) && effectiveTask.resumeSessionId) command = await nativeGuardCommand({ action: "run", provider: effectiveTask.provider, sessionId: effectiveTask.resumeSessionId, command });
+      if (["claude", "antigravity"].includes(effectiveTask.provider) && effectiveTask.resumeSessionId) {
+        command = await nativeGuardCommand({
+          action: "run",
+          provider: effectiveTask.provider,
+          sessionId: effectiveTask.resumeSessionId,
+          command,
+          ...(effectiveTask.agyProfile ? { agyProfile: effectiveTask.agyProfile } : {}),
+        });
+      }
       const result = await call(effectiveTask.host, {
         operation: "launch",
         id: effectiveTask.id,

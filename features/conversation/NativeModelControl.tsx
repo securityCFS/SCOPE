@@ -12,6 +12,8 @@ export function NativeModelControl({
   onChange,
   disabled = false,
   compact = false,
+  allowLocal = false,
+  agyProfile = "",
   effort = "",
   onEffortChange,
   onAutoSupportChange,
@@ -22,6 +24,8 @@ export function NativeModelControl({
   onChange: (value: string) => void;
   disabled?: boolean;
   compact?: boolean;
+  allowLocal?: boolean;
+  agyProfile?: string;
   effort?: string;
   onEffortChange?: (value: string) => void;
   onAutoSupportChange?: (value: boolean | null) => void;
@@ -33,8 +37,10 @@ export function NativeModelControl({
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const canRead =
-    ["antigravity", "claude"].includes(provider) && Boolean(host) && host !== "@local";
-  const requestKey = JSON.stringify([host, provider, revision]);
+    ["antigravity", "claude"].includes(provider) &&
+    Boolean(host) &&
+    (host !== "@local" || allowLocal);
+  const requestKey = JSON.stringify([host, provider, agyProfile, revision]);
   const current = result?.key === requestKey ? result : null;
   const loading = canRead && !current;
   const models = current?.models || [];
@@ -42,8 +48,12 @@ export function NativeModelControl({
   useEffect(() => {
     if (!canRead) return;
     let active = true;
+    const profileQuery =
+      provider === "antigravity" && agyProfile
+        ? `&agyProfile=${encodeURIComponent(agyProfile)}`
+        : "";
     conversationRequest<{ models: { id: string; label: string; resolvedModel?: string; efforts?: string[]; effortModels?: Record<string, string>; currentEffort?: string; supportsAutoMode?: boolean }[] }>(
-      `/api/cli-conversations/models?host=${encodeURIComponent(host)}&provider=${provider}${revision ? "&refresh=1" : ""}`,
+      `/api/cli-conversations/models?host=${encodeURIComponent(host)}&provider=${provider}${profileQuery}${revision ? "&refresh=1" : ""}`,
     )
       .then((value) => {
         if (active)
@@ -56,7 +66,7 @@ export function NativeModelControl({
     return () => {
       active = false;
     };
-  }, [host, provider, canRead, revision, requestKey]);
+  }, [host, provider, agyProfile, canRead, revision, requestKey]);
   const { tr } = useLocale();
   const selected = models.find(m => m.id === (value || "default") || m.resolvedModel === value);
   const autoSupport = provider === "antigravity" ? models[0]?.supportsAutoMode : selected?.supportsAutoMode;
@@ -110,7 +120,7 @@ export function NativeModelControl({
           type="button"
           className="native-model-refresh"
           aria-label={tr("刷新模型能力", "Refresh models")}
-          disabled={loading || disabled || !host || host === "@local"}
+          disabled={loading || disabled || !host || (host === "@local" && !allowLocal)}
           onClick={() => setRevision((value) => value + 1)}
         >
           <RefreshCw size={12} />

@@ -22,7 +22,11 @@ export function cliCommand(task, provider) {
       .filter(Boolean)
       .join(" ");
   } else if (task.provider === "antigravity") {
-    command = [executable, "-p", shellQuote(task.prompt), "--output-format json",
+    const agyProfile = String(task.agyProfile || "").trim();
+    const agyEnv = agyProfile && /^[a-zA-Z0-9._-]{1,64}$/.test(agyProfile) && agyProfile !== "." && agyProfile !== ".."
+      ? `env -u ANTIGRAVITY_APP_DATA_DIR -u ANTIGRAVITY_AGENTAPI_EXE -u ANTIGRAVITY_SOURCE_METADATA HOME="$HOME/.agy-profiles/"${shellQuote(agyProfile)} XDG_CONFIG_HOME="$HOME/.agy-profiles/"${shellQuote(agyProfile)}"/.config" XDG_CACHE_HOME="$HOME/.agy-profiles/"${shellQuote(agyProfile)}"/.cache" AGY_PROFILE=${shellQuote(agyProfile)}`
+      : "";
+    command = [agyEnv, executable, "-p", shellQuote(task.prompt), "--output-format json",
       task.effort ? `--effort ${shellQuote(task.effort)}` : "",
       task.permissionMode === "auto" ? "--mode auto --sandbox" : task.permissionMode === "plan" ? "--mode plan" : "",
       task.permissionMode === "full" ? "--dangerously-skip-permissions" : "",

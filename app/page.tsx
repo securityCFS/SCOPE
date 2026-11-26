@@ -190,6 +190,10 @@ function HomeShell() {
           <NativeConversation
             key={catalog.selected.key}
             entry={catalog.selected}
+            localCliSupported={Boolean(
+              workspace.snapshot.hosts.find((item) => item.alias === "@local")
+                ?.nativeCliSupported,
+            )}
             onChanged={() => {
               void catalog.refresh();
             }}

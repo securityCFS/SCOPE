@@ -85,7 +85,7 @@ export class SessionCatalog {
       throw new Error("未找到会话，请刷新扫描");
     }
     if (entry.provider === "antigravity") {
-      const result = await this.probe(entry.host, { sessionId: entry.sessionId, ...paging }, this.agyScript);
+      const result = await this.probe(entry.host, { sessionId: entry.sessionId, ...(entry.profile ? { profile: entry.profile } : {}), ...paging }, this.agyScript);
       return { ...result, summary: entry.preview || entry.title };
     }
     return this.probe(entry.host, { operation: "dialogue", provider: entry.provider, path: entry.path });

@@ -291,7 +291,7 @@ def parse_agy_usage_text(raw_text):
             }
     return [groups_map[k] for k in order if groups_map[k]["primary"] or groups_map[k]["secondary"]]
 
-def probe_agy_quota(exe, out):
+def probe_agy_quota(exe, out, extra_env=None):
     try:
         proc = subprocess.run(
             [exe, "-p", "/usage", "--output-format", "json"],
@@ -299,6 +299,7 @@ def probe_agy_quota(exe, out):
             capture_output=True,
             text=True,
             timeout=15,
+            env=extra_env,
         )
     except subprocess.TimeoutExpired:
         out["quotaError"] = "查询 Antigravity /usage 超时（请检查主机网络或代理配置）"
@@ -378,9 +379,7 @@ def probe_agy_quota(exe, out):
         "groups": groups,
     }
 
-def probe_agy(exe_name):
-    exe = find_exe(exe_name or "agy")
-    agy_dir = home / ".gemini/antigravity-cli"
+def _probe_agy_dir(exe, agy_dir, extra_env=None, profile_name=""):
     out = {
         "installed": bool(exe),
         "executable": exe,
@@ -393,6 +392,8 @@ def probe_agy(exe_name):
         "quotaError": None,
         "error": None,
     }
+    if profile_name:
+        out["profile"] = profile_name
     tok_path = agy_dir / "antigravity-oauth-token"
     if tok_path.is_file():
         try:
@@ -415,7 +416,43 @@ def probe_agy(exe_name):
         except Exception:
             pass
     if exe and out["loggedIn"]:
-        probe_agy_quota(exe, out)
+        probe_agy_quota(exe, out, extra_env=extra_env)
+    return out
+
+def probe_agy(exe_name):
+    exe = find_exe(exe_name or "agy")
+    agy_dir = home / ".gemini/antigravity-cli"
+    out = _probe_agy_dir(exe, agy_dir)
+    profiles = []
+    profiles_dir = home / ".agy-profiles"
+    if profiles_dir.is_dir():
+        candidates = []
+        try:
+            for child in sorted(profiles_dir.iterdir(), key=lambda p: p.name):
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                if not re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", child.name):
+                    continue
+                p_agy = child / ".gemini/antigravity-cli"
+                if p_agy.is_dir():
+                    candidates.append((child.name, child, p_agy))
+        except OSError:
+            candidates = []
+        if candidates:
+            def run_profile(item):
+                pname, phome, pagy = item
+                penv = dict(os.environ)
+                for k in ("DBUS_SESSION_BUS_ADDRESS", "ANTIGRAVITY_APP_DATA_DIR", "ANTIGRAVITY_AGENTAPI_EXE", "ANTIGRAVITY_SOURCE_METADATA"):
+                    penv.pop(k, None)
+                penv["HOME"] = str(phome)
+                penv["XDG_CONFIG_HOME"] = str(phome / ".config")
+                penv["XDG_CACHE_HOME"] = str(phome / ".cache")
+                penv["AGY_PROFILE"] = pname
+                return _probe_agy_dir(exe, pagy, extra_env=penv, profile_name=pname)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(candidates))) as ppool:
+                profiles = list(ppool.map(run_profile, candidates))
+    if profiles:
+        out["profiles"] = profiles
     return out
 
 wanted = cfg.get("providers") or ["claude", "antigravity"]
@@ -744,10 +781,14 @@ export function createAccountQuotaService({
 
   function normalizeProviderEntry(entry) {
     if (!entry || typeof entry !== "object") return null;
+    const profiles = Array.isArray(entry.profiles)
+      ? entry.profiles.map((item) => normalizeProviderEntry(item)).filter(Boolean)
+      : undefined;
     return {
       ...entry,
       quota: entry.quota ? normalizeAccountQuota(entry.quota) : null,
       quotaError: entry.quotaError ? String(entry.quotaError) : null,
+      ...(profiles ? { profiles } : {}),
     };
   }
 

@@ -30,7 +30,12 @@ state = json.loads(filename.read_text()) if filename.exists() else {"sessionId":
 def active_writer():
     if provider == "antigravity":
         # Probe native presence locks; stale files alone do not mean active.
-        native_lock = Path.home() / ".gemini/antigravity-cli/presence" / (sid + ".lock")
+        agy_profile = str(config.get("agyProfile") or "").strip()
+        if agy_profile and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", agy_profile) and agy_profile not in (".", ".."):
+            agy_base = Path.home() / ".agy-profiles" / agy_profile / ".gemini/antigravity-cli"
+        else:
+            agy_base = Path.home() / ".gemini/antigravity-cli"
+        native_lock = agy_base / "presence" / (sid + ".lock")
         if native_lock.exists():
             with native_lock.open("r") as presence:
                 try:

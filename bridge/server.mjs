@@ -23,6 +23,7 @@ import { localDirectories, localDirectory } from "./local/directories.mjs";
 import { sessionArchiveService } from "./archive/service.mjs";
 import { archiveRoutes } from "./archive/routes.mjs";
 import { createSshCommand, shellQuote } from "./transport/ssh-command.mjs";
+import { createHostCommand } from "./transport/host-command.mjs";
 import { readJsonBody, jsonResponse, requestHandler } from "./http.mjs";
 import { modelRoutes } from './routes/models.mjs';
 import { dialogueRoutes } from './routes/dialogue.mjs';
@@ -660,6 +661,8 @@ async function recoveryAgent(agent, activeAgent, requestedCwd) {
 }
 
 const runSshCommand = createSshCommand({ inventoryOperations, operationCounts: sshOperationCounts, connectTimeoutMs: SSH_TIMEOUT_MS, audit: auditLifecycle });
+const LOCAL_NATIVE_CLI_SUPPORTED = process.platform !== "win32";
+const runHostCommand = createHostCommand(runSshCommand, { allowLocal: LOCAL_NATIVE_CLI_SUPPORTED });
 
 async function resumeAgentInTmux(
   agent,
@@ -2984,7 +2987,7 @@ const sessionArchives = sessionArchiveService({
   restored: async (host, sessionId, thread) => { revealUnarchivedSession(host, sessionId, thread); await persistHistoryIndex(); },
 });
 const handleArchives = archiveRoutes(sessionArchives, { readJsonBody, jsonResponse });
-const cliAdapter = remoteCliAdapter(runSshCommand, {
+const cliAdapter = remoteCliAdapter(runHostCommand, {
   hostPreLaunch: (host) => hostRuntimeConfig(host).preLaunchCommand,
 });
 const workbench = new WorkbenchService({
@@ -3050,9 +3053,9 @@ const handleCatalog = catalogRoutes(sessionCatalog, { jsonResponse, readJsonBody
   historicalSessions.set(sessionKey(entry.host, entry.sessionId), agent);
   return agent;
 } });
-const nativeModels = new NativeModels({ hosts: () => snapshot.hosts, run: runSshCommand, settings: effectiveProviderSettings });
-const nativeCommands = new NativeCommands({ hosts: () => snapshot.hosts, run: runSshCommand, settings: effectiveProviderSettings });
-const cliConversations = await new CliConversations({ filename: path.join(STATE_DIR, "cli-conversations.json"), adapter: cliAdapter, models: nativeModels, commands: nativeCommands, lifecycle: nativeSessionState(runSshCommand),
+const nativeModels = new NativeModels({ hosts: () => snapshot.hosts, run: runHostCommand, settings: effectiveProviderSettings, allowLocal: LOCAL_NATIVE_CLI_SUPPORTED });
+const nativeCommands = new NativeCommands({ hosts: () => snapshot.hosts, run: runHostCommand, settings: effectiveProviderSettings, allowLocal: LOCAL_NATIVE_CLI_SUPPORTED });
+const cliConversations = await new CliConversations({ filename: path.join(STATE_DIR, "cli-conversations.json"), adapter: cliAdapter, models: nativeModels, commands: nativeCommands, lifecycle: nativeSessionState(runHostCommand), allowLocal: LOCAL_NATIVE_CLI_SUPPORTED,
   hosts: () => snapshot.hosts, settings: effectiveProviderSettings, catalog: sessionCatalog,
   resolveAttachments: (items, host, expected) =>
     resolveUploadedAttachments(items, host, expected),

@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import { ChoiceMenu } from "@/components/choice-menu";
-import { hostRuntimeConfig } from "@/features/workspace/shared";
+import { bridgeUrl, hostRuntimeConfig } from "@/features/workspace/shared";
+import type { AntigravityAuthStatus, ProviderAuthStatusesResponse } from "@/features/workspace/types";
 import type { WorkspaceController } from "@/features/workspace/use-workspace-controller";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { NewSessionSettings } from "./NewSessionSettings";
@@ -33,8 +34,43 @@ function Dialog({ workspace: w }: { workspace: Props }) {
   const [nativeBusy, setNativeBusy] = useState(false);
   const [nativeModel, setNativeModel] = useState("");
   const [nativeEffort, setNativeEffort] = useState("");
+  const [agyProfile, setAgyProfile] = useState("");
+  const [agyAuthCache, setAgyAuthCache] = useState<{
+    host: string;
+    auth: AntigravityAuthStatus | null;
+  } | null>(null);
   const [autoSupported, setAutoSupported] = useState<boolean | null>(null);
   const [permissionMode, setPermissionMode] = useState<NativePermission>("default");
+  const localCliSupported = Boolean(
+    w.snapshot.hosts.find((item) => item.alias === LOCAL_HOST)?.nativeCliSupported,
+  );
+  const hostBlockedForCli =
+    provider !== "codex" &&
+    w.newTaskDraft.host === LOCAL_HOST &&
+    !localCliSupported;
+  const activeAgyAuth =
+    agyAuthCache?.host === w.newTaskDraft.host ? agyAuthCache.auth : null;
+  const extraAgyProfiles = activeAgyAuth?.profiles || [];
+  useEffect(() => {
+    if (provider !== "antigravity" || !w.newTaskDraft.host || hostBlockedForCli) {
+      return;
+    }
+    const host = w.newTaskDraft.host;
+    const controller = new AbortController();
+    fetch(bridgeUrl(`/api/auth/providers?host=${encodeURIComponent(host)}`), {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as ProviderAuthStatusesResponse;
+        if (!controller.signal.aborted) {
+          setAgyAuthCache({ host, auth: data.antigravity || null });
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [provider, w.newTaskDraft.host, hostBlockedForCli]);
   const attach = useComposerAttachments({
     host: w.newTaskDraft.host,
     scope: "new-session",
@@ -60,6 +96,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
         model: nativeModel,
         effort: nativeEffort,
         permissionMode,
+        ...(provider === "antigravity" && agyProfile ? { agyProfile } : {}),
       });
       attach.clear();
       w.onNativeCreated?.(entry); w.setNewTaskOpen(false);
@@ -88,7 +125,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
       <form
         onDragOver={attach.onDragOver}
         onDrop={(e) => {
-          if (provider !== "codex" && w.newTaskDraft.host === LOCAL_HOST) return;
+          if (hostBlockedForCli) return;
           attach.onDrop(e);
         }}
         onSubmit={(e) => {
@@ -108,7 +145,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
           </button>
         </header>
         <fieldset disabled={busy} className="new-conversation-fields">
-          <NewAgentChoice value={provider} onChange={(next) => { setProvider(next); setNativeModel(""); setNativeEffort(""); setPermissionMode(next === "claude" ? "auto" : "default"); }} />
+          <NewAgentChoice value={provider} onChange={(next) => { setProvider(next); setNativeModel(""); setNativeEffort(""); setAgyProfile(""); setPermissionMode(next === "claude" ? "auto" : "default"); }} />
           <ChoiceMenu
             label={tr("设备", "Device")}
             fieldLabel={tr("设备", "Device")}
@@ -118,13 +155,21 @@ function Dialog({ workspace: w }: { workspace: Props }) {
               ...w.snapshot.hosts.map((host) => ({
                 value: host.alias,
                 label: hostLabel(host.alias),
-                description: host.reachable ? tr("在线", "Online") : tr("离线", "Offline"),
-                disabled: !host.reachable || (provider !== "codex" && host.alias === LOCAL_HOST),
+                description: host.reachable || (host.alias === LOCAL_HOST && host.nativeCliSupported && provider !== "codex") ? tr("在线", "Online") : tr("离线", "Offline"),
+                disabled:
+                  host.alias === LOCAL_HOST
+                    ? provider === "codex"
+                      ? !host.reachable
+                      : !host.nativeCliSupported
+                    : !host.reachable,
               })),
             ]}
             onChange={(nextHost) => {
               const host = w.snapshot.hosts.find((item) => item.alias === nextHost);
               const runtime = hostRuntimeConfig(w.snapshot.management, nextHost);
+              setAgyProfile("");
+              setNativeModel("");
+              setNativeEffort("");
               w.setNewTaskDraft((value) => ({
                 ...value,
                 host: nextHost,
@@ -148,7 +193,31 @@ function Dialog({ workspace: w }: { workspace: Props }) {
             <NewSessionSettings workspace={w} />
           ) : (
             <div className="new-session-cli-settings">
-              <NativeModelControl onAutoSupportChange={setAutoSupported} host={w.newTaskDraft.host} provider={provider} value={nativeModel} onChange={setNativeModel} effort={nativeEffort} onEffortChange={setNativeEffort} />
+              {provider === "antigravity" && extraAgyProfiles.length > 0 && (
+                <ChoiceMenu
+                  label={tr("Antigravity 账号", "Antigravity account")}
+                  fieldLabel={tr("账号", "Account")}
+                  value={agyProfile}
+                  onChange={(next) => {
+                    setAgyProfile(next);
+                    setNativeModel("");
+                    setNativeEffort("");
+                  }}
+                  options={[
+                    {
+                      value: "",
+                      label: tr("默认账号 (agy)", "Default (agy)"),
+                      description: activeAgyAuth?.email || undefined,
+                    },
+                    ...extraAgyProfiles.map((p) => ({
+                      value: p.profile || "",
+                      label: p.profile === "acc2" ? "acc2 (agy2)" : (p.profile || ""),
+                      description: p.email || (p.loggedIn ? tr("已登录", "Signed in") : tr("未登录", "Signed out")),
+                    })),
+                  ]}
+                />
+              )}
+              <NativeModelControl onAutoSupportChange={setAutoSupported} allowLocal={localCliSupported} agyProfile={agyProfile} host={w.newTaskDraft.host} provider={provider} value={nativeModel} onChange={setNativeModel} effort={nativeEffort} onEffortChange={setNativeEffort} />
               <NativePermissionControl autoSupported={autoSupported} provider={provider} value={permissionMode} onChange={setPermissionMode} />
               <p className="native-note">
                 {permissionMode === "auto" ? "自动评估工具权限" : permissionMode === "plan" ? "先调查并生成计划" : permissionMode === "workspace" ? "允许工作区编辑；其他操作按 CLI 策略处理" : "沿用 CLI 默认权限"} · 实时流式输出与交互审批 ·{" "}
@@ -156,7 +225,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
                   ? "已配置主机启动前命令"
                   : "直连启动（可在「设置 → 远程主机」自定义启动前命令）"}
               </p>
-              {w.newTaskDraft.host === LOCAL_HOST && (
+              {hostBlockedForCli && (
                 <p className="form-error" role="alert">
                   请选择远程设备运行{" "}
                   {provider === "claude" ? "Claude" : "Antigravity"}。
@@ -172,7 +241,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
               placeholder={tr("描述你想完成的工作…（支持拖拽或粘贴附件）", "Describe the task… (drop or paste files)")}
               value={w.newTaskDraft.prompt}
               onPaste={(e) => {
-                if (provider !== "codex" && w.newTaskDraft.host === LOCAL_HOST) return;
+                if (hostBlockedForCli) return;
                 attach.onPaste(e);
               }}
               onChange={(e) =>
@@ -194,10 +263,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
           <div className="composer-attach-bar">
             <ComposerAttachmentButton
               uploading={attach.uploading}
-              disabled={
-                !w.newTaskDraft.host ||
-                (provider !== "codex" && w.newTaskDraft.host === LOCAL_HOST)
-              }
+              disabled={!w.newTaskDraft.host || hostBlockedForCli}
               onClick={attach.openPicker}
             />
             <small>
@@ -259,7 +325,7 @@ function Dialog({ workspace: w }: { workspace: Props }) {
             disabled={
               busy ||
               attach.hasUnready ||
-              (provider !== "codex" && w.newTaskDraft.host === LOCAL_HOST) ||
+              hostBlockedForCli ||
               !w.newTaskDraft.host ||
               !w.newTaskDraft.cwd.trim() ||
               (!w.newTaskDraft.prompt.trim() && attach.attachments.length === 0)

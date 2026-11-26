@@ -8,10 +8,12 @@ import {
   renderInstructionWithAttachments,
 } from "../session-attachments.mjs";
 
+import { normalizeAgyProfile } from "./native-models.mjs";
+
 /** Persistent CLI conversations. One durable spool job per turn; polling never launches work. */
 export class CliConversations {
-  constructor({ filename, adapter, hosts, settings, catalog, models, commands, lifecycle, resolveAttachments = null }) {
-    Object.assign(this, { filename, adapter, hosts, settings, catalog, models, commands, lifecycle, resolveAttachments });
+  constructor({ filename, adapter, hosts, settings, catalog, models, commands, lifecycle, resolveAttachments = null, allowLocal = false }) {
+    Object.assign(this, { filename, adapter, hosts, settings, catalog, models, commands, lifecycle, resolveAttachments, allowLocal });
     this.sessions = new Map(); this.pending = new Map(); this.writes = Promise.resolve();
   }
   async load() {
@@ -30,7 +32,7 @@ export class CliConversations {
     return this.writes;
   }
   entries() {
-    return [...this.sessions.values()].map(({ key, host, provider, sessionId, cwd, title, model, status, updatedAt, phase, subagents }) => ({
+    return [...this.sessions.values()].map(({ key, host, provider, sessionId, cwd, title, model, status, updatedAt, phase, subagents, agyProfile }) => ({
       key,
       host,
       provider,
@@ -42,8 +44,16 @@ export class CliConversations {
       updatedAt,
       phase,
       managed: true,
+      ...(agyProfile ? { profile: agyProfile } : {}),
       activeSubagents: Array.isArray(subagents) ? subagents.filter((item) => item?.status === "working").length : 0,
     }));
+  }
+  hostAvailable(host) {
+    if (host === LOCAL_HOST) {
+      if (!this.allowLocal) return false;
+      return this.hosts().some((item) => item.alias === LOCAL_HOST);
+    }
+    return this.hosts().some((item) => item.alias === host && item.reachable);
   }
   start() {
     this.timer = setInterval(() => { void this.refresh(); }, 5000);
@@ -55,7 +65,7 @@ export class CliConversations {
     if (this.refreshing) return;
     this.refreshing = true;
     try {
-      const queue = [...this.sessions.values()].filter((session) => session.job && ["launching", "running", "waiting_permission", "stopping", "finishing", "unknown"].includes(session.status) && this.hosts().some((host) => host.alias === session.host && host.reachable));
+      const queue = [...this.sessions.values()].filter((session) => session.job && ["launching", "running", "waiting_permission", "stopping", "finishing", "unknown"].includes(session.status) && this.hostAvailable(session.host));
       await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
         for (let session; (session = queue.shift());) await this.read(session.key);
       }));
@@ -72,8 +82,11 @@ export class CliConversations {
     if (!rawPrompt && !hasRawAttachments) throw new Error("请输入消息（不超过 60000 字符）");
     if (!["claude", "antigravity"].includes(provider)) throw new Error("不支持此 Agent");
     const host = session?.host || existing?.host || body.host;
-    if (host === LOCAL_HOST) throw new Error("Claude / Antigravity 网页会话暂需选择远程设备；本机历史可浏览");
-    if (!this.hosts().some((item) => item.alias === host && item.reachable)) throw new Error("设备当前离线");
+    if (host === LOCAL_HOST && !this.allowLocal) throw new Error("Claude / Antigravity 网页会话暂需选择远程设备；本机历史可浏览");
+    if (!this.hostAvailable(host)) throw new Error("设备当前离线");
+    const agyProfile = provider === "antigravity"
+      ? normalizeAgyProfile(body.agyProfile ?? session?.agyProfile ?? existing?.profile ?? "")
+      : "";
     const cwd = workingDirectory(host, session?.cwd || existing?.cwd || body.cwd);
     const scopeKey = String(body.attachmentScope || body.key || "new-session");
     const attachments = hasRawAttachments
@@ -92,11 +105,14 @@ export class CliConversations {
     if (!["auto", "default", "workspace", "plan", ...(provider === "antigravity" ? ["full"] : [])].includes(permissionMode)) throw new Error("不支持此权限设置");
     const effort = String(body.effort ?? session?.effort ?? "");
     if (effort && !["low", "medium", "high", "xhigh", "max"].includes(effort)) throw new Error("不支持此推理强度");
-    await this.models?.validate(host, provider, model);
+    await this.models?.validate(host, provider, model, agyProfile ? { agyProfile } : undefined);
     if (provider === "claude") await this.models?.validateClaudeOptions?.(host, model, effort, permissionMode);
-    if (provider === "antigravity" && this.models?.validateAgyOptions) { model = await this.models.validateAgyOptions(host, model, effort, permissionMode); config.model = model; }
+    if (provider === "antigravity" && this.models?.validateAgyOptions) {
+      model = await this.models.validateAgyOptions(host, model, effort, permissionMode, agyProfile ? { agyProfile } : undefined);
+      config.model = model;
+    }
     const resumeId = session?.sessionId || existing?.sessionId;
-    if (resumeId) await this.lifecycle?.(host, resumeId, "check", provider);
+    if (resumeId) await this.lifecycle?.(host, resumeId, "check", provider, agyProfile ? { agyProfile } : undefined);
     // Model discovery is asynchronous. Recheck the session after it so two
     // sends cannot claim the same native conversation while discovery runs.
     session = body.key ? this.sessions.get(body.key) || session : session;
@@ -105,10 +121,12 @@ export class CliConversations {
     const effectivePrompt = renderInstructionWithAttachments(rawPrompt, attachments);
     if (!session) {
       const key = existing?.key || `cli:${randomUUID()}`;
-      session = { key, host, cwd, provider, sessionId: existing?.sessionId || null, title: (rawPrompt || attachments.map((a) => a.name).join(", ")).slice(0, 120), turns: [] };
+      session = { key, host, cwd, provider, sessionId: existing?.sessionId || null, ...(agyProfile ? { agyProfile } : {}), title: (rawPrompt || attachments.map((a) => a.name).join(", ")).slice(0, 120), turns: [] };
       this.sessions.set(key, session);
+    } else if (agyProfile && !session.agyProfile) {
+      session.agyProfile = agyProfile;
     }
-    const task = { id: randomUUID(), host, cwd, provider, interactive: true, prompt: effectivePrompt, permissionMode, effort, resumeSessionId: session.sessionId || null };
+    const task = { id: randomUUID(), host, cwd, provider, interactive: true, prompt: effectivePrompt, permissionMode, effort, resumeSessionId: session.sessionId || null, ...(agyProfile ? { agyProfile } : {}) };
     session.effort = effort;
     session.permissionMode = permissionMode;
     session.model = model; session.status = "launching"; session.updatedAt = Date.now();
@@ -135,7 +153,7 @@ export class CliConversations {
     const session = this.sessions.get(body.key);
     if (!session?.job?.interactive) throw new Error("此会话没有可用交互通道");
     if (!["running", "waiting_permission"].includes(session.status)) throw new Error("会话未在运行或正在结束，请刷新后重试");
-    if (!this.hosts().some(h => h.alias === session.host && h.reachable)) throw new Error("设备当前离线，未发送控制请求");
+    if (!this.hostAvailable(session.host)) throw new Error("设备当前离线，未发送控制请求");
     const control = { id: String(body.id || randomUUID()), action: body.action };
     if (!/^[a-f0-9-]{36}$/.test(control.id)) throw new Error("请求标识无效");
     if (body.action === "message") {
@@ -170,9 +188,10 @@ export class CliConversations {
     const entry = this.sessions.get(key) || this.catalog.get(key);
     if (!entry || !["claude", "antigravity"].includes(entry.provider) || !entry.sessionId) throw new Error("仅支持已有 Claude / Antigravity 会话");
     if (["launching", "running", "waiting_permission", "stopping", "finishing", "unknown"].includes(entry.status)) throw new Error("会话仍在运行或状态待确认");
-    if (!this.hosts().some(h => h.alias === entry.host && h.reachable)) throw new Error("主机离线，未修改归档状态");
+    if (!this.hostAvailable(entry.host)) throw new Error("主机离线，未修改归档状态");
     if (!this.lifecycle) throw new Error("远端归档服务不可用");
-    const result = await this.lifecycle(entry.host, entry.sessionId, action, entry.provider);
+    const agyProfile = entry.provider === "antigravity" ? (entry.agyProfile || entry.profile || "") : "";
+    const result = await this.lifecycle(entry.host, entry.sessionId, action, entry.provider, agyProfile ? { agyProfile } : undefined);
     for (const item of this.sessions.values()) if (item.host === entry.host && item.provider === entry.provider && item.sessionId === entry.sessionId) item.phase = result.phase;
     // Update the cached catalog immediately, then reconcile against remote state.
     for (const item of this.catalog.records?.values() || []) if (item.host === entry.host && item.provider === entry.provider && item.sessionId === entry.sessionId) item.phase = result.phase;

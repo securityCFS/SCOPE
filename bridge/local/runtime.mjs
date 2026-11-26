@@ -57,6 +57,7 @@ export class LocalCodexRuntime {
       kind: "local",
       defaultCwd: this.defaultCwd,
       reachable: !!this.executable,
+      nativeCliSupported: process.platform !== "win32",
       hostname: os.hostname(),
       latencyMs: 0,
       error: this.executable

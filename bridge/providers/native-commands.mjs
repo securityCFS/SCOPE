@@ -10,9 +10,11 @@ export function normalizeCommands(items) {
   })).values()];
 }
 export class NativeCommands {
-  constructor({run, hosts, settings}) { Object.assign(this, {run, hosts, settings}); this.cache = new Map(); this.pending = new Map(); }
+  constructor({run, hosts, settings, allowLocal = false}) { Object.assign(this, {run, hosts, settings, allowLocal}); this.cache = new Map(); this.pending = new Map(); }
   async list(host, provider, cwd, force = false) {
-    if (!["claude", "antigravity"].includes(provider) || !this.hosts().some(h => h.alias === host && h.reachable) || host === "@local") throw new Error("请选择在线远程 Agent");
+    const localAllowed = this.allowLocal && host === "@local";
+    const hostEntry = this.hosts().find(h => h.alias === host);
+    if (!["claude", "antigravity"].includes(provider) || (!hostEntry?.reachable && !localAllowed) || (host === "@local" && !this.allowLocal)) throw new Error("请选择在线远程 Agent");
     cwd = workingDirectory(host, cwd);
     // ACP session/new persists an empty native conversation. A read-only menu
     // must not create one; use commands reported by an actual owned turn.

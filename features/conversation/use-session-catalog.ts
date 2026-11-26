@@ -9,7 +9,7 @@ import { activityTime, recentProjects } from "@/lib/session-activity";
 
 import type { ExternalLockInfo } from "./use-native-history";
 
-export type CatalogEntry = { phase?: string; historyVersion?: string; key: string; host: string; provider: "codex" | "claude" | "antigravity"; sessionId: string | null; cwd: string; title: string; model: string; status?: string; updatedAt: string | number; managed?: boolean; activeSubagents?: number; externalLock?: ExternalLockInfo | null };
+export type CatalogEntry = { phase?: string; historyVersion?: string; key: string; host: string; provider: "codex" | "claude" | "antigravity"; sessionId: string | null; cwd: string; title: string; model: string; status?: string; updatedAt: string | number; managed?: boolean; profile?: string; activeSubagents?: number; externalLock?: ExternalLockInfo | null };
 type Scan = { host: string; count?: number; errors: string[]; stale?: boolean };
 export async function conversationRequest<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(bridgeUrl(url), body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -52,7 +52,7 @@ export function useSessionCatalog(workspace: WorkspaceController) {
   }, [refresh, scanning]);
   const combined = useMemo(() => {
     const ids = new Set(managed.filter((entry) => entry.sessionId).map((entry) => JSON.stringify([entry.host, entry.provider, entry.sessionId])));
-    const enriched = managed.map(item => { const native = entries.find(entry => entry.host === item.host && entry.provider === item.provider && entry.sessionId === item.sessionId); const activeSubagents = Math.max(item.activeSubagents || 0, native?.activeSubagents || 0); return { ...item, historyVersion: native?.historyVersion, phase: native?.phase || item.phase, activeSubagents, externalLock: native?.externalLock || null }; });
+    const enriched = managed.map(item => { const native = entries.find(entry => entry.host === item.host && entry.provider === item.provider && entry.sessionId === item.sessionId); const activeSubagents = Math.max(item.activeSubagents || 0, native?.activeSubagents || 0); return { ...item, historyVersion: native?.historyVersion, phase: native?.phase || item.phase, profile: item.profile || native?.profile, activeSubagents, externalLock: native?.externalLock || null }; });
     return [...enriched, ...entries.filter((entry) => !ids.has(entry.key) && !managed.some((item) => item.key === entry.key))];
   }, [entries, managed]);
   const selectedHistory = workspace.selectedAgent?.historical ? workspace.selectedAgent : null;

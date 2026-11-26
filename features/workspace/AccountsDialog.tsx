@@ -556,6 +556,48 @@ export function AccountsDialog({
                   />
                 </div>
 
+                {(agyAuth?.profiles || []).map((prof) => (
+                  <div key={prof.profile || "extra"} className="current-account-card">
+                    <span>
+                      {tr(
+                        `Antigravity 独立账号 · ${prof.profile}（${hostLabel(accountHost, locale)}）`,
+                        `Antigravity Isolated Profile · ${prof.profile} (${hostLabel(accountHost, locale)})`,
+                      )}
+                    </span>
+                    <strong>
+                      {prof.loggedIn
+                        ? prof.email || tr(`已登录 (${prof.profile})`, `Signed in (${prof.profile})`)
+                        : tr("尚未登录", "Signed out")}
+                    </strong>
+                    <small>
+                      {[
+                        prof.authMethod || "Google OAuth",
+                        prof.defaultModel
+                          ? tr(`默认模型 ${prof.defaultModel}`, `Default ${prof.defaultModel}`)
+                          : "",
+                        prof.useG1Credits ? tr("已启用 G1 Credits", "G1 Credits enabled") : "",
+                        prof.profile === "acc2" ? "agy2" : `agy-profile ${prof.profile}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                    {prof.error && (
+                      <small className="account-mismatch">{prof.error}</small>
+                    )}
+                    <QuotaMeterCard
+                      quota={prof.quota || null}
+                      loading={providersLoading}
+                      error={prof.quotaError || null}
+                      compact
+                      onRefresh={() => setQuotaRefreshSeq((value) => value + 1)}
+                      emptyNote={tr(
+                        `独立配置 ${prof.profile} 暂未返回额度`,
+                        `No quota returned for profile ${prof.profile}.`,
+                      )}
+                    />
+                  </div>
+                ))}
+
                 <div className="provider-auth-guide">
                   <strong>{tr("登录 / 切换 Antigravity 账号", "Sign in / switch Antigravity account")}</strong>
                   <p>
