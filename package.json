@@ -1,6 +1,6 @@
 {
   "name": "@godchaser/scope",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "author": {
     "name": "godchaser",
     "url": "https://github.com/securityCFS"
@@ -15,8 +15,8 @@
     "url": "https://github.com/securityCFS/SCOPE/issues"
   },
   "bin": {
-    "scope": "./bin/scope.mjs",
-    "scope-workbench": "./bin/scope.mjs"
+    "scope": "bin/scope.mjs",
+    "scope-workbench": "bin/scope.mjs"
   },
   "files": [
     "bin/",

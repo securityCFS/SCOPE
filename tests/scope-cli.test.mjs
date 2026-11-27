@@ -11,7 +11,7 @@ const cli = path.join(root, "bin", "scope.mjs");
 
 test("npm package metadata exposes scope CLI and points to securityCFS/SCOPE", () => {
   assert.equal(pkg.name, "@godchaser/scope");
-  assert.equal(pkg.bin.scope, "./bin/scope.mjs");
+  assert.equal(pkg.bin.scope, "bin/scope.mjs");
   assert.match(pkg.repository.url, /securityCFS\/SCOPE\.git$/);
   assert.ok(pkg.files.includes("bin/"));
   assert.ok(pkg.files.includes("dist/"));

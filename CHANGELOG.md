@@ -2,6 +2,13 @@
 
 All notable changes to **SCOPE** (`@godchaser/scope`, formerly `scope-agent-workbench`) are documented in this file.
 
+## [0.2.5] — 2026-11-27
+
+### Fixed
+
+- **WebKit / iOS Safari Private Gateway Login (`Origin: null`)**: Switched gateway `Referrer-Policy` from `no-referrer` to `same-origin` and accepted same-origin opaque `Origin: null` login form submissions (while continuing to block cross-site requests with `403`).
+- **Normalized npm `bin` Metadata**: Normalized `package.json` `bin` paths to `bin/scope.mjs` for npm 11/12 OIDC Trusted Publishing compatibility.
+
 ## [0.2.4] — 2026-11-27
 
 ### Added
