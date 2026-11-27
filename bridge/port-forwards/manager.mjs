@@ -51,6 +51,22 @@ function forwardKey(host, remotePort) {
   return `${host}:${remotePort}`;
 }
 
+export function resolveRemoteTargetHost(bind = "") {
+  const raw = String(bind || "")
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*$/, "");
+  if (!raw || raw === "*" || raw === "0.0.0.0" || raw === "::") {
+    return "localhost";
+  }
+  if (raw === "127.0.0.1") return "127.0.0.1";
+  if (raw === "::1") return "[::1]";
+  const version = net.isIP(raw);
+  if (version === 4) return raw;
+  if (version === 6) return `[${raw}]`;
+  return "localhost";
+}
+
 function defaultCheckLocalPortFree(port) {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -509,6 +525,7 @@ export class PortForwardManager {
     const entry = {
       host,
       remotePort: parsedRemote,
+      remoteTargetHost: resolveRemoteTargetHost(discoveredMatch?.bind),
       localPort: chosenLocal,
       localHost: "127.0.0.1",
       localOnly: false,
@@ -555,7 +572,7 @@ export class PortForwardManager {
           "-o",
           "ServerAliveCountMax=3",
           "-L",
-          `127.0.0.1:${entry.localPort}:127.0.0.1:${entry.remotePort}`,
+          `127.0.0.1:${entry.localPort}:${entry.remoteTargetHost || "localhost"}:${entry.remotePort}`,
           "--",
           entry.host,
         ],

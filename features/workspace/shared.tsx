@@ -29,7 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { LOCAL_HOST } from "@/lib/execution-host";
 import {
   isRemoteBrowserLocation,
@@ -707,20 +707,34 @@ function RemoteMarkdownPortLink({
   );
   const isLocalHost = host === LOCAL_HOST;
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ host?: string }>).detail;
+      if (!detail?.host || detail.host === host) {
+        setForwardedUrl("");
+        setState((prev) => (prev === "ready" ? "idle" : prev));
+      }
+    };
+    window.addEventListener("scope:port-forwards-changed", onChanged);
+    return () =>
+      window.removeEventListener("scope:port-forwards-changed", onChanged);
+  }, [host]);
+
   async function forwardAndOpen() {
     if (state === "opening") return;
     if (isLocalHost && !isRemoteBrowserLocation()) {
       window.open(href, "_blank", "noopener,noreferrer");
       return;
     }
-    if (forwardedUrl) {
-      window.open(forwardedUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
     const popup = window.open("about:blank", "_blank");
-    if (popup) {
+    if (popup && !popup.closed) {
       try {
-        popup.opener = null;
+        popup.document.title = `正在连接端口 ${port}…`;
+        const p = popup.document.createElement("p");
+        p.style.cssText = "font:14px/1.6 system-ui,sans-serif;color:#475569;padding:24px;margin:0";
+        p.textContent = `正在打开 ${host}:${port}，请稍候…`;
+        popup.document.body.replaceChildren(p);
       } catch {
         /* ignore */
       }
@@ -751,10 +765,23 @@ function RemoteMarkdownPortLink({
         );
       }
       if (popup && !popup.closed) {
-        popup.location.href = nextUrl;
-      } else {
-        window.open(nextUrl, "_blank", "noopener,noreferrer");
+        try {
+          popup.location.replace(nextUrl);
+          try {
+            popup.opener = null;
+          } catch {
+            /* ignore */
+          }
+          return;
+        } catch {
+          try {
+            popup.close();
+          } catch {
+            /* ignore */
+          }
+        }
       }
+      window.open(nextUrl, "_blank", "noopener,noreferrer");
     } catch (openError) {
       if (popup && !popup.closed) popup.close();
       setError(

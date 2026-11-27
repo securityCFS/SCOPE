@@ -12,8 +12,12 @@ import {
 import {
   detectServiceLabel,
   filterDiscoveredPorts,
+  parseWindowsNetstatListening,
 } from "../bridge/port-forwards/probe.mjs";
-import { PortForwardManager } from "../bridge/port-forwards/manager.mjs";
+import {
+  PortForwardManager,
+  resolveRemoteTargetHost,
+} from "../bridge/port-forwards/manager.mjs";
 import { portForwardRoutes } from "../bridge/port-forwards/routes.mjs";
 
 function makeFakeChild() {
@@ -131,13 +135,13 @@ test("PortForwardManager handles local port conflicts, hardened ssh -L args, aut
     await assert.rejects(() => manager.forward({ host: "@local", remotePort: 6006 }));
     await assert.rejects(() => manager.forward({ host: "unknown-host", remotePort: 6006 }));
 
-    // Remote 3000 avoids SCOPE's reserved local 3000 -> picks 13000
+    // Remote 3000 avoids SCOPE's reserved local 3000 -> picks 13000 (uses localhost before scan so sshd tries IPv4 & IPv6)
     const res1 = await manager.forward({ host: "gpu-a", remotePort: 3000, label: "Next.js" });
     assert.equal(res1.alreadyActive, false);
     assert.equal(res1.forward.localPort, 13000);
     assert.equal(res1.forward.status, "connected");
     assert.ok(spawned[0].args.includes("-L"));
-    assert.ok(spawned[0].args.includes("127.0.0.1:13000:127.0.0.1:3000"));
+    assert.ok(spawned[0].args.includes("127.0.0.1:13000:localhost:3000"));
     assert.ok(spawned[0].args.includes("ExitOnForwardFailure=yes"));
 
     // Idempotent repeat call reuses existing tunnel
@@ -343,6 +347,107 @@ test("PortForwardManager supports @local discovery & zero-SSH exposure when allo
       allowLocal: true,
     }).load();
     assert.equal(reloaded.state("@local").autoForward, true);
+  } finally {
+    manager.stop();
+    await manager.writes;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("filterDiscoveredPorts keeps user servers in antigravity-cli directories, filters SCOPE ui-server, and parses Windows netstat", () => {
+  const filtered = filterDiscoveredPorts([
+    {
+      port: 8787,
+      bind: "127.0.0.1",
+      pid: 9001,
+      procName: "python3",
+      cmdline: "python3 -m http.server 8787 --bind 127.0.0.1 --directory /home/dev/.gemini/antigravity-cli/brain/demo/scratch/web",
+      cwd: "/home/dev",
+    },
+    {
+      port: 3000,
+      bind: "127.0.0.1",
+      pid: 9002,
+      procName: "node",
+      cmdline: "/usr/bin/node /home/dev/scope/bridge/ui-server.mjs --hostname 127.0.0.1 --port 3000",
+      cwd: "/home/dev/scope",
+    },
+    {
+      port: 39991,
+      bind: "127.0.0.1",
+      pid: 9003,
+      procName: "antigravity-language-server",
+      cmdline: "/usr/bin/antigravity-language-server --port 39991",
+      cwd: "/home/dev",
+    },
+  ]);
+
+  assert.deepEqual(
+    filtered.map((item) => ({ port: item.port, label: item.label })),
+    [{ port: 8787, label: "Python HTTP" }],
+  );
+
+  const procMap = new Map([
+    [1234, { name: "python", cmdline: "python -m http.server 8787" }],
+    [5678, { name: "node", cmdline: "node vite --port 5173" }],
+  ]);
+  const winParsed = parseWindowsNetstatListening(
+    [
+      "Active Connections",
+      "  Proto  Local Address          Foreign Address        State           PID",
+      "  TCP    127.0.0.1:8787         0.0.0.0:0              LISTENING       1234",
+      "  TCP    [::1]:5173             [::]:0                 LISTENING       5678",
+      "  TCP    127.0.0.1:8787         127.0.0.1:54321        ESTABLISHED     1234",
+    ].join("\r\n"),
+    procMap,
+  );
+  assert.deepEqual(
+    winParsed.map((item) => ({ port: item.port, bind: item.bind, procName: item.procName })),
+    [
+      { port: 8787, bind: "127.0.0.1", procName: "python" },
+      { port: 5173, bind: "::1", procName: "node" },
+    ],
+  );
+});
+
+test("resolveRemoteTargetHost supports IPv4, IPv6 loopback, interface IP, and wildcard/unknown fallback", async () => {
+  assert.equal(resolveRemoteTargetHost("127.0.0.1"), "127.0.0.1");
+  assert.equal(resolveRemoteTargetHost("::1"), "[::1]");
+  assert.equal(resolveRemoteTargetHost("[::1]"), "[::1]");
+  assert.equal(resolveRemoteTargetHost("10.120.8.53"), "10.120.8.53");
+  assert.equal(resolveRemoteTargetHost("0.0.0.0"), "localhost");
+  assert.equal(resolveRemoteTargetHost("*"), "localhost");
+  assert.equal(resolveRemoteTargetHost("::"), "localhost");
+  assert.equal(resolveRemoteTargetHost(""), "localhost");
+
+  const dir = mkdtempSync(path.join(tmpdir(), "scope-port-binds-"));
+  const spawned = [];
+  const manager = new PortForwardManager({
+    stateDir: dir,
+    getHost: () => ({ alias: "gpu-v6", reachable: true }),
+    runSsh: async () => ({ code: 0, stdout: "", stderr: "" }),
+    discoverPorts: async () => [
+      { port: 5173, bind: "::1", pid: 10, procName: "node", label: "Vite", cmdline: "vite", cwd: "/app", inProject: true },
+      { port: 4142, bind: "10.120.8.53", pid: 11, procName: "ray", label: "Ray", cmdline: "ray", cwd: "/app", inProject: false },
+    ],
+    checkLocalPortFree: async () => true,
+    probeTcpListening: async () => true,
+    spawnProcess: (_bin, args) => {
+      const child = makeFakeChild();
+      spawned.push(args);
+      return child;
+    },
+  });
+
+  try {
+    await manager.load();
+    await manager.scan("gpu-v6", { force: true });
+    await manager.forward({ host: "gpu-v6", remotePort: 5173 });
+    await manager.forward({ host: "gpu-v6", remotePort: 4142 });
+    await manager.forward({ host: "gpu-v6", remotePort: 9998 });
+    assert.ok(spawned[0].includes("127.0.0.1:5173:[::1]:5173"));
+    assert.ok(spawned[1].includes("127.0.0.1:4142:10.120.8.53:4142"));
+    assert.ok(spawned[2].includes("127.0.0.1:9998:localhost:9998"));
   } finally {
     manager.stop();
     await manager.writes;

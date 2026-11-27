@@ -151,21 +151,38 @@ export function PortForwardsPopover({
 
   const openPortWithGesture = async (port: number, label?: string) => {
     const popup = window.open("about:blank", "_blank");
-    if (popup) {
+    if (popup && !popup.closed) {
       try {
-        popup.opener = null;
+        popup.document.title = tr(`正在连接端口 ${port}…`, `Connecting to port ${port}…`);
+        const p = popup.document.createElement("p");
+        p.style.cssText = "font:14px/1.6 system-ui,sans-serif;color:#475569;padding:24px;margin:0";
+        p.textContent = tr(`正在打开端口 ${port}，请稍候…`, `Opening port ${port}, please wait…`);
+        popup.document.body.replaceChildren(p);
       } catch {
-        /* ignore */
+        /* ignore cross-origin or restricted blank document */
       }
     }
     const fwd = await forwardPort(port, label);
     if (fwd?.localPort) {
       const nextUrl = resolveOpenUrl(fwd.localPort);
       if (popup && !popup.closed) {
-        popup.location.href = nextUrl;
-      } else {
-        window.open(nextUrl, "_blank", "noopener,noreferrer");
+        try {
+          popup.location.replace(nextUrl);
+          try {
+            popup.opener = null;
+          } catch {
+            /* ignore */
+          }
+          return;
+        } catch {
+          try {
+            popup.close();
+          } catch {
+            /* ignore */
+          }
+        }
       }
+      window.open(nextUrl, "_blank", "noopener,noreferrer");
     } else if (popup && !popup.closed) {
       popup.close();
     }

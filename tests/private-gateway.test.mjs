@@ -14,6 +14,7 @@ import {
   parsePortOrigin,
   parsePortProxyPath,
   revokeTrustedDevice,
+  rewritePortProxyCss,
   rewritePortProxyHtml,
   rewritePortProxyLocation,
 } from "../bridge/private-gateway.mjs";
@@ -894,4 +895,126 @@ test("parsePortOrigin accepts bare https origins and rejects unsafe values", () 
   for (const bad of ["http://scope-ports.example.com", "https://x.example.com/path", "https://x.example.com/?a=1", "https://u:p@x.example.com", "not a url"]) {
     assert.throws(() => parsePortOrigin(bad), Error, bad);
   }
+});
+
+test("port proxy rewrites CSS urls, remapped remotePort redirects, runtime shim, and diagnostic HTML errors", async (t) => {
+  assert.equal(
+    rewritePortProxyLocation("http://127.0.0.1:3000/dashboard", 13000, 3000),
+    "/scope-port/13000/dashboard",
+  );
+  assert.equal(
+    rewritePortProxyCss(
+      "body{background:url('/img/bg.png');font:url(/fonts/a.woff2);keep:url(data:image/png;base64,AAA);ext:url(//cdn.example.com/x.png);done:url(/scope-port/8787/ok.png)}",
+      8787,
+    ),
+    "body{background:url('/scope-port/8787/img/bg.png');font:url(/scope-port/8787/fonts/a.woff2);keep:url(data:image/png;base64,AAA);ext:url(//cdn.example.com/x.png);done:url(/scope-port/8787/ok.png)}",
+  );
+
+  const withShim = rewritePortProxyHtml(
+    '<html><head><title>SPA</title><style>.x{background:url("/bg.svg")}</style></head><body><script src="/app.js"></script></body></html>',
+    5173,
+  );
+  assert.match(withShim, /<base href="\/scope-port\/5173\/"><title>SPA<\/title>/);
+  assert.match(withShim, /url\("\/scope-port\/5173\/bg\.svg"\)/);
+  assert.match(withShim, /data-scope-port-shim/);
+  assert.equal(
+    rewritePortProxyHtml("<html><head></head><body></body></html>", 5173, {
+      injectRuntimeShim: false,
+    }).includes("data-scope-port-shim"),
+    false,
+  );
+
+  let seenHost = "";
+  const app = http.createServer((request, response) => {
+    seenHost = request.headers.host || "";
+    if (request.url === "/style.css") {
+      response.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+      response.end('body{background:url("/static/bg.png")}');
+      return;
+    }
+    if (request.url === "/drop") {
+      request.socket.destroy();
+      return;
+    }
+    response.writeHead(302, { Location: "http://localhost:3000/home" });
+    response.end();
+  });
+  const appTarget = await listen(app);
+  const appPort = Number(new URL(appTarget).port);
+  const bridge = http.createServer((request, response) => {
+    if (request.url === "/api/port-forwards") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          forwards: [
+            {
+              host: "gpu-a",
+              remotePort: 3000,
+              localPort: appPort,
+              localHost: "127.0.0.1",
+              status: "connected",
+            },
+          ],
+        }),
+      );
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  const ui = http.createServer((_req, res) => res.end("ui"));
+  const uiTarget = await listen(ui);
+  const bridgeTarget = await listen(bridge);
+  const token = "diagnostic-and-css-rewrite-test-token-over-32-chars";
+  const gateway = createPrivateGateway({ token, uiTarget, bridgeTarget });
+  const gatewayUrl = await listen(gateway);
+
+  t.after(async () => {
+    await Promise.all([close(gateway), close(ui), close(bridge), close(app)]);
+  });
+
+  const login = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  const cookie = (login.headers.get("set-cookie") || "").split(";", 1)[0];
+
+  const cssRes = await fetch(`${gatewayUrl}/scope-port/${appPort}/style.css`, {
+    headers: { cookie },
+  });
+  assert.equal(cssRes.status, 200);
+  assert.equal(seenHost, "127.0.0.1:3000");
+  assert.match(await cssRes.text(), new RegExp(`url\\("/scope-port/${appPort}/static/bg\\.png"\\)`));
+
+  const redirRes = await fetch(`${gatewayUrl}/scope-port/${appPort}/`, {
+    headers: { cookie },
+    redirect: "manual",
+  });
+  assert.equal(redirRes.status, 302);
+  assert.equal(redirRes.headers.get("location"), `/scope-port/${appPort}/home`);
+
+  // Browser navigation to dropped upstream returns actionable HTML diagnostic page
+  const dropHtml = await fetch(`${gatewayUrl}/scope-port/${appPort}/drop`, {
+    headers: { cookie, accept: "text/html,application/xhtml+xml" },
+  });
+  assert.equal(dropHtml.status, 502);
+  assert.match(dropHtml.headers.get("content-type") || "", /text\/html/);
+  assert.match(await dropHtml.text(), /未能返回有效 HTTP 响应/);
+
+  // API client (no text/html Accept) still receives JSON
+  const dropJson = await fetch(`${gatewayUrl}/scope-port/${appPort}/drop`, {
+    headers: { cookie, accept: "application/json" },
+  });
+  assert.equal(dropJson.status, 502);
+  assert.match(dropJson.headers.get("content-type") || "", /application\/json/);
+
+  // Browser navigation to unopened port returns helpful HTML diagnostic page
+  const closedHtml = await fetch(`${gatewayUrl}/scope-port/59999/`, {
+    headers: { cookie, accept: "text/html" },
+  });
+  assert.equal(closedHtml.status, 403);
+  assert.match(closedHtml.headers.get("content-type") || "", /text\/html/);
+  assert.match(await closedHtml.text(), /尚未在 SCOPE 中开放/);
 });

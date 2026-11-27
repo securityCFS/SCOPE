@@ -3125,7 +3125,7 @@ const portForwardManager = await new PortForwardManager({
   stateDir: STATE_DIR,
   getHost: (alias) => snapshot.hosts.find((host) => host.alias === alias),
   runSsh: runHostCommand,
-  allowLocal: LOCAL_NATIVE_CLI_SUPPORTED,
+  allowLocal: true,
 }).load();
 const handlePortForwards = portForwardRoutes({
   portForwards: portForwardManager,

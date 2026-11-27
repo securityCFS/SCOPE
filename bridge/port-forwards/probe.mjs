@@ -1,9 +1,15 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { LOCAL_HOST } from "../../lib/execution-host.js";
+
+const execFileAsync = promisify(execFile);
+
 const IGNORED_PORTS = new Set([22, 53, 2019, 4815, 4820, 4822, 4880, 4922]);
 
 const IGNORED_PROC_PATTERNS = [
   /^sshd(?:-session)?$/i,
-  /^ssh$/i,
-  /^cloudflared$/i,
+  /^ssh(?:\.exe)?$/i,
+  /^cloudflared(?:\.exe)?$/i,
   /^systemd-/i,
   /^cupsd$/i,
   /^rpcbind$/i,
@@ -11,20 +17,24 @@ const IGNORED_PROC_PATTERNS = [
   /^chronyd$/i,
   /^ntpd$/i,
   /^dnsmasq$/i,
-  /^tailscaled$/i,
+  /^tailscaled(?:\.exe)?$/i,
   /^containerd/i,
   /^dbus-daemon$/i,
   /^code-[0-9a-f]+$/i,
-  /^agy$/i,
-  /^codex$/i,
+  /^agy(?:\.exe)?$/i,
+  /^antigravity(?:[-_].*)?(?:\.exe)?$/i,
+  /^codex(?:\.exe)?$/i,
   /^clash/i,
-  /^mihomo$/i,
-  /^v2ray$/i,
-  /^xray$/i,
-  /^sing-box$/i,
-  /^privoxy$/i,
+  /mihomo(?:\.exe)?$/i,
+  /^v2ray(?:\.exe)?$/i,
+  /^xray(?:\.exe)?$/i,
+  /^sing-box(?:\.exe)?$/i,
+  /^privoxy(?:\.exe)?$/i,
   /^tinyproxy$/i,
-  /^qq$/i,
+  /^(?:qq|weixin|wechat)(?:\.exe)?$/i,
+  /^language_server/i,
+  /^zerotier/i,
+  /^(?:System|Idle|svchost|lsass|services|wininit|spoolsv|MsMpEng|SearchHost|Dashlane|OneDrive|WUDFHost|vmms|AppleMobileDeviceService)(?:\.exe)?$/i,
 ];
 
 const INTERNAL_CMD_PATTERNS = [
@@ -35,7 +45,8 @@ const INTERNAL_CMD_PATTERNS = [
   /\btypescript-language-server\b/i,
   /\bapp-server\b/i,
   /\bvscode-server\b/i,
-  /\bantigravity\b/i,
+  /(?:^|[\s/\\])(?:antigravity|agy)(?:-language-server|-server|-daemon|-lsp)(?:\s|$)/i,
+  /(?:^|[\s/\\])bridge[/\\](?:ui-server|server|private-start)\.mjs(?:\s|$)/i,
 ];
 
 const KNOWN_DEV_PROC_PATTERN =
@@ -311,6 +322,57 @@ def loopback_ssh_config_ports():
         pass
     return ports
 
+if not entries:
+    # macOS / BSD fallback via lsof when neither ss nor /proc/net/tcp is present
+    try:
+        out = subprocess.check_output(
+            ["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fn", "-Fp", "-Fc"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        cur_pid = None
+        cur_cmd = ""
+        for line in out.splitlines():
+            if not line:
+                continue
+            tag, val = line[0], line[1:]
+            if tag == "p" and val.isdigit():
+                cur_pid = int(val)
+                cur_cmd = ""
+            elif tag == "c":
+                cur_cmd = val.strip()
+            elif tag == "n":
+                addr = val.strip()
+                if addr.startswith("["):
+                    m = re.match(r"^\\[([^\\]]+)\\]:(\\d+)$", addr)
+                    bind, port_s = (m.group(1), m.group(2)) if m else ("", "")
+                else:
+                    idx = addr.rfind(":")
+                    bind, port_s = (addr[:idx], addr[idx+1:]) if idx >= 0 else ("", "")
+                if port_s.isdigit():
+                    cmdline = ""
+                    if cur_pid:
+                        try:
+                            cmdline = subprocess.check_output(
+                                ["ps", "-p", str(cur_pid), "-o", "command="],
+                                text=True,
+                                stderr=subprocess.DEVNULL,
+                                timeout=2,
+                            ).strip()
+                        except Exception:
+                            pass
+                    entries.append({
+                        "port": int(port_s),
+                        "bind": bind or "127.0.0.1",
+                        "pid": cur_pid,
+                        "procName": cur_cmd,
+                        "cmdline": cmdline[:240],
+                        "cwd": "",
+                    })
+    except Exception:
+        pass
+
 ssh_tunnel_ports = loopback_ssh_config_ports()
 entries = [
     e for e in entries
@@ -320,12 +382,104 @@ print(json.dumps({"ports": entries}))
 `.trim();
 }
 
+export function parseWindowsNetstatListening(netstatText = "", procMap = new Map()) {
+  const entries = [];
+  for (const rawLine of String(netstatText || "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || !/^TCP\s+/i.test(line)) continue;
+    const cols = line.split(/\s+/);
+    if (cols.length < 5) continue;
+    const state = cols[3].toUpperCase();
+    if (state !== "LISTENING") continue;
+    const local = cols[1];
+    let bind = "";
+    let portStr = "";
+    if (local.startsWith("[")) {
+      const m = /^\[([^\]]+)\]:(\d+)$/.exec(local);
+      if (m) {
+        bind = m[1];
+        portStr = m[2];
+      }
+    } else {
+      const idx = local.lastIndexOf(":");
+      if (idx >= 0) {
+        bind = local.slice(0, idx);
+        portStr = local.slice(idx + 1);
+      }
+    }
+    const port = Number(portStr);
+    const pid = Number(cols[4]);
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) continue;
+    const info = Number.isInteger(pid) && pid > 0 ? procMap.get(pid) : null;
+    entries.push({
+      port,
+      bind: bind || "127.0.0.1",
+      pid: Number.isInteger(pid) && pid > 0 ? pid : null,
+      procName: info?.name || "",
+      cmdline: (info?.cmdline || "").slice(0, 240),
+      cwd: "",
+    });
+  }
+  return entries;
+}
+
+async function readWindowsProcessMap(pids = []) {
+  const procMap = new Map();
+  const wanted = new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0));
+  if (!wanted.size) return procMap;
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-Process | Select-Object Id,ProcessName | ConvertTo-Json -Compress",
+      ],
+      { timeout: 4_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
+    );
+    const parsed = stdout.trim() ? JSON.parse(stdout.trim()) : [];
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    for (const row of rows) {
+      const pid = Number(row?.Id);
+      if (!wanted.has(pid)) continue;
+      procMap.set(pid, {
+        name: String(row?.ProcessName || "").replace(/\.exe$/i, ""),
+        cmdline: "",
+      });
+    }
+    if (procMap.size > 0) return procMap;
+  } catch {
+    /* ignore */
+  }
+  return procMap;
+}
+
+async function discoverLocalWindowsPorts({ cwd = "", excludePorts = null } = {}) {
+  const { stdout: netstatOut } = await execFileAsync(
+    "netstat.exe",
+    ["-ano", "-p", "tcp"],
+    {
+      timeout: 5_000,
+      maxBuffer: 2 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  const initial = parseWindowsNetstatListening(netstatOut);
+  const procMap = await readWindowsProcessMap(initial.map((item) => item.pid));
+  const raw = parseWindowsNetstatListening(netstatOut, procMap);
+  return filterDiscoveredPorts(raw, { cwd, excludePorts });
+}
+
 export async function discoverRemotePorts({
   host,
   cwd = "",
   run,
   excludePorts = null,
 }) {
+  if (host === LOCAL_HOST && process.platform === "win32") {
+    return discoverLocalWindowsPorts({ cwd, excludePorts });
+  }
   const result = await run(
     host,
     "python3 -",

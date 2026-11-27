@@ -554,13 +554,7 @@ export function NativeConversation({
                 : ""}
           </small>
         </div>
-        {(isExternalLocked ||
-          entry.host !== LOCAL_HOST ||
-          (subagentPrefs.showHeaderBadge &&
-            entry.provider === "claude" &&
-            totalSubagentsCount > 0) ||
-          (onAccounts && !isLocalReadOnly)) && (
-          <div className="conversation-header-actions">
+        <div className="conversation-header-actions">
             {isExternalLocked && (
               <span
                 className="native-lock-pill"
@@ -580,13 +574,11 @@ export function NativeConversation({
                 )}
               </span>
             )}
-            {(entry.host !== LOCAL_HOST || localCliSupported) && (
-              <PortForwardsPopover
-                host={entry.host}
-                cwd={entry.cwd}
-                allowLocal={localCliSupported}
-              />
-            )}
+            <PortForwardsPopover
+              host={entry.host}
+              cwd={entry.cwd}
+              allowLocal
+            />
             {subagentPrefs.showHeaderBadge &&
               entry.provider === "claude" &&
               totalSubagentsCount > 0 && (
@@ -625,7 +617,6 @@ export function NativeConversation({
               </button>
             )}
           </div>
-        )}
       </header>
       <div className="native-messages-wrap">
         <div

@@ -1,5 +1,5 @@
 "use client";
-import { LOCAL_HOST, hostLabel } from "@/lib/execution-host";
+import { hostLabel } from "@/lib/execution-host";
 import { useMemo, useState } from "react";
 import { Bot, Info, LoaderCircle, MessageSquare, Pin, Plus, Square } from "lucide-react";
 import { SubagentWorkflowDrawer } from "@/components/subagent-workflow-drawer";
@@ -171,10 +171,7 @@ export function SessionConversation({
           <PortForwardsPopover
             host={agent.host}
             cwd={agent.cwd}
-            allowLocal={Boolean(
-              workspace.snapshot.hosts.find((item) => item.alias === LOCAL_HOST)
-                ?.nativeCliSupported,
-            )}
+            allowLocal
           />
           <button
             type="button"

@@ -92,12 +92,51 @@ function stripGatewayCookies(header = "") {
 
 function portProxySecurityHeaders(response) {
   response.setHeader("Cache-Control", "no-store");
-  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Referrer-Policy", "same-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "SAMEORIGIN");
 }
 
-export function rewritePortProxyLocation(location, port) {
+function acceptsHtml(request) {
+  const accept = String(request.headers.accept || "").toLowerCase();
+  return accept.includes("text/html");
+}
+
+function sendPortProxyDiagnosticHtml(response, statusCode, { title, summary, detail = "", tips = [] }) {
+  portProxySecurityHeaders(response);
+  response.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
+  const tipsHtml = tips.length
+    ? `<ul>${tips.map((tip) => `<li>${escapeHtml(tip)}</li>`).join("")}</ul>`
+    : "";
+  response.end(`<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)} · SCOPE</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;background:#f8fafc;color:#0f172a;font:15px/1.6 system-ui,-apple-system,sans-serif}
+main{width:min(560px,100%);background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:26px 24px;box-shadow:0 12px 32px rgba(15,23,42,.08)}
+.code{display:inline-block;padding:2px 8px;border-radius:999px;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;font-size:12px;font-weight:700;margin-bottom:10px}
+h1{margin:0 0 8px;font-size:20px;line-height:1.3}
+p{margin:0 0 12px;color:#334155}
+pre{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#f1f5f9;color:#475569;font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow:auto;white-space:pre-wrap;word-break:break-word}
+ul{margin:0 0 18px;padding-left:20px;color:#475569;font-size:13.5px}
+li{margin-bottom:6px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+a,button{appearance:none;border-radius:10px;padding:9px 15px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none}
+button{border:0;background:#0f172a;color:#fff}
+a{border:1px solid #cbd5e1;background:#fff;color:#0f172a}
+</style>
+<main>
+<span class="code">HTTP ${statusCode}</span>
+<h1>${escapeHtml(title)}</h1>
+<p>${escapeHtml(summary)}</p>
+${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}
+${tipsHtml}
+<div class="actions"><button type="button" onclick="location.reload()">重试连接</button><a href="/">返回 SCOPE 工作台</a></div>
+</main>`);
+}
+
+export function rewritePortProxyLocation(location, port, remotePort = port) {
   if (typeof location !== "string" || !location) return location;
   const prefix = `/scope-port/${port}`;
   if (location.startsWith("/") && !location.startsWith("//")) {
@@ -115,7 +154,10 @@ export function rewritePortProxyLocation(location, port) {
           ? 443
           : 80;
       const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-      if (isLoopbackHostname(host) && parsedPort === port) {
+      if (
+        isLoopbackHostname(host) &&
+        (parsedPort === port || (remotePort && parsedPort === Number(remotePort)))
+      ) {
         return `${prefix}${parsed.pathname || "/"}${parsed.search || ""}${parsed.hash || ""}`;
       }
     }
@@ -123,6 +165,15 @@ export function rewritePortProxyLocation(location, port) {
     /* keep relative or non-URL locations untouched */
   }
   return location;
+}
+
+export function rewritePortProxyCss(css, port) {
+  if (typeof css !== "string" || !css) return css;
+  const prefix = `/scope-port/${port}`;
+  return css.replace(
+    /url\(\s*(["']?)\/(?!\/|scope-port\/)([^)"']*)\1\s*\)/gi,
+    (_m, quote, rest) => `url(${quote}${prefix}/${rest}${quote})`,
+  );
 }
 
 function rewritePortProxySetCookie(setCookie, port) {
@@ -161,7 +212,16 @@ function rewritePortProxySetCookie(setCookie, port) {
   return items.length ? items : null;
 }
 
-export function rewritePortProxyHtml(html, port) {
+function buildPortProxyRuntimeShim(port) {
+  const prefix = `/scope-port/${port}`;
+  return `<script data-scope-port-shim>(function(){var P=${JSON.stringify(prefix)};function rw(u){if(typeof u!=="string"||!u)return u;if(u.indexOf(P+"/")===0||u===P)return u;if(u[0]==="/"&&u[1]!=="/")return P+u;try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.origin+P+x.pathname+x.search+x.hash;}if((x.protocol==="ws:"||x.protocol==="wss:")&&x.host===location.host&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.protocol+"//"+x.host+P+x.pathname+x.search+x.hash;}}catch(e){}return u;}var f=window.fetch;if(typeof f==="function"){window.fetch=function(i,n){if(typeof i==="string"){i=rw(i);}else if(i&&typeof Request!=="undefined"&&i instanceof Request){var ni=rw(i.url);if(ni!==i.url)i=new Request(ni,i);}return f.call(this,i,n);};}var X=window.XMLHttpRequest;if(X&&X.prototype&&X.prototype.open){var xo=X.prototype.open;X.prototype.open=function(m,u){var a=[].slice.call(arguments);if(typeof u==="string")a[1]=rw(u);return xo.apply(this,a);};}var W=window.WebSocket;if(typeof W==="function"){var SW=function(u,p){var nu=typeof u==="string"?rw(u):u;return p!==undefined?new W(nu,p):new W(nu);};SW.prototype=W.prototype;SW.CONNECTING=W.CONNECTING;SW.OPEN=W.OPEN;SW.CLOSING=W.CLOSING;SW.CLOSED=W.CLOSED;window.WebSocket=SW;}var E=window.EventSource;if(typeof E==="function"){var SE=function(u,c){return new E(typeof u==="string"?rw(u):u,c);};SE.prototype=E.prototype;window.EventSource=SE;}})();</script>`;
+}
+
+export function rewritePortProxyHtml(
+  html,
+  port,
+  { injectRuntimeShim = true } = {},
+) {
   if (typeof html !== "string" || !html) return html;
   const prefix = `/scope-port/${port}`;
   let out = html;
@@ -182,6 +242,20 @@ export function rewritePortProxyHtml(html, port) {
     /(\b(?:href|src|action|poster)\s*=\s*)(["'])\/(?!\/|scope-port\/)/gi,
     `$1$2${prefix}/`,
   );
+  out = out.replace(
+    /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
+    (_m, open, body, close) => `${open}${rewritePortProxyCss(body, port)}${close}`,
+  );
+  if (injectRuntimeShim && !out.includes("data-scope-port-shim")) {
+    const shim = buildPortProxyRuntimeShim(port);
+    if (/<script\b/i.test(out)) {
+      out = out.replace(/<script\b/i, (tag) => `${shim}${tag}`);
+    } else if (/<\/head>/i.test(out)) {
+      out = out.replace(/<\/head>/i, (tag) => `${shim}${tag}`);
+    } else {
+      out = `${out}${shim}`;
+    }
+  }
   return out;
 }
 
@@ -556,13 +630,22 @@ function proxyRequest(
   request.pipe(upstream);
 }
 
+function upstreamHostHeaderForPort(target, remotePort) {
+  const parsed = Number(remotePort);
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 65_535 && parsed !== Number(target.port)) {
+    const host = target.hostname.includes(":") ? `[${target.hostname.replace(/^\[|\]$/g, "")}]` : target.hostname;
+    return parsed === 80 ? host : `${host}:${parsed}`;
+  }
+  return target.host;
+}
+
 function sanitizePortProxyHeaders(
   request,
   target,
   prefix,
-  { isUpgrade = false } = {},
+  { isUpgrade = false, upstreamHostHeader = target.host } = {},
 ) {
-  const forwarded = { ...request.headers, host: target.host };
+  const forwarded = { ...request.headers, host: upstreamHostHeader };
   const keptCookie = stripGatewayCookies(request.headers.cookie || "");
   if (keptCookie) forwarded.cookie = keptCookie;
   else delete forwarded.cookie;
@@ -581,7 +664,7 @@ function sanitizePortProxyHeaders(
     try {
       const originHost = new URL(request.headers.origin).host;
       if (originHost === request.headers.host) {
-        forwarded.origin = `http://${target.host}`;
+        forwarded.origin = `http://${upstreamHostHeader}`;
       } else {
         delete forwarded.origin;
       }
@@ -594,7 +677,7 @@ function sanitizePortProxyHeaders(
       const ref = new URL(request.headers.referer);
       if (ref.host === request.headers.host && ref.pathname.startsWith(prefix)) {
         const stripped = ref.pathname.slice(prefix.length) || "/";
-        forwarded.referer = `http://${target.host}${stripped}${ref.search}`;
+        forwarded.referer = `http://${upstreamHostHeader}${stripped}${ref.search}`;
       } else {
         delete forwarded.referer;
       }
@@ -605,15 +688,44 @@ function sanitizePortProxyHeaders(
   return forwarded;
 }
 
-function proxyPortRequest(request, response, target, upstreamPath, port) {
+function sendPortProxyUpstreamError(request, response, port, message) {
+  if (acceptsHtml(request)) {
+    sendPortProxyDiagnosticHtml(response, 502, {
+      title: `端口 ${port} 的服务未能返回有效 HTTP 响应`,
+      summary: `SCOPE 网关已接通转发通道，但目标服务（127.0.0.1:${port}）提前断开了连接或未响应 HTTP 协议。`,
+      detail: message,
+      tips: [
+        "如果服务是在 Agent 会话里后台启动的（例如 python3 -m http.server），终端关闭后 stdout/stderr 管道失效会导致每次请求直接断连；请以 </dev/null >/dev/null 2>&1 方式重启服务。",
+        "确认远端或本机进程仍在运行，且该端口提供的是 HTTP 服务（非纯 TCP / VNC / HTTPS-only 端口）。",
+        "确认服务监听在 127.0.0.1、::1 或 0.0.0.0 上，然后在 SCOPE 端口面板刷新状态后重试。",
+      ],
+    });
+    return;
+  }
+  portProxySecurityHeaders(response);
+  response.writeHead(502, { "Content-Type": "application/json" });
+  response.end(JSON.stringify({ error: message }));
+}
+
+function proxyPortRequest(
+  request,
+  response,
+  target,
+  upstreamPath,
+  port,
+  { remotePort = port } = {},
+) {
   const prefix = `/scope-port/${port}`;
+  const upstreamHostHeader = upstreamHostHeaderForPort(target, remotePort);
   const upstream = http.request(
     {
       hostname: target.hostname.replace(/^\[|\]$/g, ""),
       port: target.port,
       method: request.method,
       path: upstreamPath,
-      headers: sanitizePortProxyHeaders(request, target, prefix),
+      headers: sanitizePortProxyHeaders(request, target, prefix, {
+        upstreamHostHeader,
+      }),
     },
     (upstreamResponse) => {
       const headers = { ...upstreamResponse.headers };
@@ -626,7 +738,11 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
         statusCode < 400 &&
         typeof headers.location === "string"
       ) {
-        headers.location = rewritePortProxyLocation(headers.location, port);
+        headers.location = rewritePortProxyLocation(
+          headers.location,
+          port,
+          remotePort,
+        );
       }
       if (headers["set-cookie"]) {
         const scoped = rewritePortProxySetCookie(headers["set-cookie"], port);
@@ -634,11 +750,15 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
         else delete headers["set-cookie"];
       }
       const contentType = String(headers["content-type"] || "").toLowerCase();
-      const shouldRewriteHtml =
+      const isHtml =
         request.method !== "HEAD" &&
         contentType.includes("text/html") &&
         !headers["content-encoding"];
-      if (!shouldRewriteHtml) {
+      const isCss =
+        request.method !== "HEAD" &&
+        contentType.includes("text/css") &&
+        !headers["content-encoding"];
+      if (!isHtml && !isCss) {
         portProxySecurityHeaders(response);
         response.writeHead(statusCode, headers);
         upstreamResponse.pipe(response);
@@ -670,8 +790,12 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
           response.end();
           return;
         }
-        const rawHtml = Buffer.concat(chunks).toString("utf8");
-        const rewritten = rewritePortProxyHtml(rawHtml, port);
+        const rawText = Buffer.concat(chunks).toString("utf8");
+        const rewritten = isHtml
+          ? rewritePortProxyHtml(rawText, port, {
+              injectRuntimeShim: !headers["content-security-policy"],
+            })
+          : rewritePortProxyCss(rawText, port);
         const body = Buffer.from(rewritten, "utf8");
         delete headers["transfer-encoding"];
         headers["content-length"] = String(body.length);
@@ -682,12 +806,11 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
       upstreamResponse.on("error", (error) => {
         if (response.headersSent) response.destroy(error);
         else {
-          portProxySecurityHeaders(response);
-          response.writeHead(502, { "Content-Type": "application/json" });
-          response.end(
-            JSON.stringify({
-              error: `Proxied local service error: ${error.message}`,
-            }),
+          sendPortProxyUpstreamError(
+            request,
+            response,
+            port,
+            `Proxied local service error: ${error.message}`,
           );
         }
       });
@@ -698,12 +821,11 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
       response.destroy(error);
       return;
     }
-    portProxySecurityHeaders(response);
-    response.writeHead(502, { "Content-Type": "application/json" });
-    response.end(
-      JSON.stringify({
-        error: `Proxied local service unavailable: ${error.message}`,
-      }),
+    sendPortProxyUpstreamError(
+      request,
+      response,
+      port,
+      `Proxied local service unavailable: ${error.message}`,
     );
   });
   request.pipe(upstream);
@@ -797,7 +919,14 @@ function fetchAllowedPortsFromBridge(bridge, blockedPorts) {
               }
               const localHost =
                 entry?.localHost === "::1" ? "::1" : "127.0.0.1";
-              allowedMap.set(localPort, { port: localPort, localHost });
+              const parsedRemote = Number(entry?.remotePort);
+              const remotePort =
+                Number.isInteger(parsedRemote) &&
+                parsedRemote >= 1 &&
+                parsedRemote <= 65_535
+                  ? parsedRemote
+                  : localPort;
+              allowedMap.set(localPort, { port: localPort, remotePort, localHost });
             }
             resolve(allowedMap);
           } catch {
@@ -1321,6 +1450,17 @@ export function createPrivateGateway({
     }
     const targetInfo = await resolveAllowedPortTarget(parsed.port);
     if (!targetInfo) {
+      if (acceptsHtml(request)) {
+        sendPortProxyDiagnosticHtml(response, 403, {
+          title: `端口 ${parsed.port} 尚未在 SCOPE 中开放`,
+          summary: `为了安全，SCOPE 私有网关仅放行你在工作台「端口」面板中显式开放或 SSH 转发的端口。`,
+          tips: [
+            `回到 SCOPE 工作台，点击右上角「端口」按钮，确认端口 ${parsed.port} 已处于「已开放 / 已转发」状态。`,
+            "如果刚刚重启过 SCOPE，请重新点击对应端口的「开放打开 / 转发打开」。",
+          ],
+        });
+        return;
+      }
       securityHeaders(response);
       response.writeHead(403, { "Content-Type": "application/json" });
       response.end(
@@ -1344,6 +1484,7 @@ export function createPrivateGateway({
       loopbackUrlForPort(targetInfo.localHost, targetInfo.port),
       `${parsed.suffix}${requestUrl.search}`,
       parsed.port,
+      { remotePort: targetInfo.remotePort },
     );
   };
 
@@ -1724,7 +1865,13 @@ export function createPrivateGateway({
         request,
         target,
         `/scope-port/${parsed.port}`,
-        { isUpgrade: true },
+        {
+          isUpgrade: true,
+          upstreamHostHeader: upstreamHostHeaderForPort(
+            target,
+            targetInfo.remotePort,
+          ),
+        },
       ),
     );
   };
