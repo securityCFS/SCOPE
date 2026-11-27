@@ -504,6 +504,31 @@ test("private gateway supports persistent trusted devices, rename, per-device & 
   assert.match(loginHtml, /autocomplete="username"/);
   assert.match(loginHtml, /name="trustDevice"/);
 
+  // 1b. Cross-site login POST is rejected, while Safari/WebKit same-origin `Origin: null` form POST succeeds
+  const crossSiteLogin = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "https://attacker.example",
+      "sec-fetch-site": "cross-site",
+    },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  assert.equal(crossSiteLogin.status, 403);
+
+  const safariOpaqueLogin = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "null",
+      "sec-fetch-site": "same-origin",
+    },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  assert.equal(safariOpaqueLogin.status, 303);
+
   // 2. Sign in with trustDevice=1 on Device A (iPhone)
   const loginA = await fetch(`${gatewayUrl}/scope-auth`, {
     method: "POST",

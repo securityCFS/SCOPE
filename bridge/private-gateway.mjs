@@ -362,7 +362,7 @@ function securityHeaders(response) {
     "form-action 'self'",
   ].join("; "));
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Referrer-Policy", "same-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
 }
@@ -413,11 +413,19 @@ ${message ? `<p class="error">${escapeHtml(message)}</p>` : ""}
 </main>`);
 }
 
-function hasSafeWriteOrigin(request) {
+function hasSafeWriteOrigin(request, { allowOpaqueLoginOrigin = false } = {}) {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method || "")) return true;
-  if (request.headers["sec-fetch-site"] === "cross-site") return false;
+  const fetchSite = String(request.headers["sec-fetch-site"] || "").toLowerCase();
+  if (fetchSite === "cross-site") return false;
   const origin = request.headers.origin;
   if (!origin) return true;
+  if (origin === "null") {
+    // WebKit/iOS Safari can send `Origin: null` on form POSTs (e.g. under strict
+    // referrer policies or 401 error documents). Allow same-origin Sec-Fetch-Site,
+    // or login forms without Sec-Fetch-Site (which still verify the 256-bit token).
+    if (fetchSite === "same-origin") return true;
+    return allowOpaqueLoginOrigin && !fetchSite;
+  }
   try {
     return new URL(origin).host === request.headers.host;
   } catch {
@@ -1172,7 +1180,7 @@ export function createPrivateGateway({
     const requestUrl = new URL(request.url || "/", "http://scope.local");
 
     if (request.method === "POST" && requestUrl.pathname === "/scope-auth") {
-      if (!hasSafeWriteOrigin(request)) {
+      if (!hasSafeWriteOrigin(request, { allowOpaqueLoginOrigin: true })) {
         securityHeaders(response);
         response.writeHead(403, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ error: "Cross-site login rejected" }));
