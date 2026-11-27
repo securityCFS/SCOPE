@@ -373,8 +373,10 @@ export function AccountsDialog({
                     setTabOverride({ sessionKey: dialogSessionKey, tab: item.id })
                   }
                 >
-                  <AgentLogo provider={item.id} size={15} />
-                  <span>{item.label}</span>
+                  <span className="provider-tab-head">
+                    <AgentLogo provider={item.id} size={15} />
+                    <span>{item.label}</span>
+                  </span>
                   <small className="provider-tab-pill">{item.tag}</small>
                 </button>
               ))}

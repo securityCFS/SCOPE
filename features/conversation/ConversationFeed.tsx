@@ -130,15 +130,15 @@ function CodexSubagentInteractionCard({
       open={defaultOpen}
     >
       <summary>
-        <span className="agent-interaction-left">
-          <span className="agent-interaction-badge">
-            {isOutbound ? (
-              <ArrowUpRight size={11} />
-            ) : (
-              <ArrowDownLeft size={11} />
-            )}
-            {badgeLabel}
-          </span>
+        <span className="agent-interaction-badge">
+          {isOutbound ? (
+            <ArrowUpRight size={11} />
+          ) : (
+            <ArrowDownLeft size={11} />
+          )}
+          {badgeLabel}
+        </span>
+        <span className="agent-interaction-copy">
           <span className="agent-interaction-peer" title={peerLabel}>
             {peerLabel}
           </span>

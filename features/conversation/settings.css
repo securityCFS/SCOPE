@@ -480,12 +480,15 @@
     min-width: 24px;
     padding: 4px;
   }
-  .monitor-shell[data-ui-theme] .chat-compose-surface .primary-action {
+  .monitor-shell[data-ui-theme] .chat-compose-surface .session-reply-actions .primary-action {
     padding: 6px;
     min-width: 34px;
     width: 34px;
     gap: 0;
     font-size: 0;
+  }
+  .new-conversation-grid {
+    grid-template-columns: 1fr;
   }
   .new-conversation-fields {
     padding: 8px 16px 16px;

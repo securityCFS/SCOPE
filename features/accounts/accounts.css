@@ -288,21 +288,39 @@
   line-height: 1.6;
 }
 .account-provider-tabs {
-  padding: 0 24px 12px;
+  flex: 0 0 auto;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line-soft);
 }
 .account-provider-tabs .new-agent-choice button {
-  min-height: 34px;
+  min-height: 36px;
+  min-width: 0;
   padding: 5px 8px;
   font-size: 12px;
   gap: 6px;
 }
+.provider-tab-head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.provider-tab-head > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .provider-tab-pill {
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 10px;
   color: var(--muted);
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .provider-auth-guide {
   display: grid;
@@ -329,7 +347,24 @@
 }
 @media (max-width: 720px) {
   .account-provider-tabs {
-    padding: 0 16px 10px;
+    padding: 10px 16px;
+  }
+  .monitor-shell[data-ui-theme] .account-provider-tabs .new-agent-choice button {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 52px;
+    padding: 6px 4px;
+    font-size: 11.5px;
+  }
+  .account-provider-tabs .provider-tab-head svg,
+  .account-provider-tabs .provider-tab-head img {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .monitor-shell[data-ui-theme] .account-profile-modal .profile-create-row {
+    grid-template-columns: 1fr;
   }
 }
 

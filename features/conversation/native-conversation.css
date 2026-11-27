@@ -529,6 +529,7 @@ details.native-subagents-card > summary.native-subagents-head::-webkit-details-m
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .native-subagent-badge {
   display: inline-flex;
@@ -539,6 +540,7 @@ details.native-subagents-card > summary.native-subagents-head::-webkit-details-m
   border: 1px solid var(--line);
   font-size: 11px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .native-subagent-badge.is-working {
   color: var(--blue, #68b5ff);

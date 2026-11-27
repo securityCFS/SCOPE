@@ -84,11 +84,11 @@ export function NativeLiveEvents({
                 open={prefs.autoExpandInteractions}
               >
                 <summary>
-                  <span className="agent-interaction-left">
-                    <span className="agent-interaction-badge">
-                      <ArrowUpRight size={11} />
-                      {tr("主会话 → 新建子代理", "Main → Spawn")}
-                    </span>
+                  <span className="agent-interaction-badge">
+                    <ArrowUpRight size={11} />
+                    {tr("主会话 → 新建子代理", "Main → Spawn")}
+                  </span>
+                  <span className="agent-interaction-copy">
                     <span className="agent-interaction-peer" title={desc}>
                       {desc}
                     </span>
@@ -141,11 +141,11 @@ export function NativeLiveEvents({
                 open={prefs.autoExpandInteractions}
               >
                 <summary>
-                  <span className="agent-interaction-left">
-                    <span className="agent-interaction-badge">
-                      <ArrowUpRight size={11} />
-                      {tr("主会话 → 协作消息", "Main → Agent")}
-                    </span>
+                  <span className="agent-interaction-badge">
+                    <ArrowUpRight size={11} />
+                    {tr("主会话 → 协作消息", "Main → Agent")}
+                  </span>
+                  <span className="agent-interaction-copy">
                     {to && (
                       <span className="agent-interaction-peer" title={to}>
                         {to}
@@ -190,11 +190,11 @@ export function NativeLiveEvents({
                 open={prefs.autoExpandInteractions}
               >
                 <summary>
-                  <span className="agent-interaction-left">
-                    <span className="agent-interaction-badge">
-                      <ArrowDownLeft size={11} />
-                      {tr("子代理回传 → 主会话", "Subagent → Main")}
-                    </span>
+                  <span className="agent-interaction-badge">
+                    <ArrowDownLeft size={11} />
+                    {tr("子代理回传 → 主会话", "Subagent → Main")}
+                  </span>
+                  <span className="agent-interaction-copy">
                     {firstLine && (
                       <span
                         className="agent-interaction-preview"

@@ -69,6 +69,10 @@ export function InlineTaskSubagentGroup({
       </div>
       <div className="native-task-subagents-list">
         {visible.map((item) => {
+          const statusLabel = statusLabels[item.status] || item.status;
+          const showLastAction = Boolean(
+            item.lastAction && item.lastAction.trim() !== statusLabel,
+          );
           const inner = (
             <>
               <div className="native-subagent-stack">
@@ -81,7 +85,7 @@ export function InlineTaskSubagentGroup({
                     ) : (
                       <Bot size={11} />
                     )}
-                    {statusLabels[item.status] || item.status}
+                    {statusLabel}
                   </span>
                   <strong title={item.role}>{item.role}</strong>
                   {item.typeName && <small>{item.typeName}</small>}
@@ -98,7 +102,7 @@ export function InlineTaskSubagentGroup({
                 )}
               </div>
               <span className="native-subagent-right">
-                {item.lastAction && (
+                {showLastAction && (
                   <span className="native-subagent-action" title={item.lastAction}>
                     {item.lastAction}
                   </span>
@@ -185,17 +189,17 @@ function AgentInteractionCard({
       open={defaultOpen}
     >
       <summary>
-        <span className="agent-interaction-left">
-          <span className="agent-interaction-badge">
-            {isNotif ? (
-              <Bell size={11} />
-            ) : isOutbound ? (
-              <ArrowUpRight size={11} />
-            ) : (
-              <ArrowDownLeft size={11} />
-            )}
-            {badgeLabel}
-          </span>
+        <span className="agent-interaction-badge">
+          {isNotif ? (
+            <Bell size={11} />
+          ) : isOutbound ? (
+            <ArrowUpRight size={11} />
+          ) : (
+            <ArrowDownLeft size={11} />
+          )}
+          {badgeLabel}
+        </span>
+        <span className="agent-interaction-copy">
           {peerLabel && (
             <span className="agent-interaction-peer" title={peerLabel}>
               {peerLabel}
