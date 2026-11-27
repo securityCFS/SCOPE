@@ -1,8 +1,19 @@
 # Changelog
 
-All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in this file.
+All notable changes to **SCOPE** (`@godchaser/scope`, formerly `scope-agent-workbench`) are documented in this file.
 
-## [Unreleased]
+## [0.2.4] — 2026-11-27
+
+### Added
+
+- **Scoped npm Package (`@godchaser/scope`) & Remote Access CLI**: Added `scope start --gateway`, `scope gateway`, `scope token [--show|--rotate|--url]`, `scope devices [list|revoke]`, `scope expose tailscale`, `scope expose cloudflare --domain <fqdn>`, and `scope service <install|status|restart|uninstall>` with bilingual Tailscale Serve and Cloudflare Custom Domain + Zero Trust Access setup guides (`docs/remote-access.md`, `docs/remote-access.zh-CN.md`).
+- **Persistent Trusted Devices (`SameSite=Lax` + 90-Day Sliding Renewal)**:
+  - Issues per-device cryptographic credentials stored hashed in `.scope/private-access.json` (`0600`) with 90-day sliding `HttpOnly; Secure; SameSite=Lax` cookies and `autocomplete="username"` for iOS iCloud Keychain autofill.
+  - Adds **Settings -> General -> Trusted Devices** UI (view, rename, trust temporary session, revoke single/other devices, sign out) and live hot-reloading CLI management (`scope devices list`, `scope devices revoke <id|--all>`).
+- **Authenticated Remote Port Proxy (`/scope-port/<port>/`) & `@local` Port Exposure**:
+  - Proxies active SCOPE-forwarded SSH ports and verified Linux `@local` listeners over the Private Gateway with HTTP/HTML `<base>` rewriting, redirect rewriting, scoped cookies, WebSocket upgrades (`wss://`), strict allowlist enforcement, and control-port blocking.
+- **POSIX `@local` Native CLI & Isolated AGY Profiles**: Enables direct `@local` Claude Code / Antigravity sessions on Linux/macOS and discovers isolated `~/.agy-profiles/*` profiles with live quotas.
+- **Official SCOPE Homepage (`site/`)**: Adds static landing page and automated GitHub Pages publishing workflow (`.github/workflows/pages.yml`).
 
 ### Changed
 
@@ -12,6 +23,13 @@ All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in thi
 
 - **Single-use login URLs**: `scope token --url <https://host>` now prints a `?scope_login=` link with a one-time code that expires after 10 minutes and is consumed on first use; the master access token never appears in a URL (use `--show` to print it for manual entry). Legacy `?token=<master token>` links are stripped from the address bar but no longer sign in. The Windows `enable-private-access.ps1` bootstrap uses the same single-use links.
 - **Revocable temporary gateway sessions**: Untrusted-device logins no longer receive a cookie deterministically derived from the master access token (which could never be revoked short of rotating the token). Each login now mints a random secret held only in gateway memory with a 24h server-side expiry; **Sign out**, **Revoke others**, upgrading to a trusted device, or restarting the gateway invalidates it. Cookies issued by older versions stop working, so every browser must sign in once after upgrading.
+
+### Fixed
+
+- **Mobile & iPhone Layout Overhaul**:
+  - Overhauled responsive layout, touch targets, drawer UX, safe-area padding, and iOS PWA viewport handling (`100dvh`, `16px` focus inputs).
+  - Fixed Claude Code & Codex subagent text overlapping buttons on mobile (`agent-interaction-card` two-row full-width layout, full untruncated subagent names in `.native-task-subagents`, stacked `.subagent-drawer-header`, full-width single-line `.subagent-switcher-select`, single-line group counts).
+  - Portaled the Port Forwards popover to `.monitor-shell` with a mobile bottom sheet (eliminating iOS Safari horizontal-scroll bleed-through), stacked Accounts provider tabs cleanly, scoped mobile send button sizing, centered floating composer popovers, and hid desktop-only keyboard shortcut hints on phones.
 
 ## [0.2.3] — 2026-11-25
 
