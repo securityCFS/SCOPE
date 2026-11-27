@@ -8,6 +8,7 @@ All notable changes to **SCOPE** (`@godchaser/scope`, formerly `scope-agent-work
 
 - **Isolated port-proxy origin**: Set `SCOPE_PORT_ORIGIN` (or `--port-origin`) to serve `/scope-port/*` from a separate hostname. The control-plane origin then never executes forwarded apps; it issues a single-use 60-second ticket and redirects to the port origin, which only serves `/scope-port/*` with its own `scope_port` cookie and has no access to `/scope-api`. Sign-out and device revocation drop all port sessions. `scope expose cloudflare --port-domain` and `scope service install --port-origin` configure it.
 - **Port proxy hardening (always on)**: Forwarded responses can no longer set `Service-Worker-Allowed` or `Clear-Site-Data`, service-worker script fetches through `/scope-port` are refused, and the `scope_port` cookie is neither forwarded to nor settable by proxied apps.
+- **nodemailer 10.6.1**: Upgrade from `^9` to `^10.6.1`, clearing 12 published advisories affecting `<=10.1.3` (SMTP credential disclosure via shared TLS servername cache, parser DoS, header injection). The only breaking change upstream is Node.js >= 20, already below SCOPE's `>=22.13` floor.
 
 ### Fixed
 
