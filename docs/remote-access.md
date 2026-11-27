@@ -49,6 +49,10 @@ scope --version
 
 Best when you want private HTTPS access from your iPhone, iPad, or secondary laptop without buying a domain or touching public DNS.
 
+> **One-Click Launch Script**: Prefer a single command?
+> - **Linux / macOS**: `bash scripts/setup-remote-tailscale.sh` (preview first with `--dry-run`)
+> - **Windows PowerShell**: `pwsh -File scripts/enable-private-access.ps1`
+
 ### 1. Start SCOPE with the built-in Private Access Gateway
 
 On macOS, Windows, or Linux foreground:
@@ -108,6 +112,10 @@ Opening the printed `Login URL` consumes its one-time `?scope_login=` code, issu
 ## Track 2: Custom Domain via Cloudflare Named Tunnel + Zero Trust Access
 
 Best when you want your own memorable URL such as **`https://scope.yourdomain.com`** accessible from any phone or browser with **zero open inbound ports on your server** and **enterprise-grade double authentication** (Cloudflare Zero Trust Access + SCOPE's own access token).
+
+> **One-Click Launch Script**: Prefer a single command after installing `cloudflared`?
+> - **Linux / macOS**: `bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com` (preview first with `--dry-run`)
+> - **Windows PowerShell**: `pwsh -File scripts/setup-remote-cloudflare.ps1 -Domain scope.yourdomain.com`
 
 ```mermaid
 flowchart LR

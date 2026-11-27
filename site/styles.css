@@ -231,7 +231,9 @@ a {
 .hero-kicker {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  max-width: 100%;
   padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
@@ -239,6 +241,7 @@ a {
   color: var(--muted);
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.4;
   margin-bottom: 22px;
 }
 
@@ -292,7 +295,9 @@ a {
 
 .cmd-tab {
   flex: 1;
-  height: 28px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -300,6 +305,7 @@ a {
   font: inherit;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 140ms ease, color 140ms ease;
 }
@@ -326,12 +332,17 @@ a {
 }
 
 .hero-cmd-line code {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   font-size: 13.5px;
   color: var(--text);
   overflow-x: auto;
   white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.hero-cmd-line code::-webkit-scrollbar {
+  display: none;
 }
 
 .cmd-copy {
@@ -512,6 +523,15 @@ a {
   background: var(--surface);
 }
 
+.metric-card.is-accent {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.metric-card.is-accent .metric-value {
+  color: var(--accent);
+}
+
 .metric-value {
   font-size: 28px;
   font-weight: 700;
@@ -587,6 +607,8 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .bento-card.is-wide {
@@ -734,6 +756,7 @@ a {
   padding: 2px 7px;
   border-radius: 999px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mock-pill.is-green {
@@ -749,6 +772,9 @@ a {
 .mock-name {
   font-weight: 600;
   color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -759,6 +785,8 @@ a {
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mock-muted-clip {
@@ -892,6 +920,188 @@ a {
   color: var(--text);
 }
 
+/* Security & Protocol Protection Grid */
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.security-card {
+  padding: 22px;
+  border-radius: 15px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.security-card.is-highlight {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sec-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--accent);
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sec-pill {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.security-card h3 {
+  margin: 2px 0 0;
+  font-size: 16.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.security-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+/* One-Click Remote Setup Tabs */
+.remote-shell {
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.remote-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.remote-tab {
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.remote-tab strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.remote-tab span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.remote-tab.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.remote-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.remote-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.remote-block {
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.remote-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.remote-block pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.remote-callout {
+  padding: 12px 15px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-2));
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.remote-callout strong {
+  color: var(--text);
+  margin-right: 4px;
+}
+
+.remote-callout.is-amber {
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--line));
+  background: var(--amber-soft);
+}
+
+.remote-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 /* Architecture */
 .arch-grid {
   display: grid;
@@ -955,6 +1165,8 @@ a {
   border: 1px solid var(--line);
   background: var(--surface);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .code-card-head {
@@ -1013,6 +1225,8 @@ a {
 .qs-grid {
   margin-top: 24px;
   width: min(860px, 100%);
+  max-width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -1026,6 +1240,9 @@ a {
   background: var(--surface-2);
   display: grid;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .qs-card-label {
@@ -1038,15 +1255,22 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  width: 100%;
 }
 
 .qs-cmd code {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   font-size: 12.5px;
   color: var(--text);
   overflow-x: auto;
   white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.qs-cmd code::-webkit-scrollbar {
+  display: none;
 }
 
 /* Footer */
@@ -1101,6 +1325,9 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .bento,
+  .security-grid,
+  .remote-tabs,
+  .remote-cols,
   .plugin-split,
   .qs-grid,
   .mock-strip {
@@ -1118,11 +1345,97 @@ a {
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 560px) {
+  .container {
+    width: calc(100% - 28px);
+  }
+  .nav {
+    gap: 8px;
+  }
+  .nav-actions {
+    gap: 5px;
+  }
+  .nav-pill {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .nav-icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .nav-cta {
+    height: 30px;
+    padding: 0 10px;
+    gap: 5px;
+    font-size: 12px;
+  }
+  .hero {
+    padding: 40px 0 24px;
+  }
+  .hero-kicker {
+    padding: 5px 11px;
+    font-size: 11.5px;
+    border-radius: 14px;
+  }
+  .hero-title {
+    font-size: clamp(25px, 6.8vw, 34px);
+    line-height: 1.22;
+  }
+  .cmd-tab {
+    font-size: 11.5px;
+    padding: 4px 5px;
+  }
+  .hero-cmd-line {
+    padding: 10px 11px;
+    gap: 8px;
+  }
+  .hero-cmd-line code {
+    font-size: 12.5px;
+  }
   .metrics {
     grid-template-columns: 1fr;
   }
   .stage-url {
     display: none;
+  }
+  .bento-card,
+  .security-card {
+    padding: 18px;
+  }
+  .remote-shell {
+    padding: 14px;
+  }
+  .remote-block-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .mock-sub-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    column-gap: 6px;
+    padding: 9px 10px;
+  }
+  .mock-sub-row .mock-action {
+    order: 2;
+    margin-left: auto;
+  }
+  .mock-sub-row .mock-name {
+    order: 3;
+    flex: 1 0 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+  .mock-sub-row .mock-muted-clip {
+    order: 4;
+    flex: 1 0 100%;
+  }
+  .cta-banner {
+    padding: 26px 16px;
+  }
+  .qs-card {
+    padding: 12px;
   }
 }

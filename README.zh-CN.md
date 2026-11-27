@@ -45,11 +45,11 @@
 
 ## 核心特性
 
-- **零遥测、零云端中转、零凭据上传**：100% 自托管运行在你自己的设备上（默认仅监听 `127.0.0.1`），运行时仅 2 个依赖（`ws`、`nodemailer`）。所有对话记录、SSH 密钥与 Claude/Codex/AGY 凭据绝不离开所在主机。
-- **3 分钟手机端远程部署（Tailscale Serve / 自定义 Cloudflare 域名）**：内置 `scope start --gateway`、`scope expose tailscale`、`scope expose cloudflare --domain scope.yourdomain.com` 与 `scope service install`，开箱即享移动端响应式工作台与认证 `/scope-port/<port>/` 端口代理（TensorBoard、Gradio、Jupyter、本机开发服务直接从手机打开），服务器防火墙零开放端口。
+- **极致轻量、零遥测、绝不读取 Claude 凭据**：100% 自托管运行在你自己的设备上（默认仅监听 `127.0.0.1`，全量仅 13 MB，运行时仅 2 个依赖 `ws` 与 `nodemailer`）。所有对话历史严格留在对应主机；Claude Code 配额完全通过未经修改的官方 `claude -p /usage` CLI 读取，绝不触碰 `~/.claude/.credentials.json` 或 macOS 钥匙串。
+- **2–3 分钟手机端远程部署（Tailscale Serve / 自定义 Cloudflare 域名）**：内置 `scope start --gateway`、`scope expose tailscale`、`scope expose cloudflare --domain scope.yourdomain.com`、`scope devices` 以及一键启动脚本（`scripts/setup-remote-tailscale.sh`、`scripts/setup-remote-cloudflare.sh`、`scripts/enable-private-access.ps1`、`scripts/setup-remote-cloudflare.ps1`），自带一次性 `?scope_login=` 登录码、90 天可吊销受信任设备与白名单 `/scope-port/<port>/` 端口代理，服务器防火墙零开放端口。
 - **One monitor for all agent sessions**：零侵入扫描你在终端、VS Code 或 `tmux` 里启动过的原生会话（`~/.codex/sessions`、`~/.claude/projects`、`~/.gemini/antigravity-cli`），直接按原生会话 ID 续聊，不破坏原有 CLI 历史。
 - **实时流式交互、审批与后台子代理**：支持 Codex、Claude Code 和 Antigravity 的文件修改/命令审批、交互问答卡片、运行中追加消息、模型/推理强度切换、安全中断，以及 **Claude Code / Antigravity 后台子代理实时工作状态** 追踪。
-- **多 Agent 账号中心与实时 `/usage` 额度**：统一查看 **Codex**（多 Profile 池 + 故障自动切换 + 5h/周额度）、**Claude Code**（本地 OAuth 实时 5h/7d 额度）和 **Antigravity**（官方 `agy -p /usage --output-format json` 分组 5h/周额度）的登录态与余量，并支持一键打开内置 Web SSH 终端登录/切换账号。
+- **多 Agent 账号中心与官方 `/usage` 额度**：统一查看 **Codex**（多 Profile 池 + 故障自动切换 + 5h/周额度）、**Claude Code**（纯官方 `claude -p /usage --output-format json --no-session-persistence --strict-mcp-config`，零凭据读取）和 **Antigravity**（官方 `agy -p /usage --output-format json` 分组 5h/周额度）的登录态与余量，并支持一键打开内置 Web SSH 终端登录/切换账号。
 - **GPU 归属与会话并发池**：实时采集各主机 `nvidia-smi` 显存/利用率和训练进程树，自动关联到对应 Agent 会话；提供按主机的常驻会话并发池（`residentSessionsPerHost`）与会话 **保留（Pin）** 机制，避免重要长程任务被误回收。
 - **跨项目总调度（Coordinator）**：只读汇总各主机状态、会话进展和 GPU 资源，在一个对话框里对比实验、定位异常或起草下一步任务。
 - **富媒体渲染与三端 SCOPE 协议一键注入**：原生支持 KaTeX 公式、GFM 表格、远端图片内嵌、HTML5 视频流式预览与 `file://` 行号跳转（全面兼容 Antigravity 的 `file://` 链接习惯），并支持一键向 `~/.codex/AGENTS.md`、`~/.claude/CLAUDE.md` 与 `~/.gemini/config/GEMINI.md` 注入规范协议。
@@ -78,7 +78,7 @@ flowchart LR
 | 实时流式对话与原生续聊 | 支持（`app-server` 与本机） | 支持（`stream-json`） | 支持（`ACP`） | Headless 单次任务 |
 | 网页审批与提问表单 | 支持 | 支持 | 支持 | — |
 | 模型与推理强度切换 | 支持 | 支持 | 支持 | 由远端 profile 控制 |
-| 订阅剩余额度实时查询（`/usage`） | 支持（5h/周 + 多账号） | 支持（5h/7d OAuth 实时用量） | 支持（分组 5h/周实时额度） | — |
+| 订阅剩余额度实时查询（`/usage`） | 支持（5h/周 + 多账号） | 支持（官方 `claude -p /usage`，零凭据读取） | 支持（分组 5h/周实时额度） | — |
 | 后台子代理实时状态显示 | Rollout 子代理树 | 支持（实时 + `subagents/`） | 支持（ACP + 子会话日志） | — |
 | `/` 命令与项目技能 | 支持（`skills/list` + `/compact`） | 支持（实时读取 CLI 命令） | 支持（ACP 会话命令） | — |
 | 外部终端 / VS Code 会话观察 | 支持（只读观察） | 历史扫描 | 历史扫描 | — |

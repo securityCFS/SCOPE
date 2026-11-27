@@ -49,6 +49,10 @@ scope --version
 
 无需购买域名、无需配置 DNS，适合已经或愿意使用 Tailscale 的开发者，几条命令即可在手机上通过专属 HTTPS 地址访问。
 
+> **一键启动脚本**：想一条命令自动完成安装、起后台服务、开 Tailscale Serve 与生成一次性登录链接？
+> - **Linux / macOS**：`bash scripts/setup-remote-tailscale.sh`（可先加 `--dry-run` 预览）
+> - **Windows PowerShell**：`pwsh -File scripts/enable-private-access.ps1`
+
 ### 1. 一键启动 SCOPE 与内置私有网关
 
 在 macOS、Windows 或 Linux 前台启动：
@@ -108,6 +112,10 @@ scope token --url https://<机器名>.<你的tailnet>.ts.net
 ## 方案二：自定义域名 + Cloudflare Named Tunnel + Zero Trust Access
 
 适合希望用自己域名（如 **`https://scope.yourdomain.com`**）随时在手机/平板/任意浏览器打开，同时做到 **服务器防火墙零放行端口** 与 **Cloudflare Access + SCOPE 密钥双重鉴权** 的场景。
+
+> **一键启动脚本**：装好 `cloudflared` 后想一条命令自动完成 Tunnel 配置、常驻服务安装与一次性登录链接生成？
+> - **Linux / macOS**：`bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com`（可先加 `--dry-run` 预览）
+> - **Windows PowerShell**：`pwsh -File scripts/setup-remote-cloudflare.ps1 -Domain scope.yourdomain.com`
 
 ```mermaid
 flowchart LR

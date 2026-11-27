@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SCOPE — Lightweight Web Control Plane for All Your Coding Agents</title>
+    <title>SCOPE — Lightweight, Security-First Web Control Plane for Coding Agents</title>
     <meta
       name="description"
-      content="Monitor, resume, and steer Claude Code, Codex, and Antigravity across local and remote SSH GPU servers from one ultra-lightweight 13 MB local-first Web UI."
+      content="Ultra-lightweight 13 MB local-first web control plane for Claude Code, Codex, and Antigravity across local and remote SSH GPU servers. Zero telemetry, zero credential collection, one-click Tailscale & Cloudflare remote setup."
     />
-    <meta property="og:title" content="SCOPE — Lightweight Web Control Plane for Coding Agents" />
+    <meta property="og:title" content="SCOPE — Lightweight, Security-First Web Control Plane for Coding Agents" />
     <meta
       property="og:description"
-      content="13 MB MIT open-source web control plane for Claude Code, Codex & Antigravity across local and SSH GPU servers. Subagent workflows, auto SSH port forwarding, live /usage quotas, and Plugin Protocol v1."
+      content="13 MB MIT open-source web control plane for Claude Code, Codex, and Antigravity. Official CLI quota protocol, zero credential harvesting, single-use login URLs, revocable trusted devices, and 1-click Tailscale/Cloudflare remote access."
     />
     <meta property="og:image" content="./assets/scope-preview-dark-en.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -35,8 +35,9 @@
         </a>
 
         <div class="nav-links">
+          <a href="#security" data-i18n="navSecurity">Security</a>
+          <a href="#remote" data-i18n="navRemote">Remote Setup</a>
           <a href="#features" data-i18n="navFeatures">Features</a>
-          <a href="#architecture" data-i18n="navArch">Remote &amp; Privacy</a>
           <a href="#plugins" data-i18n="navPlugins">Plugins</a>
           <a href="#quickstart" data-i18n="navQuickstart">Quickstart</a>
         </div>
@@ -94,16 +95,16 @@
         <div class="hero-kicker">
           <span class="pulse-dot" aria-hidden="true"></span>
           <span data-i18n="heroKicker">
-            MIT Open Source, Zero Telemetry, Local-First, 13 MB Install
+            MIT Open Source, 13 MB Install, Zero Telemetry, Zero Credential Collection
           </span>
         </div>
 
         <h1 class="hero-title" data-i18n="heroTitle">
-          One lightweight web control plane for all your coding agents.
+          Ultra-lightweight, security-first web control plane for all your coding agents.
         </h1>
 
         <p class="hero-subtitle" data-i18n="heroSubtitle">
-          Monitor, resume, and steer Claude Code, Codex, and Antigravity across local and remote SSH GPU servers — no heavy Electron wrapper, no remote daemons, no IDE bloat.
+          Monitor, resume, and steer Claude Code, Codex, and Antigravity across local and remote SSH GPU servers — 13 MB install, zero Electron bloat, zero remote daemons, and strict protocol-safe isolation that never reads Claude credentials or uploads transcripts.
         </p>
 
         <div class="hero-cmd-box">
@@ -128,6 +129,16 @@
             >
               Install &amp; Launch
             </button>
+            <button
+              type="button"
+              role="tab"
+              class="cmd-tab"
+              aria-selected="false"
+              data-cmd-mode="remote"
+              data-i18n="cmdTabRemote"
+            >
+              Mobile Remote
+            </button>
           </div>
           <div class="hero-cmd-line">
             <span class="cmd-prompt" aria-hidden="true">$</span>
@@ -141,6 +152,13 @@
         <div class="hero-ctas">
           <a
             class="btn-primary"
+            href="#remote"
+          >
+            <span data-i18n="ctaRemoteSetup">One-Click Remote Setup</span>
+            <span aria-hidden="true">↓</span>
+          </a>
+          <a
+            class="btn-secondary"
             href="https://github.com/securityCFS/SCOPE"
             target="_blank"
             rel="noreferrer"
@@ -150,33 +168,26 @@
           </a>
           <a
             class="btn-secondary"
-            href="https://github.com/securityCFS/SCOPE/blob/main/docs/getting-started.md"
+            href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md"
             target="_blank"
             rel="noreferrer"
             id="cta-docs-link"
           >
-            <span data-i18n="ctaDocs">Read Docs</span>
-          </a>
-          <a
-            class="btn-secondary"
-            href="https://github.com/securityCFS/SCOPE/releases"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span data-i18n="ctaReleases">Releases</span>
+            <span data-i18n="ctaDocs">Remote Access Guide</span>
           </a>
         </div>
 
         <div class="compat-strip">
-          <span class="compat-label" data-i18n="compatLabel">Works with your existing CLI &amp; subscriptions:</span>
+          <span class="compat-label" data-i18n="compatLabel">Built for your native CLIs &amp; subscriptions:</span>
           <span class="compat-chip">Claude Code</span>
           <span class="compat-chip">OpenAI Codex</span>
           <span class="compat-chip">Antigravity (agy)</span>
           <span class="compat-chip">OpenSSH</span>
-          <span class="compat-chip">Linux / macOS / Windows</span>
+          <span class="compat-chip">Tailscale / Cloudflare</span>
+          <span class="compat-chip">Sigstore Provenance</span>
         </div>
 
-        <!-- HERO PRODUCT STAGE (Real UI + Walkthrough only) -->
+        <!-- HERO PRODUCT STAGE -->
         <div class="stage-wrap">
           <div class="stage-toolbar">
             <div class="stage-dots" aria-hidden="true">
@@ -217,35 +228,281 @@
         </div>
       </section>
 
-      <!-- MEASURED FOOTPRINT -->
-      <section class="metrics container" aria-label="Measured footprint">
+      <!-- MEASURED FOOTPRINT & ZERO-TRUST METRICS -->
+      <section class="metrics container" aria-label="Measured footprint and security guarantees">
         <div class="metric-card">
           <div class="metric-value">13 MB</div>
           <div class="metric-label" data-i18n="m1Title">Full npm install</div>
           <p class="metric-desc" data-i18n="m1Desc">
-            4.2 MB tarball with only 2 runtime deps (nodemailer &amp; ws). Zero Electron bloat.
+            4.3 MB tarball with only 2 runtime deps (nodemailer &amp; ws). Zero Electron wrapper or IDE bloat.
           </p>
         </div>
         <div class="metric-card">
           <div class="metric-value">~160 MB</div>
           <div class="metric-label" data-i18n="m2Title">Steady-state RAM</div>
           <p class="metric-desc" data-i18n="m2Desc">
-            Measured across 30 configured SSH hosts with 0% idle CPU. Runs easily on a 2-vCPU VM.
+            Measured across 30 configured SSH hosts with 0% idle CPU. Runs effortlessly on a 2-vCPU cloud VM.
           </p>
         </div>
         <div class="metric-card">
           <div class="metric-value">0</div>
-          <div class="metric-label" data-i18n="m3Title">Remote daemons</div>
+          <div class="metric-label" data-i18n="m3Title">Remote daemons &amp; relays</div>
           <p class="metric-desc" data-i18n="m3Desc">
-            Pure OpenSSH control plane. Reads your existing ~/.ssh/config and native CLI logs directly.
+            Pure OpenSSH control plane bound strictly to 127.0.0.1. Zero third-party cloud relays or background agents.
           </p>
         </div>
-        <div class="metric-card">
-          <div class="metric-value" data-i18n="m4Val">5 sec</div>
-          <div class="metric-label" data-i18n="m4Title">Zero-SSH preview</div>
+        <div class="metric-card is-accent">
+          <div class="metric-value">0</div>
+          <div class="metric-label" data-i18n="m4Title">Claude credentials read</div>
           <p class="metric-desc" data-i18n="m4Desc">
-            Explore the full workbench locally with built-in synthetic data before connecting any host.
+            Never reads ~/.claude/.credentials.json or macOS Keychain. Official claude -p /usage protocol only.
           </p>
+        </div>
+      </section>
+
+      <!-- SECURITY & LIGHTWEIGHT ARCHITECTURE -->
+      <section id="security" class="section container">
+        <div class="section-head">
+          <span class="section-tag" data-i18n="secTag">Security &amp; Protocol Protection</span>
+          <h2 data-i18n="secTitle">Lightweight by architecture. Verifiably private by default.</h2>
+          <p data-i18n="secDesc">
+            Every security guarantee below is enforced in open-source code, verified by automated unit tests and leak scanners on every release, and published via npm OIDC + Sigstore build provenance.
+          </p>
+        </div>
+
+        <div class="security-grid">
+          <article class="security-card is-highlight">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s1Pill">Claude Protocol Hardened</span>
+            </div>
+            <h3 data-i18n="s1Title">Zero Claude Credential Collection</h3>
+            <p data-i18n="s1Desc">
+              SCOPE never reads ~/.claude/.credentials.json, never touches macOS Keychain, and never calls Anthropic OAuth endpoints directly. Claude 5h and weekly quotas come solely from the unmodified official binary (claude -p /usage --output-format json --no-session-persistence --strict-mcp-config, zero LLM tokens), backed by an automated regression test.
+            </p>
+          </article>
+
+          <article class="security-card">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s2Pill">Single-Use &amp; Revocable</span>
+            </div>
+            <h3 data-i18n="s2Title">One-Time Login Links &amp; Trusted Devices</h3>
+            <p data-i18n="s2Desc">
+              Master tokens never appear in URLs or browser history. Login links carry a single-use ?scope_login= code (10-minute TTL, consumed on first use). Trusted devices store only SHA-256 hashes (0600) with 90-day sliding HttpOnly Secure SameSite=Lax cookies; untrusted sessions stay RAM-only and revocable in 2 seconds via Settings or scope devices revoke.
+            </p>
+          </article>
+
+          <article class="security-card">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M4.93 4.93 19.07 19.07" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s3Pill">127.0.0.1 Only</span>
+            </div>
+            <h3 data-i18n="s3Title">Zero Telemetry, Zero Cloud Relay</h3>
+            <p data-i18n="s3Desc">
+              No analytics, no crash uploads, no hosted relay server, and no transcript harvesting. UI (:3000), Bridge (:4815), and Private Gateway (:4820) bind strictly to loopback 127.0.0.1. Every commit passes automated secret-leak checks before publishing with Sigstore transparency logs.
+            </p>
+          </article>
+
+          <article class="security-card">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s4Pill">Zero-SSRF Proxy</span>
+            </div>
+            <h3 data-i18n="s4Title">Separate-Origin /scope-port/ Isolation</h3>
+            <p data-i18n="s4Desc">
+              Inspect TensorBoard, Gradio, or Jupyter from your phone with always-on Service-Worker &amp; Clear-Site-Data blocking, hard-blocked control ports, and opt-in separate-origin isolation (--port-domain / 60s single-use handoff ticket) so proxied apps can never reach /scope-api.
+            </p>
+          </article>
+
+          <article class="security-card">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s5Pill">4.3 MB / 2 Deps</span>
+            </div>
+            <h3 data-i18n="s5Title">Ultra-Lightweight Native Footprint</h3>
+            <p data-i18n="s5Desc">
+              Installs in seconds via npm with just 2 runtime packages (nodemailer 10.6.1, ws — 0 audit advisories), no 500 MB Electron runtime, no Docker stack, and zero remote installation. Runs at ~160 MB RAM and 0% idle CPU across 30 hosts.
+            </p>
+          </article>
+
+          <article class="security-card">
+            <div class="sec-head">
+              <span class="sec-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+              </span>
+              <span class="sec-pill" data-i18n="s6Pill">TTY Lock Guard</span>
+            </div>
+            <h3 data-i18n="s6Title">Non-Invasive Terminal Safety &amp; MIT Audit</h3>
+            <p data-i18n="s6Desc">
+              Detects active external Claude Code and Antigravity terminal sessions via /proc, tmux, and flock, automatically switching to read-only tailing so SCOPE never hijacks your active terminal. 100% MIT open source and auditable line by line.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ONE-CLICK REMOTE ACCESS (TAILSCALE & CUSTOM CLOUDFLARE DOMAIN) -->
+      <section id="remote" class="section container">
+        <div class="section-head">
+          <span class="section-tag" data-i18n="remTag">One-Click Remote Access</span>
+          <h2 data-i18n="remTitle">Deploy privately to your phone in 2–3 minutes — Tailscale or your own domain.</h2>
+          <p data-i18n="remDesc">
+            Zero open inbound firewall ports. Pick private Tailscale Serve HTTPS (no domain needed) or your own Cloudflare-managed domain with Zero Trust Access double authentication. Full English &amp; Chinese tutorials and one-click scripts included.
+          </p>
+        </div>
+
+        <div class="remote-shell">
+          <div class="remote-tabs" role="tablist" aria-label="Remote deployment mode">
+            <button
+              type="button"
+              role="tab"
+              class="remote-tab is-active"
+              aria-selected="true"
+              data-remote-mode="tailscale"
+            >
+              <strong data-i18n="remTabTsTitle">Option A: Tailscale Serve</strong>
+              <span data-i18n="remTabTsSub">2 min, zero domain, private tailnet HTTPS (never Funnel)</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="remote-tab"
+              aria-selected="false"
+              data-remote-mode="cloudflare"
+            >
+              <strong data-i18n="remTabCfTitle">Option B: Custom Domain + Cloudflare Tunnel</strong>
+              <span data-i18n="remTabCfSub">3 min, your own HTTPS domain + Zero Trust Access double auth</span>
+            </button>
+          </div>
+
+          <!-- Tailscale Panel -->
+          <div class="remote-panel" id="remote-panel-tailscale">
+            <div class="remote-cols">
+              <div class="remote-block">
+                <div class="remote-block-head">
+                  <span data-i18n="remTsCliHead">Option 1: Built-in CLI (Linux / macOS / Windows)</span>
+                  <button type="button" class="cmd-copy small" data-copy-target="rem-ts-cli" data-i18n="copyBtn">Copy</button>
+                </div>
+                <pre><code id="rem-ts-cli">npm install -g @godchaser/scope
+scope start --gateway
+scope expose tailscale
+scope token --url https://&lt;your-machine&gt;.&lt;tailnet&gt;.ts.net</code></pre>
+              </div>
+
+              <div class="remote-block">
+                <div class="remote-block-head">
+                  <span data-i18n="remTsScriptHead">Option 2: One-Click Launch Script</span>
+                  <button type="button" class="cmd-copy small" data-copy-target="rem-ts-script" data-i18n="copyBtn">Copy</button>
+                </div>
+                <pre><code id="rem-ts-script"># Linux / macOS (installs systemd service + Tailscale Serve + 1-time link)
+bash scripts/setup-remote-tailscale.sh
+
+# Windows PowerShell
+pwsh -File scripts/enable-private-access.ps1</code></pre>
+              </div>
+            </div>
+
+            <div class="remote-callout">
+              <strong data-i18n="remTsNoteTitle">Private by construction:</strong>
+              <span data-i18n="remTsNoteBody">
+                SCOPE always uses private tailscale serve (never public Funnel). Opening the generated single-use ?scope_login= link on your phone registers a 90-day sliding Trusted Device cookie and strips the code from the address bar.
+              </span>
+            </div>
+          </div>
+
+          <!-- Cloudflare Panel -->
+          <div class="remote-panel" id="remote-panel-cloudflare" hidden>
+            <div class="remote-cols">
+              <div class="remote-block">
+                <div class="remote-block-head">
+                  <span data-i18n="remCfCliHead">Option 1: Built-in CLI (Linux / macOS / Windows)</span>
+                  <button type="button" class="cmd-copy small" data-copy-target="rem-cf-cli" data-i18n="copyBtn">Copy</button>
+                </div>
+                <pre><code id="rem-cf-cli">npm install -g @godchaser/scope
+scope expose cloudflare --domain scope.yourdomain.com --port-domain scope-ports.yourdomain.com
+scope service install --with-gateway --with-cloudflared --port-origin https://scope-ports.yourdomain.com
+scope token --url https://scope.yourdomain.com</code></pre>
+              </div>
+
+              <div class="remote-block">
+                <div class="remote-block-head">
+                  <span data-i18n="remCfScriptHead">Option 2: One-Click Launch Script</span>
+                  <button type="button" class="cmd-copy small" data-copy-target="rem-cf-script" data-i18n="copyBtn">Copy</button>
+                </div>
+                <pre><code id="rem-cf-script"># Linux / macOS (Tunnel + optional isolated port-domain + systemd + 1-time link)
+bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com --port-domain scope-ports.yourdomain.com
+
+# Windows PowerShell
+pwsh -File scripts/setup-remote-cloudflare.ps1 -Domain scope.yourdomain.com -PortDomain scope-ports.yourdomain.com</code></pre>
+              </div>
+            </div>
+
+            <div class="remote-callout is-amber">
+              <strong data-i18n="remCfNoteTitle">Cloudflare Zero Trust Access checklist:</strong>
+              <span data-i18n="remCfNoteBody">
+                Put ONLY your own Emails in the Allow policy Include rule (never add Login Methods inside Include), and raise Session Duration to 1 month so mobile Safari and Home Screen PWA stay signed in seamlessly.
+              </span>
+            </div>
+          </div>
+
+          <div class="remote-footer-links">
+            <a
+              class="btn-secondary"
+              href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md"
+              target="_blank"
+              rel="noreferrer"
+              id="remote-guide-en"
+            >
+              <span data-i18n="remGuideEn">English Tutorial (Tailscale &amp; Cloudflare)</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              class="btn-secondary"
+              href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md"
+              target="_blank"
+              rel="noreferrer"
+              id="remote-guide-zh"
+            >
+              <span data-i18n="remGuideZh">中文完整部署教程（Tailscale / 个人域名）</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              class="btn-secondary"
+              href="https://github.com/securityCFS/SCOPE/tree/main/scripts"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span data-i18n="remScriptsLink">Inspect All Launch Scripts</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
         </div>
       </section>
 
@@ -255,7 +512,7 @@
           <span class="section-tag" data-i18n="featTag">Capabilities</span>
           <h2 data-i18n="featTitle">Built for multi-host AI workflows — not another heavy IDE.</h2>
           <p data-i18n="featDesc">
-            No code editor bloat. Just fast observability, approvals, subagent workflows, port forwarding, and quotas across every remote GPU box.
+            No code editor bloat. Just fast observability, approvals, subagent workflows, authenticated port forwarding, and live quotas across every local or SSH GPU machine.
           </p>
         </div>
 
@@ -277,7 +534,7 @@
             </div>
             <h3 data-i18n="f1Title">Subagent Directory, Workflow Drawer &amp; Bidirectional Timeline</h3>
             <p data-i18n="f1Desc">
-              Track every Claude Code &amp; Codex subagent per task, inspect step-by-step reasoning and tool calls in a scrollable drawer, and see parent ↔ subagent handbacks &amp; SendMessage exchanges chronologically.
+              Track every Claude Code &amp; Codex subagent per task, inspect step-by-step reasoning and tool calls in a scrollable drawer, and see parent ↔ subagent handbacks &amp; SendMessage exchanges chronologically on both desktop and mobile.
             </p>
             <div class="mock-panel" id="demo-subagent-preview">
               <div class="mock-sub-head">
@@ -299,18 +556,18 @@
             </div>
           </article>
 
-          <!-- Card 2: SSH Auto Port Forwarding + Mini Widget -->
+          <!-- Card 2: SSH Auto Port Forwarding + /scope-port/ Proxy -->
           <article class="bento-card">
-            <div class="card-badge" data-i18n="f2Badge">SSH Port Forwarding</div>
-            <h3 data-i18n="f2Title">Auto-Discover &amp; One-Click Forward Agent Ports</h3>
+            <div class="card-badge" data-i18n="f2Badge">SSH &amp; Remote Ports</div>
+            <h3 data-i18n="f2Title">Auto-Discover Ports &amp; Mobile /scope-port/ Proxy</h3>
             <p data-i18n="f2Desc">
-              Detects TensorBoard, Jupyter, Gradio, Vite, or FastAPI launched on remote GPUs, avoids local port collisions, and turns inline localhost links into 1-click SSH -L tunnels.
+              Detects TensorBoard, Jupyter, Gradio, Vite, or FastAPI on remote SSH or Linux @local hosts, avoids local port collisions, and proxies allowlisted web apps securely to your phone over HTTPS &amp; WSS.
             </p>
             <div class="mock-panel is-compact">
               <div class="mock-port-row is-live">
                 <div>
                   <div class="mock-port-title"><span class="mock-dot is-green"></span>TensorBoard</div>
-                  <div class="mock-mono">:6006 → 127.0.0.1:6006</div>
+                  <div class="mock-mono">/scope-port/6006/</div>
                 </div>
                 <span class="mock-btn-dark" data-i18n="mockOpen">Open ↗</span>
               </div>
@@ -324,12 +581,12 @@
             </div>
           </article>
 
-          <!-- Card 3: 3-Agent Quotas + Mini Bars -->
+          <!-- Card 3: 3-Agent Quotas (Official Claude /usage CLI!) -->
           <article class="bento-card">
             <div class="card-badge" data-i18n="f3Badge">Quotas &amp; Failover</div>
-            <h3 data-i18n="f3Title">3-Agent Live /usage Quotas &amp; Codex Multi-Account Pool</h3>
+            <h3 data-i18n="f3Title">3-Agent Official /usage Quotas &amp; Codex Pool</h3>
             <p data-i18n="f3Desc">
-              View Codex, Claude Code (host-local OAuth — tokens never leave the host), and Antigravity quotas in one place, with automatic Codex failover and built-in Web SSH login.
+              View Codex, Claude Code (unmodified official claude -p /usage CLI, zero credentials read), and Antigravity quotas in one place, with automatic Codex failover and built-in Web SSH login.
             </p>
             <div class="mock-panel is-compact">
               <div class="mock-quota">
@@ -337,7 +594,7 @@
                 <div class="mock-bar"><span style="width: 92%"></span></div>
               </div>
               <div class="mock-quota">
-                <div class="mock-quota-top"><span>Claude OAuth (5h)</span><span class="is-ok">78%</span></div>
+                <div class="mock-quota-top"><span>Claude CLI /usage (5h)</span><span class="is-ok">78%</span></div>
                 <div class="mock-bar"><span style="width: 78%"></span></div>
               </div>
               <div class="mock-quota">
@@ -372,43 +629,6 @@
               </div>
             </div>
           </article>
-        </div>
-      </section>
-
-      <!-- PRIVATE REMOTE ARCHITECTURE -->
-      <section id="architecture" class="section container">
-        <div class="section-head">
-          <span class="section-tag" data-i18n="archTag">Local-First &amp; Self-Hosted Remote</span>
-          <h2 data-i18n="archTitle">Zero telemetry. 127.0.0.1 by default. Private mobile access on your terms.</h2>
-          <p data-i18n="archDesc">
-            Zero cloud relay, zero credential upload, zero transcript harvesting. Every session log and OAuth token stays strictly on your own hosts. Expose privately to your phone in 2–3 minutes via Tailscale Serve or your own Cloudflare domain + Zero Trust Access.
-          </p>
-        </div>
-
-        <div class="arch-grid">
-          <div class="arch-box">
-            <div class="arch-step">01</div>
-            <h3 data-i18n="a1Title">Workstation or Private Linux Hub</h3>
-            <p data-i18n="a1Desc">
-              UI (:3000) and Bridge (:4815) bind strictly to 127.0.0.1. Claude, Codex, and AGY credentials never leave the host where they live.
-            </p>
-          </div>
-          <div class="arch-arrow" aria-hidden="true">→</div>
-          <div class="arch-box">
-            <div class="arch-step">02</div>
-            <h3 data-i18n="a2Title">Built-in Private Gateway (:4820)</h3>
-            <p data-i18n="a2Desc">
-              Merges UI, API, SSE, WebSocket terminal, and allowlisted /scope-port/&lt;port&gt;/ dev-server proxying behind a 32-byte secret and HttpOnly Secure cookie.
-            </p>
-          </div>
-          <div class="arch-arrow" aria-hidden="true">→</div>
-          <div class="arch-box">
-            <div class="arch-step">03</div>
-            <h3 data-i18n="a3Title">Tailscale Serve or Custom Cloudflare Domain</h3>
-            <p data-i18n="a3Desc">
-              Run scope expose tailscale for private tailnet HTTPS, or scope expose cloudflare --domain scope.yourdomain.com with Cloudflare Access double auth and zero open inbound ports.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -469,7 +689,7 @@
           <span class="section-tag" data-i18n="qsTag">Try It in 5 Seconds</span>
           <h2 data-i18n="qsTitle">Launch the isolated preview right now — zero SSH needed.</h2>
           <p data-i18n="qsDesc">
-            Test the real workbench UI locally with synthetic data, then install globally to connect your SSH GPU servers and coding agents.
+            Test the real 13 MB workbench locally with synthetic data, then install globally to monitor local and remote SSH GPU agents with full privacy.
           </p>
           <div class="qs-grid">
             <div class="qs-card">
@@ -523,7 +743,7 @@
     <footer class="footer container">
       <div class="footer-left">
         <strong>SCOPE</strong>
-        <span data-i18n="footerTagline">Lightweight web control plane for coding agents (MIT)</span>
+        <span data-i18n="footerTagline">Lightweight, security-first web control plane for coding agents (MIT)</span>
         <a class="footer-credit" href="https://github.com/securityCFS" target="_blank" rel="noreferrer">
           Built by @godchaser (securityCFS)
         </a>
