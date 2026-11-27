@@ -34,10 +34,10 @@
 </p>
 
 <p align="center">
-  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：富媒体渲染（表格 · KaTeX 公式 · 内嵌图片与可播放视频 · <code>file://</code> 跳转）→ Claude 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载 → 深色模式。</sub>
+  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：富媒体渲染（表格、KaTeX 公式、内嵌图片与可播放视频、<code>file://</code> 跳转）→ Claude 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载 → 深色模式。</sub>
 </p>
 
-| 浅色模式（表格 · 公式 · 图片与视频内嵌预览） | 深色模式（后台子代理实时追踪 · 交互审批） |
+| 浅色模式（表格、公式、图片与视频内嵌预览） | 深色模式（后台子代理实时追踪与交互审批） |
 | :---: | :---: |
 | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-light-zh.png" alt="SCOPE 浅色模式预览（中文界面）" width="100%" /> | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-dark-zh.png" alt="SCOPE 深色模式预览（中文界面）" width="100%" /> |
 
@@ -58,10 +58,10 @@
 
 ```mermaid
 flowchart LR
-  UI["浏览器工作台 (127.0.0.1:3000)\n浅/深色主题 · 中/英文切换"] <-->|HTTP / SSE / WS| Bridge["本机 Bridge (127.0.0.1:4815)\nSSH 调度 · 额度探测 · 插件 · 邮件中继"]
+  UI["浏览器工作台 (127.0.0.1:3000)\n浅/深色主题，中/英文切换"] <-->|HTTP / SSE / WS| Bridge["本机 Bridge (127.0.0.1:4815)\nSSH 调度、额度探测、插件、邮件中继"]
   Bridge -->|本机 app-server / 探测| Local["当前工作电脑"]
-  Bridge -->|OpenSSH| Remote1["GPU 主机 A (Linux)\nCodex · Claude · AGY · GPUs"]
-  Bridge -->|OpenSSH| Remote2["GPU 主机 B (Linux)\nCodex · Claude · AGY · GPUs"]
+  Bridge -->|OpenSSH| Remote1["GPU 主机 A (Linux)\nCodex / Claude / AGY / GPUs"]
+  Bridge -->|OpenSSH| Remote2["GPU 主机 B (Linux)\nCodex / Claude / AGY / GPUs"]
   Remote1 -.->|"回环 SSH -R 隧道\n(scope-notify MCP)"| Bridge
 ```
 
@@ -155,7 +155,7 @@ npm run scope
 - [多 Agent 会话、审批与账号管理](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.zh-CN.md) — Codex 多账号故障切换、Claude/AGY 实时交互、附件上传与可逆归档
 - [邮件通知与远端一键初始化](https://github.com/securityCFS/SCOPE/blob/main/docs/notifications-and-remote.zh-CN.md) — Web SMTP 预设、本地 `0600` 凭据与非 root 的 `scope-notify` 部署
 - [架构说明](https://github.com/securityCFS/SCOPE/blob/main/docs/architecture.zh-CN.md) — 前后端目录与模块职责
-- [贡献指南](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) · [安全说明](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
+- [贡献指南](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) / [安全说明](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
 
 ---
 

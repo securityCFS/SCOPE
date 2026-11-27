@@ -34,10 +34,10 @@
 </p>
 
 <p align="center">
-  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Rich media (GFM tables · KaTeX · inline image &amp; playable video · <code>file://</code> links) → Claude live background subagents &amp; approvals → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
+  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Rich media (GFM tables, KaTeX, inline image &amp; playable video, <code>file://</code> links) → Claude live background subagents &amp; approvals → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
 </p>
 
-| Light Mode (Tables · KaTeX · Inline Image & Video) | Dark Mode (Live Background Subagents · Approvals) |
+| Light Mode (Tables, KaTeX, Inline Image & Video) | Dark Mode (Live Background Subagents & Approvals) |
 | :---: | :---: |
 | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-light-en.png" alt="SCOPE Light Mode preview (English UI)" width="100%" /> | <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-preview-dark-en.png" alt="SCOPE Dark Mode preview (English UI)" width="100%" /> |
 
@@ -58,10 +58,10 @@
 
 ```mermaid
 flowchart LR
-  UI["Browser UI (127.0.0.1:3000)\nLight / Dark · EN / 中文"] <-->|HTTP / SSE / WS| Bridge["Local Bridge (127.0.0.1:4815)\nAuth · Quota · Scheduler · Plugins · Relay"]
+  UI["Browser UI (127.0.0.1:3000)\nLight / Dark, EN / 中文"] <-->|HTTP / SSE / WS| Bridge["Local Bridge (127.0.0.1:4815)\nAuth, Quota, Scheduler, Plugins, Relay"]
   Bridge -->|Local app-server / probes| Local["This Workstation"]
-  Bridge -->|OpenSSH| Remote1["GPU Host A (Linux)\nCodex · Claude · AGY · GPUs"]
-  Bridge -->|OpenSSH| Remote2["GPU Host B (Linux)\nCodex · Claude · AGY · GPUs"]
+  Bridge -->|OpenSSH| Remote1["GPU Host A (Linux)\nCodex / Claude / AGY / GPUs"]
+  Bridge -->|OpenSSH| Remote2["GPU Host B (Linux)\nCodex / Claude / AGY / GPUs"]
   Remote1 -.->|"Loopback SSH -R tunnel\n(scope-notify MCP)"| Bridge
 ```
 
@@ -155,7 +155,7 @@ All runtime state—host pre-launch commands, SMTP secrets (`0600`), remote tunn
 - [Agents, Sessions & Approvals](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.md) — Codex multi-account failover, Claude/AGY streaming, attachments, and reversible archiving
 - [Email Notifications & Remote Bootstrap](https://github.com/securityCFS/SCOPE/blob/main/docs/notifications-and-remote.md) — Web SMTP presets and non-root `scope-notify` MCP deployment
 - [Architecture Overview](https://github.com/securityCFS/SCOPE/blob/main/docs/architecture.md) — Module layout for contributors
-- [Contributing](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) · [Security Model](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
+- [Contributing](https://github.com/securityCFS/SCOPE/blob/main/CONTRIBUTING.md) / [Security Model](https://github.com/securityCFS/SCOPE/blob/main/SECURITY.md)
 
 ---
 

@@ -10,7 +10,7 @@
       heroKicker: "MIT Open Source, 13 MB, Zero Telemetry, Zero Credential Reads",
       heroTitle: "Ultra-lightweight, security-first web control plane for all your coding agents.",
       heroSubtitle:
-        "Monitor, resume, and steer Claude Code, Codex, and Antigravity across local and remote SSH GPU servers — 13 MB install, zero Electron bloat, zero remote daemons, and strict protocol-safe isolation that never reads Claude credentials or uploads transcripts.",
+        "Monitor, resume, and steer Claude Code, Codex, and Antigravity across local machines and remote SSH GPU servers. 13 MB npm install, zero Electron or remote daemons, and strict protocol isolation that never reads Claude credentials or uploads transcripts.",
       cmdTabPreview: "5s Preview (No SSH)",
       cmdTabInstall: "Install & Launch",
       cmdTabRemote: "Mobile Remote",
@@ -57,13 +57,13 @@
       s5Pill: "4.3 MB / 2 Deps",
       s5Title: "Ultra-Lightweight Native Footprint",
       s5Desc:
-        "Installs in seconds via npm with just 2 runtime packages (nodemailer 10.6.1, ws — 0 audit advisories), no 500 MB Electron runtime, no Docker stack, and zero remote installation. Runs at ~160 MB RAM and 0% idle CPU across 30 hosts.",
+        "Installs in seconds via npm with only 2 runtime packages (nodemailer 10.6.1 and ws, 0 audit advisories). No 500 MB Electron wrapper, no Docker stack, and nothing to install on remote servers. Uses ~160 MB RAM and 0% idle CPU across 30 hosts.",
       s6Pill: "TTY Lock Guard",
       s6Title: "Non-Invasive Terminal Safety & MIT Audit",
       s6Desc:
         "Detects active external Claude Code and Antigravity terminal sessions via /proc, tmux, and flock, automatically switching to read-only tailing so SCOPE never hijacks your active terminal. 100% MIT open source and auditable line by line.",
       remTag: "One-Click Remote Access",
-      remTitle: "Deploy privately to your phone in 2–3 minutes — Tailscale or your own domain.",
+      remTitle: "Access privately from your phone in 2 minutes (Tailscale or your own domain).",
       remDesc:
         "Zero open inbound firewall ports. Pick private Tailscale Serve HTTPS (no domain needed) or your own Cloudflare-managed domain with Zero Trust Access double authentication. Full English & Chinese tutorials and one-click scripts included.",
       remTabTsTitle: "Option A: Tailscale Serve",
@@ -84,7 +84,7 @@
       remGuideZh: "中文完整部署教程（Tailscale / 个人域名）",
       remScriptsLink: "Inspect All Launch Scripts",
       featTag: "Capabilities",
-      featTitle: "Built for multi-host AI workflows — not another heavy IDE.",
+      featTitle: "Multi-host agent observability, without IDE bloat.",
       featDesc:
         "No code editor bloat. Just fast observability, approvals, subagent workflows, authenticated port forwarding, and live quotas across every local or SSH GPU machine.",
       f1Badge: "Subagents & Collaboration",
@@ -120,7 +120,7 @@
       p3: "Full CLI lifecycle: scope plugin inspect / add / list / remove",
       plugCta: "Read Plugin Protocol v1",
       qsTag: "Try It in 5 Seconds",
-      qsTitle: "Launch the isolated preview right now — zero SSH needed.",
+      qsTitle: "Try the isolated preview locally (zero SSH needed).",
       qsDesc:
         "Test the real 13 MB workbench locally with synthetic data, then install globally to monitor local and remote SSH GPU agents with full privacy.",
       qsPreview: "Instant Preview (Zero SSH)",
@@ -139,7 +139,7 @@
       heroKicker: "MIT 开源，13 MB 轻量，零遥测，零凭据读取",
       heroTitle: "极致轻量的安全 Web 控制台\n一屏驾驭所有 Coding Agent",
       heroSubtitle:
-        "统一监控与操控本机及多台远程 SSH GPU 服务器上的 Claude Code、Codex 与 Antigravity——仅 13 MB 安装体积、无 Electron 重壳、远端零常驻，并严格遵循官方协议保护，绝不读取 Claude 登录凭据或上传任何对话记录。",
+        "在一张网页里监控、恢复和操控本机与远程 SSH GPU 服务器上的 Claude Code、Codex 和 Antigravity。安装仅 13 MB，无 Electron 重壳，远端无需装后台进程，严格走官方 CLI 协议，不读 Claude 凭据，不上传任何对话。",
       cmdTabPreview: "5 秒免 SSH 预览",
       cmdTabInstall: "安装与本地启动",
       cmdTabRemote: "手机远程托管",
@@ -164,7 +164,7 @@
       m4Desc:
         "绝不读取 ~/.claude/.credentials.json 或 macOS 钥匙串，严格通过官方 claude -p /usage 获取配额。",
       secTag: "安全与协议保护架构",
-      secTitle: "天生极致轻量，默认经得起源码审计的安全隔离。",
+      secTitle: "架构足够轻，隐私默认可审计",
       secDesc:
         "每一条安全承诺均直接落在开源代码与自动化回归测试中，发版时通过防泄漏扫描与 npm OIDC + Sigstore 透明日志签名溯源。",
       s1Pill: "Claude 协议保护强化",
@@ -186,13 +186,13 @@
       s5Pill: "4.3 MB / 2 依赖",
       s5Title: "极致轻量的原生运行时",
       s5Desc:
-        "一条 npm install 秒装，运行时仅依赖 nodemailer 10.6.1 与 ws 两个轻量包（0 已知安全漏洞）——无 Electron、无需 Docker、远端零部署，30 台主机常驻约 160 MB 内存、0% 空闲 CPU。",
+        "一条 npm install 秒装，运行时只依赖 nodemailer 10.6.1 和 ws 两个包（0 已知漏洞）。不打包 Electron，不需要 Docker，远端服务器零部署。实测挂载 30 台主机常驻约 160 MB 内存，空闲 CPU 为 0%。",
       s6Pill: "外部终端防抢占锁",
       s6Title: "不抢占原终端，100% MIT 开源可审计",
       s6Desc:
         "通过 /proc、tmux 与 flock 自动识别正在外部终端运行的 Claude Code 与 Antigravity 会话，自动切换只读跟踪防止写入冲突。全部源码 MIT 开源，无黑盒二进制。",
       remTag: "一键远程托管（手机端随时远控）",
-      remTitle: "2–3 分钟配好私人手机远程访问——Tailscale 私网或自有域名任选。",
+      remTitle: "2 分钟配好手机私人远程访问（Tailscale 或自有域名）",
       remDesc:
         "服务器零开放公网端口。支持免域名的 Tailscale Serve 私网 HTTPS，也支持自有 Cloudflare 托管域名 + Zero Trust Access 双重认证，附完整中英文图文教程与一键启动脚本。",
       remTabTsTitle: "方案 A：Tailscale Serve（免域名）",
@@ -213,7 +213,7 @@
       remGuideZh: "中文完整部署教程（Tailscale / 个人域名）",
       remScriptsLink: "查看全部一键启动脚本源码",
       featTag: "核心能力",
-      featTitle: "专为多机 AI 协作打造——轻量控制面，而非重型 IDE。",
+      featTitle: "专为多机 Agent 协作设计的轻量控制面",
       featDesc:
         "不塞多余的代码编辑器，专注把子代理协同、鉴权端口转发、官方配额监控与算力观测做到极致顺手。",
       f1Badge: "子代理与双向协同",
@@ -249,7 +249,7 @@
       p3: "原生 CLI 全生命周期管理：scope plugin inspect / add / list / remove",
       plugCta: "阅读插件开发协议 v1",
       qsTag: "5 秒立即体验",
-      qsTitle: "一行命令即可试玩完整界面——无需配置任何 SSH。",
+      qsTitle: "一行命令先试玩，无需配置 SSH",
       qsDesc:
         "内置零隐私虚拟数据隔离预览；满意后全局安装，即刻纳管你所有的本地与远程 SSH GPU 主机。",
       qsPreview: "5 秒零配预览（虚拟数据）",
