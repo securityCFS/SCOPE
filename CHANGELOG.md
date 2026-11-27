@@ -8,6 +8,10 @@ All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in thi
 
 - **Claude Code quota via official `/usage`**: Claude 5h / weekly / per-model quotas are now read from the unmodified Claude Code binary (`claude -p /usage --output-format json --no-session-persistence --strict-mcp-config`, zero tokens). SCOPE no longer reads `~/.claude/.credentials.json` or the macOS keychain and no longer calls Anthropic's OAuth usage endpoint with the user's token, in line with Anthropic's policy that third-party tools must not collect or intermediate Claude.ai credentials. Extra-usage credit balances are no longer shown for Claude.
 
+### Security
+
+- **Revocable temporary gateway sessions**: Untrusted-device logins no longer receive a cookie deterministically derived from the master access token (which could never be revoked short of rotating the token). Each login now mints a random secret held only in gateway memory with a 24h server-side expiry; **Sign out**, **Revoke others**, upgrading to a trusted device, or restarting the gateway invalidates it. Cookies issued by older versions stop working, so every browser must sign in once after upgrading.
+
 ## [0.2.3] — 2026-11-25
 
 ### Added

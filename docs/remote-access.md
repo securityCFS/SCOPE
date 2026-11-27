@@ -101,7 +101,7 @@ Generate or display your `0600`-protected 32-byte access token (stored in `~/.sc
 scope token --show --url https://<your-machine>.<your-tailnet>.ts.net
 ```
 
-Opening the printed `Login URL` exchanges `?token=...` via `303 Redirect` for an `HttpOnly; Secure; SameSite=Strict` cookie (`scope_private`) and immediately strips `?token=` from the browser address bar and history.
+Opening the printed `Login URL` exchanges `?token=...` via `303 Redirect` for an `HttpOnly; Secure; SameSite=Lax` cookie (`scope_private`) and strips `?token=` from the address bar. The Login URL embeds your master access token: treat it like a password, open it only on your own device, and never bookmark, paste, or share it. Untrusted (temporary) sessions use a random per-login secret held only in gateway memory, so **Sign out**, **Revoke others**, or a gateway restart invalidates them; trusted devices are listed and revocable under **Settings → Trusted Devices**.
 
 ---
 

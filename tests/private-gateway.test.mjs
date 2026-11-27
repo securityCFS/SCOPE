@@ -590,3 +590,74 @@ test("private gateway supports persistent trusted devices, rename, per-device & 
     401,
   );
 });
+
+test("private gateway temporary sessions are random, revocable, and never derived from the access token", async (t) => {
+  const { createHash } = await import("node:crypto");
+  const dir = mkdtempSync(path.join(tmpdir(), "scope-temp-sessions-"));
+  const stateFile = path.join(dir, "private-access.json");
+  const token = await loadOrCreatePrivateAccessToken(stateFile);
+  const ui = http.createServer((_request, response) => response.end("ui-ok"));
+  const bridge = http.createServer((_request, response) => response.end("{}"));
+  const uiTarget = await listen(ui);
+  const bridgeTarget = await listen(bridge);
+  const gateway = createPrivateGateway({ token, stateFile, uiTarget, bridgeTarget });
+  const gatewayUrl = await listen(gateway);
+  t.after(async () => {
+    await Promise.all([close(gateway), close(ui), close(bridge)]);
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  });
+
+  const loginTemp = async () => {
+    const response = await fetch(`${gatewayUrl}/scope-auth`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }).toString(),
+    });
+    assert.equal(response.status, 303);
+    return (response.headers.get("set-cookie") || "").split(";", 1)[0];
+  };
+  const status = async (cookie) => (await fetch(gatewayUrl, { headers: { cookie } })).status;
+
+  // The pre-hardening cookie was sha256("scope-private-session:" + token): it must no longer work.
+  const legacy = createHash("sha256").update(`scope-private-session:${token}`).digest("base64url");
+  assert.equal(await status(`scope_private=${legacy}`), 401);
+
+  const first = await loginTemp();
+  const second = await loginTemp();
+  assert.match(first, /^scope_private=s\./);
+  assert.notEqual(first, second);
+  assert.equal(first.includes(token), false);
+  assert.equal(await status(first), 200);
+  assert.equal(await status(second), 200);
+
+  // ?token=…&trust=0 also mints a random temporary session.
+  const queryLogin = await fetch(`${gatewayUrl}/?token=${encodeURIComponent(token)}&trust=0`, { redirect: "manual" });
+  assert.equal(queryLogin.status, 303);
+  const third = (queryLogin.headers.get("set-cookie") || "").split(";", 1)[0];
+  assert.match(third, /^scope_private=s\./);
+
+  // Logout kills only the current temporary session.
+  const logout = await fetch(`${gatewayUrl}/scope-auth/logout`, { method: "POST", headers: { cookie: first } });
+  assert.equal(logout.status, 200);
+  assert.equal(await status(first), 401);
+  assert.equal(await status(second), 200);
+
+  // Revoke-others from one session signs out every other temporary session.
+  const revoke = await fetch(`${gatewayUrl}/scope-auth/devices/revoke-others`, { method: "POST", headers: { cookie: second } });
+  assert.equal(revoke.status, 200);
+  assert.equal((await revoke.json()).removedSessions, 1);
+  assert.equal(await status(third), 401);
+  assert.equal(await status(second), 200);
+
+  // Upgrading to a trusted device retires the temporary session cookie.
+  const upgrade = await fetch(`${gatewayUrl}/scope-auth/devices/trust`, {
+    method: "POST",
+    headers: { cookie: second, "content-type": "application/json" },
+    body: JSON.stringify({ name: "Laptop" }),
+  });
+  assert.equal(upgrade.status, 200);
+  const trusted = (upgrade.headers.get("set-cookie") || "").split(";", 1)[0];
+  assert.equal(await status(second), 401);
+  assert.equal(await status(trusted), 200);
+});

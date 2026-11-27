@@ -188,9 +188,11 @@ function equalSecret(actual, expected) {
   return timingSafeEqual(left, right);
 }
 
-function cookieValue(token) {
+const MAX_TEMPORARY_SESSIONS = 200;
+
+function hashSessionSecret(secret) {
   return createHash("sha256")
-    .update(`scope-private-session:${token}`)
+    .update(`scope-private-temp-session:${secret}`)
     .digest("base64url");
 }
 
@@ -879,6 +881,34 @@ export function createPrivateGateway({
   const trustedTtlMs = trustedTtlSeconds * 1000;
 
   let trustedDevices = [];
+  // Temporary (untrusted-device) sessions: random per-login secrets kept only
+  // in memory, so logout / revoke-others / restart invalidate them.
+  const temporarySessions = new Map();
+
+  const pruneTemporarySessions = (now = Date.now()) => {
+    for (const [key, expiresAtMs] of temporarySessions) {
+      if (expiresAtMs <= now) temporarySessions.delete(key);
+    }
+  };
+
+  const mintTemporarySession = () => {
+    const now = Date.now();
+    pruneTemporarySessions(now);
+    while (temporarySessions.size >= MAX_TEMPORARY_SESSIONS) {
+      temporarySessions.delete(temporarySessions.keys().next().value);
+    }
+    const secret = randomBytes(32).toString("base64url");
+    temporarySessions.set(
+      hashSessionSecret(secret),
+      now + SESSION_COOKIE_MAX_AGE_SECONDS * 1000,
+    );
+    return formatAuthCookie(`s.${secret}`, SESSION_COOKIE_MAX_AGE_SECONDS);
+  };
+
+  const temporarySessionKey = (raw) =>
+    typeof raw === "string" && raw.startsWith("s.") && raw.length > 2
+      ? hashSessionSecret(raw.slice(2))
+      : null;
   let loadedStateMtimeMs = -1;
   let lastStateStatAt = 0;
   let stateWriteQueue = Promise.resolve();
@@ -1001,8 +1031,13 @@ export function createPrivateGateway({
       return { ok: true, mode: "trusted-device", device, refreshCookie };
     }
 
-    if (equalSecret(raw, cookieValue(token))) {
-      return { ok: true, mode: "session", device: null, refreshCookie: null };
+    const sessionKey = temporarySessionKey(raw);
+    if (sessionKey) {
+      const expiresAtMs = temporarySessions.get(sessionKey);
+      if (expiresAtMs && expiresAtMs > Date.now()) {
+        return { ok: true, mode: "session", device: null, sessionKey, refreshCookie: null };
+      }
+      temporarySessions.delete(sessionKey);
     }
 
     return { ok: false, mode: null, device: null, refreshCookie: null };
@@ -1102,10 +1137,7 @@ export function createPrivateGateway({
           });
           setCookieHeader = minted.cookieHeader;
         } else {
-          setCookieHeader = formatAuthCookie(
-            cookieValue(token),
-            SESSION_COOKIE_MAX_AGE_SECONDS,
-          );
+          setCookieHeader = mintTemporarySession();
         }
         securityHeaders(response);
         response.writeHead(303, {
@@ -1129,7 +1161,7 @@ export function createPrivateGateway({
       requestUrl.searchParams.delete("trust");
       const setCookieHeader =
         trustFlag === "0" || trustFlag === "false"
-          ? formatAuthCookie(cookieValue(token), SESSION_COOKIE_MAX_AGE_SECONDS)
+          ? mintTemporarySession()
           : (
               await mintTrustedDevice({
                 name: "",
@@ -1205,6 +1237,7 @@ export function createPrivateGateway({
           }
         }
         const minted = await mintTrustedDevice({ name: desiredName, userAgent: ua });
+        if (auth.sessionKey) temporarySessions.delete(auth.sessionKey);
         const devices = await listPublicDevices(minted.device.id);
         sendJson(
           response,
@@ -1232,14 +1265,21 @@ export function createPrivateGateway({
       trustedDevices = keepId
         ? before.filter((item) => item.id === keepId)
         : [];
+      let removedSessions = 0;
+      for (const key of [...temporarySessions.keys()]) {
+        if (key === auth.sessionKey) continue;
+        temporarySessions.delete(key);
+        removedSessions += 1;
+      }
       const removedCount = before.length - trustedDevices.length;
       await persistTrustedDevices();
       const devices = await listPublicDevices(keepId);
-      sendJson(response, 200, { ok: true, removedCount, devices });
+      sendJson(response, 200, { ok: true, removedCount, removedSessions, devices });
       return;
     }
 
     if (requestUrl.pathname === "/scope-auth/logout" && request.method === "POST") {
+      if (auth.sessionKey) temporarySessions.delete(auth.sessionKey);
       if (auth.device?.id) {
         await syncTrustedDevicesFromDisk(true);
         trustedDevices = pruneTrustedDevices(trustedDevices).filter(

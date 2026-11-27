@@ -101,7 +101,7 @@ scope expose tailscale --off
 scope token --show --url https://<机器名>.<你的tailnet>.ts.net
 ```
 
-在手机浏览器打开输出的 `Login URL` 后，网关会通过 `303` 重定向写入 `HttpOnly; Secure; SameSite=Strict` Cookie（`scope_private`），并立即将 `?token=` 从地址栏和历史记录中抹除。
+在手机浏览器打开输出的 `Login URL` 后，网关会通过 `303` 重定向写入 `HttpOnly; Secure; SameSite=Lax` Cookie（`scope_private`），并将 `?token=` 从地址栏移除。Login URL 内含主访问密钥：请像密码一样对待，只在自己的设备上打开，不要收藏、粘贴或分享。未勾选信任的临时会话使用每次登录随机生成、仅保存在网关内存中的密钥，**退出登录**、**移除其他设备** 或重启网关都会使其失效；受信任设备可在 **设置 → 受信任设备** 中查看和单独吊销。
 
 ---
 
