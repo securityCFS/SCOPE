@@ -23,6 +23,19 @@ const DEFAULT_STATE_FILE = path.resolve(
   "../.scope/private-access.json",
 );
 const COOKIE_NAME = "scope_private";
+// Isolated port-proxy origin (opt-in via SCOPE_PORT_ORIGIN): forwarded apps are
+// served from a different host and never share the control-plane origin.
+const PORT_SESSION_COOKIE = "scope_port";
+const PORT_TICKET_PARAM = "__scope_port_ticket";
+const PORT_TICKET_TTL_MS = 60 * 1000;
+const PORT_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
+const MAX_PORT_TICKETS = 200;
+const MAX_PORT_SESSIONS = 200;
+// Response headers a forwarded app must never be able to set on a SCOPE origin.
+const PORT_PROXY_STRIPPED_RESPONSE_HEADERS = [
+  "service-worker-allowed",
+  "clear-site-data",
+];
 const DEFAULT_TRUSTED_DEVICE_DAYS = 90;
 const SESSION_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
 const MAX_TRUSTED_DEVICES = 50;
@@ -69,6 +82,7 @@ function stripGatewayCookies(header = "") {
       if (!name) return false;
       return (
         name !== COOKIE_NAME &&
+        name !== PORT_SESSION_COOKIE &&
         name !== "CF_Authorization" &&
         name !== "CF_AppSession"
       );
@@ -118,6 +132,7 @@ function rewritePortProxySetCookie(setCookie, port) {
     const name = (eq >= 0 ? value.slice(0, eq) : value).trim();
     return (
       name === COOKIE_NAME ||
+      name === PORT_SESSION_COOKIE ||
       name === "CF_Authorization" ||
       name === "CF_AppSession"
     );
@@ -263,6 +278,56 @@ function sanitizeDeviceName(raw, fallback = "Browser Device") {
     .trim()
     .slice(0, 64);
   return cleaned || fallback;
+}
+
+/**
+ * Validate an isolated port-proxy origin such as `https://scope-ports.example.com`.
+ * Plain http:// is only accepted for loopback / `*.localhost` test hosts.
+ */
+export function parsePortOrigin(value) {
+  if (!value) return null;
+  let parsed;
+  try {
+    parsed = new URL(String(value).trim());
+  } catch {
+    throw new Error(`Invalid port origin: ${value}`);
+  }
+  const host = parsed.hostname.toLowerCase();
+  const localTestHost = isLoopbackHostname(host) || host.endsWith(".localhost");
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && localTestHost)) {
+    throw new Error("Port origin must use https:// (http:// only for *.localhost tests)");
+  }
+  if (
+    (parsed.pathname && parsed.pathname !== "/") ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.username ||
+    parsed.password
+  ) {
+    throw new Error("Port origin must be a bare origin like https://scope-ports.example.com");
+  }
+  return parsed;
+}
+
+function hashPortSecret(kind, secret) {
+  return createHash("sha256")
+    .update(`scope-port-${kind}:${secret}`)
+    .digest("base64url");
+}
+
+function formatPortSessionCookie(value, maxAgeSeconds) {
+  const safeMaxAge = Math.max(0, Math.round(maxAgeSeconds));
+  return `${PORT_SESSION_COOKIE}=${value}; Path=/scope-port/; HttpOnly; Secure; SameSite=Lax; Max-Age=${safeMaxAge}`;
+}
+
+function isServiceWorkerScriptRequest(request) {
+  return String(request.headers["service-worker"] || "").toLowerCase() === "script";
+}
+
+function sendPortOriginText(response, statusCode, message) {
+  portProxySecurityHeaders(response);
+  response.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" });
+  response.end(message);
 }
 
 function safeRedirectTarget(raw = "/") {
@@ -554,6 +619,7 @@ function proxyPortRequest(request, response, target, upstreamPath, port) {
       const headers = { ...upstreamResponse.headers };
       delete headers["access-control-allow-origin"];
       delete headers["access-control-allow-credentials"];
+      for (const name of PORT_PROXY_STRIPPED_RESPONSE_HEADERS) delete headers[name];
       const statusCode = upstreamResponse.statusCode || 502;
       if (
         statusCode >= 300 &&
@@ -916,6 +982,7 @@ export function createPrivateGateway({
   stateFile = null,
   trustedDeviceDays: explicitTrustedDeviceDays,
   portCacheTtlMs = 300,
+  portOrigin = "",
 } = {}) {
   if (typeof token !== "string" || token.length < 32) {
     throw new Error("A private access token of at least 32 characters is required");
@@ -973,6 +1040,72 @@ export function createPrivateGateway({
     });
     stateWriteQueue = run.catch(() => {});
     return run.catch(() => false);
+  };
+
+  const portOriginUrl = parsePortOrigin(portOrigin);
+  const portTickets = new Map();
+  const portSessions = new Map();
+
+  const isPortOriginRequest = (request) =>
+    Boolean(portOriginUrl) &&
+    String(request.headers.host || "").toLowerCase() === portOriginUrl.host;
+
+  const pruneExpiring = (map, now = Date.now()) => {
+    for (const [key, entry] of map) {
+      const expiresAtMs = typeof entry === "number" ? entry : entry.expiresAtMs;
+      if (expiresAtMs <= now) map.delete(key);
+    }
+  };
+
+  const capMap = (map, max) => {
+    while (map.size >= max) map.delete(map.keys().next().value);
+  };
+
+  const mintPortTicket = () => {
+    pruneExpiring(portTickets);
+    capMap(portTickets, MAX_PORT_TICKETS);
+    const secret = randomBytes(32).toString("base64url");
+    portTickets.set(hashPortSecret("ticket", secret), {
+      expiresAtMs: Date.now() + PORT_TICKET_TTL_MS,
+    });
+    return secret;
+  };
+
+  const consumePortTicket = (secret) => {
+    if (typeof secret !== "string" || secret.length < 16) return false;
+    pruneExpiring(portTickets);
+    const key = hashPortSecret("ticket", secret);
+    const entry = portTickets.get(key);
+    portTickets.delete(key);
+    return Boolean(entry && entry.expiresAtMs > Date.now());
+  };
+
+  const mintPortSession = () => {
+    pruneExpiring(portSessions);
+    capMap(portSessions, MAX_PORT_SESSIONS);
+    const secret = randomBytes(32).toString("base64url");
+    portSessions.set(
+      hashPortSecret("session", secret),
+      Date.now() + PORT_SESSION_MAX_AGE_SECONDS * 1000,
+    );
+    return formatPortSessionCookie(secret, PORT_SESSION_MAX_AGE_SECONDS);
+  };
+
+  const hasPortSession = (request) => {
+    const raw = parseCookies(request.headers.cookie)[PORT_SESSION_COOKIE];
+    if (!raw) return false;
+    const key = hashPortSecret("session", raw);
+    const expiresAtMs = portSessions.get(key);
+    if (expiresAtMs && expiresAtMs > Date.now()) return true;
+    portSessions.delete(key);
+    return false;
+  };
+
+  // Forwarded-app sessions cannot be attributed to a device, so any sign-out or
+  // revocation conservatively drops all of them; users simply reopen the port.
+  const dropPortSessions = () => {
+    portSessions.clear();
+    portTickets.clear();
   };
 
   const temporarySessionKey = (raw) =>
@@ -1173,11 +1306,88 @@ export function createPrivateGateway({
     return next.get(port) || null;
   };
 
+  const servePortProxy = async (request, response, requestUrl) => {
+    if (isServiceWorkerScriptRequest(request)) {
+      // A forwarded app must never install a service worker on a SCOPE origin.
+      sendPortOriginText(response, 403, "Service workers are not allowed through the SCOPE port proxy");
+      return;
+    }
+    const parsed = parsePortProxyPath(requestUrl.pathname);
+    if (!parsed) {
+      securityHeaders(response);
+      response.writeHead(400, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ error: "Invalid port proxy path" }));
+      return;
+    }
+    const targetInfo = await resolveAllowedPortTarget(parsed.port);
+    if (!targetInfo) {
+      securityHeaders(response);
+      response.writeHead(403, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          error: `Port ${parsed.port} is not currently open in SCOPE`,
+        }),
+      );
+      return;
+    }
+    if (parsed.needsTrailingSlash) {
+      portProxySecurityHeaders(response);
+      response.writeHead(307, {
+        Location: `/scope-port/${parsed.port}/${requestUrl.search}`,
+      });
+      response.end();
+      return;
+    }
+    proxyPortRequest(
+      request,
+      response,
+      loopbackUrlForPort(targetInfo.localHost, targetInfo.port),
+      `${parsed.suffix}${requestUrl.search}`,
+      parsed.port,
+    );
+  };
+
+  const handlePortOriginRequest = async (request, response, requestUrl) => {
+    if (!requestUrl.pathname.startsWith("/scope-port/")) {
+      sendPortOriginText(response, 404, "Not found");
+      return;
+    }
+    const ticket = requestUrl.searchParams.get(PORT_TICKET_PARAM);
+    if (ticket !== null) {
+      requestUrl.searchParams.delete(PORT_TICKET_PARAM);
+      if (!consumePortTicket(ticket)) {
+        sendPortOriginText(response, 403, "This port link expired. Reopen the port from the SCOPE workbench.");
+        return;
+      }
+      portProxySecurityHeaders(response);
+      response.writeHead(303, {
+        Location: safeRedirectTarget(`${requestUrl.pathname}${requestUrl.search}`),
+        "Set-Cookie": mintPortSession(),
+      });
+      response.end();
+      return;
+    }
+    if (!hasPortSession(request)) {
+      sendPortOriginText(response, 401, "Open this port from the SCOPE workbench to sign in.");
+      return;
+    }
+    if (!hasSafeWriteOrigin(request)) {
+      sendPortOriginText(response, 403, "Cross-site write rejected");
+      return;
+    }
+    await servePortProxy(request, response, requestUrl);
+  };
+
   const handler = async (request, response) => {
     if (!allowed(request)) {
       response.writeHead(403); response.end("Client address is not allowed"); return;
     }
     const requestUrl = new URL(request.url || "/", "http://scope.local");
+
+    if (isPortOriginRequest(request)) {
+      await handlePortOriginRequest(request, response, requestUrl);
+      return;
+    }
 
     if (request.method === "POST" && requestUrl.pathname === "/scope-auth") {
       if (!hasSafeWriteOrigin(request, { allowOpaqueLoginOrigin: true })) {
@@ -1355,6 +1565,7 @@ export function createPrivateGateway({
       trustedDevices = keepId
         ? before.filter((item) => item.id === keepId)
         : [];
+      dropPortSessions();
       let removedSessions = 0;
       for (const key of [...temporarySessions.keys()]) {
         if (key === auth.sessionKey) continue;
@@ -1369,6 +1580,7 @@ export function createPrivateGateway({
     }
 
     if (requestUrl.pathname === "/scope-auth/logout" && request.method === "POST") {
+      dropPortSessions();
       if (auth.sessionKey) temporarySessions.delete(auth.sessionKey);
       if (auth.device?.id) {
         await syncTrustedDevicesFromDisk(true);
@@ -1428,6 +1640,7 @@ export function createPrivateGateway({
           return;
         }
         await persistTrustedDevices();
+        dropPortSessions();
         const revokedCurrent = Boolean(auth.device?.id && auth.device.id === targetId);
         const devices = await listPublicDevices(
           revokedCurrent ? null : auth.device?.id || null,
@@ -1443,39 +1656,21 @@ export function createPrivateGateway({
     }
 
     if (requestUrl.pathname.startsWith("/scope-port/")) {
-      const parsed = parsePortProxyPath(requestUrl.pathname);
-      if (!parsed) {
+      if (portOriginUrl) {
+        // Never execute forwarded apps on the control-plane origin: hand the
+        // browser a single-use ticket for the isolated port origin instead.
+        if (!["GET", "HEAD"].includes(request.method || "")) {
+          sendJson(response, 403, { error: "Port proxy is served from the isolated port origin" });
+          return;
+        }
+        const target = new URL(`${requestUrl.pathname}${requestUrl.search}`, portOriginUrl);
+        target.searchParams.set(PORT_TICKET_PARAM, mintPortTicket());
         securityHeaders(response);
-        response.writeHead(400, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ error: "Invalid port proxy path" }));
-        return;
-      }
-      const targetInfo = await resolveAllowedPortTarget(parsed.port);
-      if (!targetInfo) {
-        securityHeaders(response);
-        response.writeHead(403, { "Content-Type": "application/json" });
-        response.end(
-          JSON.stringify({
-            error: `Port ${parsed.port} is not currently open in SCOPE`,
-          }),
-        );
-        return;
-      }
-      if (parsed.needsTrailingSlash) {
-        portProxySecurityHeaders(response);
-        response.writeHead(307, {
-          Location: `/scope-port/${parsed.port}/${requestUrl.search}`,
-        });
+        response.writeHead(303, { Location: target.toString() });
         response.end();
         return;
       }
-      proxyPortRequest(
-        request,
-        response,
-        loopbackUrlForPort(targetInfo.localHost, targetInfo.port),
-        `${parsed.suffix}${requestUrl.search}`,
-        parsed.port,
-      );
+      await servePortProxy(request, response, requestUrl);
       return;
     }
 
@@ -1506,10 +1701,52 @@ export function createPrivateGateway({
   };
   server = tls ? https.createServer(tls, handler) : http.createServer(handler);
 
+  const upgradePortProxy = async (request, socket, head, requestUrl) => {
+    const parsed = parsePortProxyPath(requestUrl.pathname);
+    if (!parsed) {
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+      return;
+    }
+    const targetInfo = await resolveAllowedPortTarget(parsed.port);
+    if (!targetInfo) {
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      return;
+    }
+    const target = loopbackUrlForPort(targetInfo.localHost, targetInfo.port);
+    proxyUpgrade(
+      request,
+      socket,
+      head,
+      target,
+      `${parsed.suffix || "/"}${requestUrl.search}`,
+      false,
+      sanitizePortProxyHeaders(
+        request,
+        target,
+        `/scope-port/${parsed.port}`,
+        { isUpgrade: true },
+      ),
+    );
+  };
+
   server.on("upgrade", async (request, socket, head) => {
     try {
       if (!allowed(request) || (request.headers.origin && !hasSafeWriteOrigin({ headers: request.headers, method: "POST" }))) {
         socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        return;
+      }
+      const requestUrl = new URL(request.url || "/", "http://scope.local");
+      if (isPortOriginRequest(request)) {
+        if (!requestUrl.pathname.startsWith("/scope-port/")) {
+          socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+          return;
+        }
+        if (!hasPortSession(request)) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+        await upgradePortProxy(request, socket, head, requestUrl);
         return;
       }
       const wsAuth = await resolveAuth(request);
@@ -1518,34 +1755,12 @@ export function createPrivateGateway({
         socket.destroy();
         return;
       }
-      const requestUrl = new URL(request.url || "/", "http://scope.local");
       if (requestUrl.pathname.startsWith("/scope-port/")) {
-        const parsed = parsePortProxyPath(requestUrl.pathname);
-        if (!parsed) {
-          socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-          return;
-        }
-        const targetInfo = await resolveAllowedPortTarget(parsed.port);
-        if (!targetInfo) {
+        if (portOriginUrl) {
           socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
           return;
         }
-        const target = loopbackUrlForPort(targetInfo.localHost, targetInfo.port);
-        const upstreamPath = `${parsed.suffix || "/"}${requestUrl.search}`;
-        proxyUpgrade(
-          request,
-          socket,
-          head,
-          target,
-          upstreamPath,
-          false,
-          sanitizePortProxyHeaders(
-            request,
-            target,
-            `/scope-port/${parsed.port}`,
-            { isUpgrade: true },
-          ),
-        );
+        await upgradePortProxy(request, socket, head, requestUrl);
         return;
       }
       if (requestUrl.pathname.startsWith("/scope-api/")) {
@@ -1582,6 +1797,7 @@ export async function startPrivateGateway({
   uiTarget = defaultUiTarget(),
   bridgeTarget = defaultBridgeTarget(),
   trustedDeviceDays,
+  portOrigin = process.env.SCOPE_PORT_ORIGIN || "",
 } = {}) {
   if (!isLoopbackHostname(host)) {
     throw new Error("Private gateway must listen on loopback");
@@ -1595,10 +1811,11 @@ export async function startPrivateGateway({
     uiTarget,
     bridgeTarget,
     trustedDeviceDays,
+    portOrigin,
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, resolve);
   });
-  return { server, token, host, port, stateFile };
+  return { server, token, host, port, stateFile, portOrigin: portOrigin || null };
 }

@@ -21,7 +21,8 @@ Usage:
   scope token [--show] [--rotate] [--url U]  Inspect/rotate the gateway token; --url prints a single-use login URL
   scope devices [list | revoke <id|--all>]   List or revoke trusted mobile/browser devices
   scope expose tailscale [options]           Expose Private Gateway privately over Tailscale Serve
-  scope expose cloudflare --domain <fqdn>    Configure Cloudflare Named Tunnel (+ Access checklist)
+  scope expose cloudflare --domain <fqdn> [--port-domain <fqdn>]
+                                             Configure Cloudflare Named Tunnel (+ Access checklist)
   scope service <install|status|restart|uninstall> [options]
                                              Manage Linux systemd --user persistent services
   scope preview [--en]                       Launch isolated zero-SSH preview mode
@@ -35,6 +36,7 @@ Start options:
   --bridge-port <port>   Bridge API port (default: 4815, env: SCOPE_BRIDGE_PORT)
   --gateway              Also start Private Access Gateway (127.0.0.1:4820) under one supervisor
   --gateway-port <port>  Private Gateway port (default: 4820, env: SCOPE_PRIVATE_PORT)
+  --port-origin <url>    Serve forwarded ports from an isolated origin, e.g. https://scope-ports.example.com (env: SCOPE_PORT_ORIGIN)
   --state-dir <dir>      State directory (default: ./.scope in repo or ~/.scope globally)
   --skip-build           Use prebuilt UI bundle without rebuilding
   --build                Force rebuild UI before starting (source checkout only)
@@ -95,6 +97,7 @@ if (command === "start") {
   const uiPort = readFlag(rest, "--port");
   const bridgePort = readFlag(rest, "--bridge-port");
   const gatewayPort = readFlag(rest, "--gateway-port");
+  const portOrigin = readFlag(rest, "--port-origin");
   const withGateway = rest.includes("--gateway") || rest.includes("--private-gateway");
   const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
   const forwardArgs = [];
@@ -111,18 +114,21 @@ if (command === "start") {
     ...(uiPort ? { SCOPE_UI_PORT: uiPort } : {}),
     ...(bridgePort ? { SCOPE_BRIDGE_PORT: bridgePort } : {}),
     ...(gatewayPort ? { SCOPE_PRIVATE_PORT: gatewayPort } : {}),
+    ...(portOrigin ? { SCOPE_PORT_ORIGIN: portOrigin } : {}),
     ...(withGateway ? { SCOPE_WITH_GATEWAY: "1" } : {}),
   });
 } else if (command === "gateway") {
   const gatewayPort = readFlag(rest, "--port") || readFlag(rest, "--gateway-port");
   const uiPort = readFlag(rest, "--ui-port");
   const bridgePort = readFlag(rest, "--bridge-port");
+  const portOrigin = readFlag(rest, "--port-origin");
   const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
   runScript("bridge/private-start.mjs", [], {
     SCOPE_STATE_DIR: stateDir,
     ...(gatewayPort ? { SCOPE_PRIVATE_PORT: gatewayPort } : {}),
     ...(uiPort ? { SCOPE_UI_PORT: uiPort } : {}),
     ...(bridgePort ? { SCOPE_BRIDGE_PORT: bridgePort } : {}),
+    ...(portOrigin ? { SCOPE_PORT_ORIGIN: portOrigin } : {}),
   });
 } else if (command === "token" || command === "devices" || command === "expose" || command === "service") {
   const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));

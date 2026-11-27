@@ -245,6 +245,24 @@ SCOPE's Private Gateway includes a **Zero-SSRF Authenticated Port Proxy** at `/s
    - **Hard-blocked control ports**: Ports `22`, `53`, `2019`, `3000`, `4815`, `4820`, `4822`, `4880`, `4922`, plus the active UI/Bridge/Gateway ports can never be proxied.
    - **Zero credential leakage**: `scope_private`, `CF_Authorization`, and Cloudflare JWT headers are stripped before requests reach the proxied app, and proxied apps cannot overwrite gateway cookies.
 
+
+### Isolate forwarded ports on their own origin (strongly recommended)
+
+By default `/scope-port/<port>/` shares the SCOPE origin, so **any JavaScript in a forwarded page runs with the same browser privileges as the SCOPE workbench** — it can call `/scope-api` with your session cookie and drive agents and terminals on every host. That is acceptable only for ports whose content you fully trust. A dev server with a malicious npm dependency, an XSS bug, or someone else's notebook is enough to take over SCOPE. (The gateway always strips `Service-Worker-Allowed` / `Clear-Site-Data` from forwarded responses and refuses service-worker scripts, but that cannot stop same-origin API calls.)
+
+Serve forwarded apps from a separate hostname instead:
+
+1. Pick a one-level hostname covered by your Universal SSL certificate, e.g. `scope-ports.yourdomain.com` (not `ports.scope.yourdomain.com`).
+2. Add it as a **second public hostname of the same Cloudflare Access application** (Zero Trust → Access → Applications → your SCOPE app → Configure → Add public hostname). Do this *before* routing DNS.
+3. Route it through the same tunnel and enable isolation:
+
+```sh
+scope expose cloudflare --domain scope.yourdomain.com --port-domain scope-ports.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub --port-origin https://scope-ports.yourdomain.com
+```
+
+With `SCOPE_PORT_ORIGIN` set, the SCOPE origin never executes forwarded content: opening `/scope-port/<port>/` hands your browser a **single-use, 60-second ticket** and redirects to the port origin, which issues its own `scope_port` cookie (`Path=/scope-port/`, 12 h). The port origin serves **only** `/scope-port/*` — no UI, no `/scope-api`, no login — so a hostile forwarded page can at most affect other forwarded pages. Signing out or revoking devices in SCOPE drops all port sessions; simply reopen the port from the workbench.
+
 ---
 
 ## Token Rotation & Operations

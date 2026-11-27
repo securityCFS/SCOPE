@@ -11,12 +11,17 @@ const stateFile = process.env.SCOPE_PRIVATE_STATE
   : process.env.SCOPE_STATE_DIR
     ? path.join(path.resolve(process.env.SCOPE_STATE_DIR), "private-access.json")
     : path.join(repoRoot, ".scope", "private-access.json");
-const { server, host, port } = await startPrivateGateway({ stateFile });
+const { server, host, port, portOrigin } = await startPrivateGateway({ stateFile });
 
 console.log(`[scope-private] gateway listening on http://${host}:${port}`);
 console.log(`[scope-private] access token is stored in ${stateFile}`);
 console.log("[scope-private] expose via Tailscale Serve (never Funnel) or Cloudflare Tunnel + Zero Trust Access.");
 console.log("[scope-private] run `scope token --show` to view your login token.");
+console.log(
+  portOrigin
+    ? `[scope-private] forwarded ports are isolated on ${portOrigin}`
+    : "[scope-private] forwarded ports share this origin; set SCOPE_PORT_ORIGIN to isolate them (see docs/remote-access.md).",
+);
 
 function stop() {
   server.close(() => process.exit(0));

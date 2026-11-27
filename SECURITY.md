@@ -8,6 +8,7 @@ SCOPE is designed as a **single-operator control surface**. By default, both the
 - For remote browser access, use SSH port forwarding, `npm run private-gateway` behind Tailscale Serve (never Funnel), or `npm run shared-gateway` with TLS and an explicit IP allowlist.
 - **Local Secrets**: SMTP credentials (`.scope/email-smtp-secret.json`), relay bearer tokens (`.scope/agent-email-relay.json`), gateway access keys, and session caches live exclusively inside the git-ignored `.scope/` directory with `0600` file permissions where supported.
 - **Remote Notifications**: Remote hosts only receive a loopback HTTP endpoint (`http://127.0.0.1:4922/v1/notify`) and a scoped bearer token—never your SMTP username or password.
+- **Forwarded ports (`/scope-port`)**: Forwarded web apps share the SCOPE origin unless `SCOPE_PORT_ORIGIN` points the gateway at a separate hostname. On the shared origin, any script in a forwarded page can act as the signed-in operator, so only forward content you trust, or enable the isolated port origin (see `docs/remote-access.md`).
 - **Plugins**: Locally imported plugins execute in the same Node.js process as the Bridge. Only install plugins whose source code you have audited.
 
 ## Reporting a Vulnerability

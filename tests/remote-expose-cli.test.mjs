@@ -171,3 +171,31 @@ test("scope expose & service dry-run commands render accurate Tailscale, Cloudfl
   assert.match(svcDry, /--- scope-private-gateway\.service ---/);
   assert.match(svcDry, /--- scope-cloudflared\.service ---/);
 });
+
+test("isolated port domain adds a second ingress hostname and SCOPE_PORT_ORIGIN to the gateway unit", () => {
+  const yaml = buildCloudflaredConfig({
+    tunnelId: "uuid-1",
+    credentialsFile: "/home/u/.cloudflared/uuid-1.json",
+    domain: "scope.example.dev",
+    portDomain: "scope-ports.example.dev",
+  });
+  const hostnames = [...yaml.matchAll(/hostname: (\S+)/g)].map((match) => match[1]);
+  assert.deepEqual(hostnames, ["scope.example.dev", "scope-ports.example.dev"]);
+  assert.equal((yaml.match(/service: http:\/\/127\.0\.0\.1:4820/g) || []).length, 2);
+  assert.match(yaml, /service: http_status:404\n$/);
+  assert.throws(() => buildCloudflaredConfig({ tunnelId: "u", credentialsFile: "/c", domain: "a.example.dev", portDomain: "a.example.dev" }));
+  assert.throws(() => buildCloudflaredConfig({ tunnelId: "u", credentialsFile: "/c", domain: "a.example.dev", portDomain: "bad host" }));
+
+  const units = renderSystemdUnits({
+    nodeBin: "/usr/bin/node",
+    scopeBin: "/opt/scope/bin/scope.mjs",
+    stateDir: "/home/u/.scope",
+    withGateway: true,
+    portOrigin: "https://scope-ports.example.dev",
+  });
+  const gatewayUnit = units.find((unit) => unit.name === "scope-private-gateway.service").content;
+  assert.match(gatewayUnit, /^Environment=SCOPE_PORT_ORIGIN=https:\/\/scope-ports\.example\.dev$/m);
+  const workbenchUnit = units.find((unit) => unit.name === "scope-workbench.service").content;
+  assert.doesNotMatch(workbenchUnit, /SCOPE_PORT_ORIGIN/);
+  assert.throws(() => renderSystemdUnits({ stateDir: "/s", withGateway: true, portOrigin: "http://insecure.example.dev" }));
+});

@@ -2,6 +2,17 @@
 
 All notable changes to **SCOPE** (`@godchaser/scope`, formerly `scope-agent-workbench`) are documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- **Isolated port-proxy origin**: Set `SCOPE_PORT_ORIGIN` (or `--port-origin`) to serve `/scope-port/*` from a separate hostname. The control-plane origin then never executes forwarded apps; it issues a single-use 60-second ticket and redirects to the port origin, which only serves `/scope-port/*` with its own `scope_port` cookie and has no access to `/scope-api`. Sign-out and device revocation drop all port sessions. `scope expose cloudflare --port-domain` and `scope service install --port-origin` configure it.
+- **Port proxy hardening (always on)**: Forwarded responses can no longer set `Service-Worker-Allowed` or `Clear-Site-Data`, service-worker script fetches through `/scope-port` are refused, and the `scope_port` cookie is neither forwarded to nor settable by proxied apps.
+
+### Fixed
+
+- `scope expose` hints now print `scope token --url` (single-use links) instead of the removed `--show --url` flow.
+
 ## [0.2.5] — 2026-11-27
 
 ### Fixed

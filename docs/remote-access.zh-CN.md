@@ -245,6 +245,24 @@ SCOPE 私有网关内置了 **零 SSRF 认证端口代理（`/scope-port/<port>/
    - **系统/控制端口硬屏蔽**：`22`、`53`、`2019`、`3000`、`4815`、`4820`、`4822`、`4880`、`4922` 以及当前 UI/Bridge/Gateway 端口永久禁止通过 `/scope-port/` 访问。
    - **零凭据泄漏**：代理请求前自动剥离 `scope_private`、`CF_Authorization` 与 Cloudflare JWT 头，并禁止业务页面覆盖网关 Cookie。
 
+
+### 为转发端口启用独立域名隔离（强烈建议）
+
+默认情况下 `/scope-port/<port>/` 与 SCOPE 控制台同源，因此**被转发页面中的任意 JavaScript 都拥有与 SCOPE 工作台相同的浏览器权限**：可以携带你的会话 Cookie 调用 `/scope-api`，进而操控所有主机上的 Agent 与终端。只有在你完全信任端口内容时这才可以接受；带恶意 npm 依赖的开发服务器、存在 XSS 的页面或他人分享的 Notebook 都足以接管 SCOPE。（网关始终会剥离转发响应中的 `Service-Worker-Allowed` / `Clear-Site-Data` 并拒绝 Service Worker 脚本，但无法阻止同源 API 调用。）
+
+建议改为由独立主机名提供转发页面：
+
+1. 选择一个被 Universal SSL 覆盖的一级子域名，例如 `scope-ports.yourdomain.com`（不要用 `ports.scope.yourdomain.com`）。
+2. 在 **同一个 Cloudflare Access 应用** 中把它添加为第二个公共主机名（Zero Trust → Access → Applications → 你的 SCOPE 应用 → Configure → Add public hostname），并且要在配置 DNS **之前** 完成。
+3. 通过同一条 Tunnel 路由并启用隔离：
+
+```sh
+scope expose cloudflare --domain scope.yourdomain.com --port-domain scope-ports.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub --port-origin https://scope-ports.yourdomain.com
+```
+
+设置 `SCOPE_PORT_ORIGIN` 后，SCOPE 主域名不再执行任何被转发的内容：打开 `/scope-port/<port>/` 时，网关会签发一张 **60 秒有效的一次性票据** 并跳转到端口域名，由端口域名签发独立的 `scope_port` Cookie（`Path=/scope-port/`，12 小时）。端口域名 **只** 提供 `/scope-port/*`，没有 UI、没有 `/scope-api`、也没有登录入口，因此恶意页面最多只能影响其他被转发的页面。在 SCOPE 中退出登录或吊销设备会同时清空所有端口会话，重新从工作台打开端口即可。
+
 ---
 
 ## 密钥轮换与常用运维命令

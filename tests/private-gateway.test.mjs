@@ -11,6 +11,7 @@ import {
   inferDeviceName,
   listTrustedDevices,
   loadOrCreatePrivateAccessToken,
+  parsePortOrigin,
   parsePortProxyPath,
   revokeTrustedDevice,
   rewritePortProxyHtml,
@@ -719,4 +720,178 @@ test("private gateway temporary sessions are random, revocable, and never derive
   const trusted = (upgrade.headers.get("set-cookie") || "").split(";", 1)[0];
   assert.equal(await status(second), 401);
   assert.equal(await status(trusted), 200);
+});
+
+function rawRequest(url, { host, method = "GET", headers = {}, body } = {}) {
+  const target = new URL(url);
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        method,
+        path: `${target.pathname}${target.search}`,
+        headers: { ...(host ? { host } : {}), ...headers },
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () =>
+          resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks).toString("utf8") }),
+        );
+      },
+    );
+    request.on("error", reject);
+    request.end(body);
+  });
+}
+
+async function startPortProxyFixture(t, gatewayOptions = {}) {
+  const seen = [];
+  const app = http.createServer((request, response) => {
+    seen.push({ url: request.url, cookie: request.headers.cookie || "" });
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Service-Worker-Allowed": "/",
+      "Clear-Site-Data": '"storage"',
+      "Set-Cookie": ["scope_port=forged; Path=/", "app_ok=1; Path=/"],
+    });
+    response.end("<html><head></head><body>forwarded-app</body></html>");
+  });
+  const appWs = new WebSocketServer({ noServer: true });
+  app.on("upgrade", (request, socket, head) => {
+    appWs.handleUpgrade(request, socket, head, (ws) => ws.send(`ws:${request.headers.cookie || ""}`));
+  });
+  const appTarget = await listen(app);
+  const appPort = Number(new URL(appTarget).port);
+  const forwards = [{ host: "@local", remotePort: appPort, localPort: appPort, localHost: "127.0.0.1", status: "connected" }];
+  const bridge = http.createServer((request, response) => {
+    if (request.url === "/api/port-forwards") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ forwards }));
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end("{}");
+  });
+  const ui = http.createServer((_request, response) => response.end("ui"));
+  const uiTarget = await listen(ui);
+  const bridgeTarget = await listen(bridge);
+  const token = "port-isolation-test-token-that-is-longer-than-32-chars";
+  const gateway = createPrivateGateway({ token, uiTarget, bridgeTarget, ...gatewayOptions });
+  const gatewayUrl = await listen(gateway);
+  t.after(async () => {
+    appWs.close();
+    await Promise.all([close(gateway), close(ui), close(bridge), close(app)]);
+  });
+  const login = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  const mainCookie = (login.headers.get("set-cookie") || "").split(";", 1)[0];
+  return { gateway, gatewayUrl, appPort, mainCookie, seen };
+}
+
+test("port proxy strips service-worker/clear-site-data headers and refuses service worker scripts", async (t) => {
+  const { gatewayUrl, appPort, mainCookie, seen } = await startPortProxyFixture(t);
+  const page = await rawRequest(`${gatewayUrl}/scope-port/${appPort}/`, {
+    headers: { cookie: `${mainCookie}; scope_port=leak-me; app_ok=1` },
+  });
+  assert.equal(page.status, 200);
+  assert.match(page.body, /forwarded-app/);
+  assert.equal(page.headers["service-worker-allowed"], undefined);
+  assert.equal(page.headers["clear-site-data"], undefined);
+  const setCookies = [page.headers["set-cookie"] || []].flat();
+  assert.equal(setCookies.some((value) => /^scope_port=/.test(value)), false);
+  assert.ok(setCookies.some((value) => /^app_ok=1/.test(value)));
+  assert.equal(seen.at(-1).cookie.includes("scope_port"), false);
+  assert.equal(seen.at(-1).cookie.includes("scope_private"), false);
+
+  const swScript = await rawRequest(`${gatewayUrl}/scope-port/${appPort}/sw.js`, {
+    headers: { cookie: mainCookie, "service-worker": "script" },
+  });
+  assert.equal(swScript.status, 403);
+});
+
+test("isolated port origin hands off with single-use tickets and never shares the control-plane origin", async (t) => {
+  // Both origins hit the same socket; the gateway tells them apart by Host header.
+  const portOrigin = "http://ports.localhost:4999";
+  const portHost = "ports.localhost:4999";
+  const { gatewayUrl, appPort, mainCookie, seen } = await startPortProxyFixture(t, { portOrigin });
+  const portsUrl = gatewayUrl;
+
+  // Control-plane origin: authenticated GET is redirected with a ticket; nothing is proxied.
+  const handoff = await rawRequest(`${gatewayUrl}/scope-port/${appPort}/dash?tab=1`, { headers: { cookie: mainCookie } });
+  assert.equal(handoff.status, 303);
+  const location = new URL(handoff.headers.location);
+  assert.equal(location.origin, portOrigin);
+  assert.equal(location.pathname, `/scope-port/${appPort}/dash`);
+  assert.equal(location.searchParams.get("tab"), "1");
+  const ticket = location.searchParams.get("__scope_port_ticket");
+  assert.ok(ticket && ticket.length >= 32);
+  assert.equal(seen.length, 0, "control-plane origin must not proxy forwarded apps");
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-port/${appPort}/`)).status, 401);
+  assert.equal(
+    (await rawRequest(`${gatewayUrl}/scope-port/${appPort}/`, { method: "POST", headers: { cookie: mainCookie, origin: gatewayUrl } })).status,
+    403,
+  );
+
+  // Port origin: only /scope-port/* exists, and only with a port session.
+  assert.equal((await rawRequest(`${portsUrl}/`, { host: portHost, headers: { cookie: mainCookie } })).status, 404);
+  assert.equal((await rawRequest(`${portsUrl}/scope-api/api/health`, { host: portHost, headers: { cookie: mainCookie } })).status, 404);
+  assert.equal(
+    (await rawRequest(`${portsUrl}/scope-auth`, { host: portHost, method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "token=x" })).status,
+    404,
+  );
+  assert.equal((await rawRequest(`${portsUrl}/scope-port/${appPort}/`, { host: portHost, headers: { cookie: mainCookie } })).status, 401);
+
+  const exchange = await rawRequest(`${portsUrl}${location.pathname}${location.search}`, { host: portHost });
+  assert.equal(exchange.status, 303);
+  assert.equal(exchange.headers.location, `/scope-port/${appPort}/dash?tab=1`);
+  const portCookieHeader = [exchange.headers["set-cookie"]].flat()[0] || "";
+  assert.match(portCookieHeader, /^scope_port=/);
+  assert.match(portCookieHeader, /Path=\/scope-port\//);
+  assert.match(portCookieHeader, /HttpOnly/);
+  const portCookie = portCookieHeader.split(";", 1)[0];
+  assert.equal(
+    (await rawRequest(`${portsUrl}${location.pathname}${location.search}`, { host: portHost })).status,
+    403,
+    "tickets are single-use",
+  );
+
+  const page = await rawRequest(`${portsUrl}/scope-port/${appPort}/`, { host: portHost, headers: { cookie: portCookie } });
+  assert.equal(page.status, 200);
+  assert.match(page.body, /forwarded-app/);
+  assert.equal(seen.at(-1).cookie.includes("scope_port"), false);
+
+  // The port session is worthless on the control plane.
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-api/api/health`, { headers: { cookie: portCookie } })).status, 401);
+
+  // WebSockets: port origin needs a port session; the control plane refuses /scope-port upgrades.
+  const wsMessage = (url, headers) =>
+    new Promise((resolve) => {
+      const socket = new WebSocket(url, { headers });
+      socket.once("message", (data) => { resolve(String(data)); socket.close(); });
+      socket.once("unexpected-response", (_request, response) => resolve(response.statusCode));
+      socket.once("error", () => resolve("error"));
+    });
+  const wsBase = gatewayUrl.replace(/^http/, "ws");
+  assert.equal(await wsMessage(`${wsBase}/scope-port/${appPort}/ws`, { host: portHost, origin: portOrigin, cookie: portCookie }), "ws:");
+  assert.equal(await wsMessage(`${wsBase}/scope-port/${appPort}/ws`, { host: portHost, origin: portOrigin }), 401);
+  assert.equal(await wsMessage(`${wsBase}/scope-port/${appPort}/ws`, { cookie: mainCookie }), 403);
+
+  // Signing out of SCOPE drops forwarded-app sessions too.
+  await fetch(`${gatewayUrl}/scope-auth/logout`, { method: "POST", headers: { cookie: mainCookie } });
+  assert.equal((await rawRequest(`${portsUrl}/scope-port/${appPort}/`, { host: portHost, headers: { cookie: portCookie } })).status, 401);
+});
+
+test("parsePortOrigin accepts bare https origins and rejects unsafe values", () => {
+  assert.equal(parsePortOrigin(""), null);
+  assert.equal(parsePortOrigin("https://scope-ports.example.com").host, "scope-ports.example.com");
+  assert.equal(parsePortOrigin("http://ports.localhost:4820").host, "ports.localhost:4820");
+  for (const bad of ["http://scope-ports.example.com", "https://x.example.com/path", "https://x.example.com/?a=1", "https://u:p@x.example.com", "not a url"]) {
+    assert.throws(() => parsePortOrigin(bad), Error, bad);
+  }
 });
