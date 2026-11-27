@@ -95,13 +95,13 @@ scope expose tailscale --off
 
 ### 3. Sign in from your phone (one-tap URL or manual token)
 
-Generate or display your `0600`-protected 32-byte access token (stored in `~/.scope/private-access.json`):
+Print a **single-use** one-tap login URL (valid for 10 minutes; your `0600`-protected 32-byte master token stays in `~/.scope/private-access.json` and is never put in a URL — add `--show` to print it for manual entry):
 
 ```sh
-scope token --show --url https://<your-machine>.<your-tailnet>.ts.net
+scope token --url https://<your-machine>.<your-tailnet>.ts.net
 ```
 
-Opening the printed `Login URL` exchanges `?token=...` via `303 Redirect` for an `HttpOnly; Secure; SameSite=Lax` cookie (`scope_private`) and strips `?token=` from the address bar. The Login URL embeds your master access token: treat it like a password, open it only on your own device, and never bookmark, paste, or share it. Untrusted (temporary) sessions use a random per-login secret held only in gateway memory, so **Sign out**, **Revoke others**, or a gateway restart invalidates them; trusted devices are listed and revocable under **Settings → Trusted Devices**.
+Opening the printed `Login URL` consumes its one-time `?scope_login=` code, issues an `HttpOnly; Secure; SameSite=Lax` cookie (`scope_private`) via `303 Redirect`, and strips the code from the address bar. A used or expired link only shows the login page, so a leaked URL from browser history is worthless. Old `?token=<master token>` links no longer sign anyone in. Untrusted (temporary) sessions use a random per-login secret held only in gateway memory, so **Sign out**, **Revoke others**, or a gateway restart invalidates them; trusted devices are listed and revocable under **Settings → Trusted Devices**.
 
 ---
 
@@ -217,12 +217,12 @@ You should see **`HTTP/2 302`** redirecting to `https://<your-team>.cloudflareac
 Print your one-tap login URL:
 
 ```sh
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 1. Open `https://scope.yourdomain.com` (or the one-tap URL) on your phone.
 2. Complete Cloudflare Access Email OTP once. **Tip**: In Cloudflare Zero Trust -> **Access** -> **Applications** -> your SCOPE app -> **Settings**, increase **Session Duration** from `24 hours` to **`1 month`** so mobile browsers rarely ask for another OTP.
-3. Enter your SCOPE access token once with **"Trust this device"** checked (enabled by default, or automatically registered when using the `?token=` URL). SCOPE issues an independent **90-day sliding `SameSite=Lax` HttpOnly cookie** (auto-renewed on activity) and supports iOS iCloud Keychain autofill — refreshing or reopening never asks to re-verify!
+3. Enter your SCOPE access token once with **"Trust this device"** checked (enabled by default, or automatically registered when using the single-use Login URL). SCOPE issues an independent **90-day sliding `SameSite=Lax` HttpOnly cookie** (auto-renewed on activity) and supports iOS iCloud Keychain autofill — refreshing or reopening never asks to re-verify!
 4. Manage or revoke individual devices anytime in **Settings -> General -> Trusted Devices** or via CLI (`scope devices list`, `scope devices revoke <id|--all>`).
 5. **iPhone Tip**: In Safari, tap **Share -> Add to Home Screen** to launch SCOPE full-screen with safe-area padding like a native app.
 
@@ -254,7 +254,7 @@ SCOPE's Private Gateway includes a **Zero-SSRF Authenticated Port Proxy** at `/s
 scope token
 
 # Print token and one-tap URL
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 
 # List or revoke trusted mobile/browser devices (hot-reloads within ~2s, no restart needed)
 scope devices list

@@ -161,7 +161,7 @@ cloudflared tunnel login
 scope expose cloudflare --domain scope.yourdomain.com --tunnel scope-hub
 scope service install --with-gateway --with-cloudflared --tunnel scope-hub
 loginctl enable-linger "$USER"
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 - 将 `https://scope.yourdomain.com` 安全映射到本机 `http://127.0.0.1:4820`，**服务器防火墙零开放端口**。

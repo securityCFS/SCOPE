@@ -18,7 +18,7 @@ Zero telemetry, zero cloud relay, 100% self-hosted on 127.0.0.1.
 Usage:
   scope [start] [options]                    Start Web UI + Bridge (optionally + Private Gateway)
   scope gateway [options]                    Start standalone Private Access Gateway (127.0.0.1:4820)
-  scope token [--show] [--rotate] [--url U]  Inspect, show, or rotate Private Gateway access token
+  scope token [--show] [--rotate] [--url U]  Inspect/rotate the gateway token; --url prints a single-use login URL
   scope devices [list | revoke <id|--all>]   List or revoke trusted mobile/browser devices
   scope expose tailscale [options]           Expose Private Gateway privately over Tailscale Serve
   scope expose cloudflare --domain <fqdn>    Configure Cloudflare Named Tunnel (+ Access checklist)

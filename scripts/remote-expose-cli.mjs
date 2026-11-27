@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  createLoginCode,
   listTrustedDevices,
   loadOrCreatePrivateAccessToken,
   revokeTrustedDevice,
@@ -49,12 +50,12 @@ export function parseHttpsPortFlag(raw, fallback = 443) {
   return parsed;
 }
 
-export function buildLoginUrl(baseUrl, token) {
+export function buildLoginUrl(baseUrl, loginCode) {
   const parsed = new URL(baseUrl);
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error("Login URL must start with https:// or http://");
   }
-  parsed.searchParams.set("token", token);
+  parsed.searchParams.set("scope_login", loginCode);
   return parsed.toString();
 }
 
@@ -262,18 +263,20 @@ async function runTokenCommand(args) {
     console.log(`[scope] Private access token file: ${stateFile}`);
   }
 
-  if (!show) {
-    console.log("[scope] Token is initialized and stored locally (hidden by default).");
-    console.log("[scope] Pass --show to print the token, or --show --url https://<your-domain> for a one-tap login URL.");
-    console.log("[scope] Pass --rotate to generate a fresh token (use --keep-devices to preserve trusted devices).");
-    return;
+  if (show) {
+    console.log("");
+    console.log(`Token:     ${token}`);
   }
-
-  console.log("");
-  console.log(`Token:     ${token}`);
   if (publicUrl) {
-    console.log(`Login URL: ${buildLoginUrl(publicUrl, token)}`);
-    console.log("(Opening this URL registers a 90-day sliding Trusted Device cookie and strips ?token= from the address bar.)");
+    buildLoginUrl(publicUrl, ""); // validate before minting a code
+    const { code, expiresAt } = await createLoginCode(stateFile);
+    console.log(`Login URL: ${buildLoginUrl(publicUrl, code)}`);
+    console.log(`(Single-use, expires ${expiresAt}. It does not contain your master token; opening it registers a Trusted Device cookie.)`);
+  }
+  if (!show && !publicUrl) {
+    console.log("[scope] Token is initialized and stored locally (hidden by default).");
+    console.log("[scope] Pass --url https://<your-domain> for a single-use one-tap login URL, or --show to print the token.");
+    console.log("[scope] Pass --rotate to generate a fresh token (use --keep-devices to preserve trusted devices).");
   }
 }
 

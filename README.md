@@ -117,7 +117,7 @@ scope token --show
 cloudflared tunnel login
 scope expose cloudflare --domain scope.yourdomain.com
 scope service install --with-gateway --with-cloudflared --tunnel scope-hub
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 > Full step-by-step instructions (including Cloudflare Access double-auth policy rules and `/scope-port/<port>/` remote dev-server proxying): **[Remote & Mobile Access Guide](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md)**.

@@ -95,13 +95,13 @@ scope expose tailscale --off
 
 ### 3. 获取访问密钥并在手机端登录
 
-查看自动生成（`0600` 权限，位于 `~/.scope/private-access.json`）的 32 字节随机密钥与一键登录链接：
+生成**一次性**一键登录链接（10 分钟内有效；`0600` 权限的 32 字节主密钥保存在 `~/.scope/private-access.json`，不会出现在 URL 中，需要手动输入时加 `--show` 显示）：
 
 ```sh
-scope token --show --url https://<机器名>.<你的tailnet>.ts.net
+scope token --url https://<机器名>.<你的tailnet>.ts.net
 ```
 
-在手机浏览器打开输出的 `Login URL` 后，网关会通过 `303` 重定向写入 `HttpOnly; Secure; SameSite=Lax` Cookie（`scope_private`），并将 `?token=` 从地址栏移除。Login URL 内含主访问密钥：请像密码一样对待，只在自己的设备上打开，不要收藏、粘贴或分享。未勾选信任的临时会话使用每次登录随机生成、仅保存在网关内存中的密钥，**退出登录**、**移除其他设备** 或重启网关都会使其失效；受信任设备可在 **设置 → 受信任设备** 中查看和单独吊销。
+在手机浏览器打开输出的 `Login URL` 后，网关会消耗其中的一次性 `?scope_login=` 登录码，通过 `303` 重定向写入 `HttpOnly; Secure; SameSite=Lax` Cookie（`scope_private`），并将登录码从地址栏移除。链接 10 分钟内有效且只能使用一次，已使用或过期的链接只会显示登录页，因此即使出现在浏览器历史中也无法被复用；主访问密钥永远不会出现在 URL 中（需要手动输入时可加 `--show` 显示）。旧的 `?token=<主密钥>` 链接已不再能登录。未勾选信任的临时会话使用每次登录随机生成、仅保存在网关内存中的密钥，**退出登录**、**移除其他设备** 或重启网关都会使其失效；受信任设备可在 **设置 → 受信任设备** 中查看和单独吊销。
 
 ---
 
@@ -217,12 +217,12 @@ curl -sI https://scope.yourdomain.com/ | grep -iE "^HTTP/|^location:"
 打印你的密钥与一键登录地址：
 
 ```sh
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 1. 在手机浏览器打开 `https://scope.yourdomain.com`（或上述一键登录链接）。
 2. 先通过 Cloudflare Access 信任邮箱一次性验证码。**强烈建议**：在 Cloudflare Zero Trust -> **Access** -> **Applications** -> 你的 SCOPE 应用 -> **Settings** 中，将 **Session Duration（会话有效期）** 从默认的 `24 hours` 调高为 **`1 month`**，这样邮箱验证层也不会每天弹窗。
-3. 再输入一次 SCOPE 访问密钥，保持勾选 **“信任此设备（90 天自动续期免密）”**（或使用一键 `?token=` 链接自动注册受信任设备）。SCOPE 会为该手机颁发独立的加密设备凭证并写入 `SameSite=Lax` + `HttpOnly` 长期 Cookie（活跃自动续期，且支持 iOS iCloud 钥匙串自动保存），刷新页面或从主屏幕重新打开均不再重复验证。
+3. 再输入一次 SCOPE 访问密钥，保持勾选 **“信任此设备（90 天自动续期免密）”**（或使用一次性登录链接自动注册受信任设备）。SCOPE 会为该手机颁发独立的加密设备凭证并写入 `SameSite=Lax` + `HttpOnly` 长期 Cookie（活跃自动续期，且支持 iOS iCloud 钥匙串自动保存），刷新页面或从主屏幕重新打开均不再重复验证。
 4. 随时可在网页端 **设置 -> 常规 -> 受信任设备** 中查看/重命名/单台吊销，或在主机终端执行 `scope devices list` / `scope devices revoke <id|--all>`（2 秒内热生效，无需重启服务）。
 5. **iPhone 使用技巧**：在 Safari 点击底部 **分享 -> 添加到主屏幕**，即可全屏 PWA 沉浸式使用，自动适配刘海屏与底部安全区。
 
@@ -254,7 +254,7 @@ SCOPE 私有网关内置了 **零 SSRF 认证端口代理（`/scope-port/<port>/
 scope token
 
 # 显示密钥与一键登录地址
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 
 # 查看或吊销受信任设备（运行中网关 2 秒内热生效，无需重启）
 scope devices list

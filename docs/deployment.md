@@ -169,7 +169,7 @@ cloudflared tunnel login
 scope expose cloudflare --domain scope.yourdomain.com --tunnel scope-hub
 scope service install --with-gateway --with-cloudflared --tunnel scope-hub
 loginctl enable-linger "$USER"
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 - Routes `https://scope.yourdomain.com` strictly to `http://127.0.0.1:4820` with **zero open inbound server ports**.

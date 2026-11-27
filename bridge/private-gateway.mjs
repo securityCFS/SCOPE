@@ -189,6 +189,25 @@ function equalSecret(actual, expected) {
 }
 
 const MAX_TEMPORARY_SESSIONS = 200;
+const LOGIN_CODE_PARAM = "scope_login";
+const LOGIN_CODE_TTL_MS = 10 * 60 * 1000;
+const MAX_LOGIN_CODES = 20;
+
+function hashLoginCode(code) {
+  return createHash("sha256")
+    .update(`scope-login-code:${code}`)
+    .digest("base64url");
+}
+
+function pruneLoginCodes(entries, now = Date.now()) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(
+    (entry) =>
+      entry &&
+      typeof entry.hash === "string" &&
+      Date.parse(entry.expiresAt || "") > now,
+  );
+}
 
 function hashSessionSecret(secret) {
   return createHash("sha256")
@@ -811,6 +830,30 @@ export async function rotatePrivateAccessToken(
   return token;
 }
 
+/**
+ * Mint a single-use login code for one-tap Login URLs. Only its hash is stored
+ * (next to the token, 0600); the running gateway consumes it on first use, and
+ * rotating the access token discards every outstanding code.
+ */
+export async function createLoginCode(
+  stateFile = DEFAULT_STATE_FILE,
+  { ttlMs = LOGIN_CODE_TTL_MS } = {},
+) {
+  const state = await readPrivateAccessState(stateFile);
+  if (!state || typeof state.token !== "string" || state.token.length < 32) {
+    throw new Error("Private access token is not initialized");
+  }
+  const code = randomBytes(24).toString("base64url");
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const codes = pruneLoginCodes(state.loginCodes);
+  codes.push({ hash: hashLoginCode(code), expiresAt });
+  await writePrivateAccessState(stateFile, {
+    ...state,
+    loginCodes: codes.slice(-MAX_LOGIN_CODES),
+  });
+  return { code, expiresAt };
+}
+
 export async function listTrustedDevices(stateFile = DEFAULT_STATE_FILE) {
   const state = await readPrivateAccessState(stateFile);
   if (!state) return [];
@@ -903,6 +946,25 @@ export function createPrivateGateway({
       now + SESSION_COOKIE_MAX_AGE_SECONDS * 1000,
     );
     return formatAuthCookie(`s.${secret}`, SESSION_COOKIE_MAX_AGE_SECONDS);
+  };
+
+  const consumeLoginCode = (code) => {
+    if (!stateFile || typeof code !== "string" || code.length < 16) {
+      return Promise.resolve(false);
+    }
+    const run = stateWriteQueue.then(async () => {
+      const state = await readPrivateAccessState(stateFile);
+      if (!state) return false;
+      const codes = pruneLoginCodes(state.loginCodes);
+      const wanted = hashLoginCode(code);
+      const index = codes.findIndex((entry) => equalSecret(entry.hash, wanted));
+      if (index < 0) return false;
+      codes.splice(index, 1);
+      await writePrivateAccessState(stateFile, { ...state, loginCodes: codes });
+      return true;
+    });
+    stateWriteQueue = run.catch(() => {});
+    return run.catch(() => false);
   };
 
   const temporarySessionKey = (raw) =>
@@ -1154,11 +1216,20 @@ export function createPrivateGateway({
       return;
     }
 
-    const queryToken = requestUrl.searchParams.get("token");
-    if (queryToken && equalSecret(queryToken, token)) {
+    const loginCode = requestUrl.searchParams.get(LOGIN_CODE_PARAM);
+    if (loginCode !== null) {
       const trustFlag = requestUrl.searchParams.get("trust");
-      requestUrl.searchParams.delete("token");
+      requestUrl.searchParams.delete(LOGIN_CODE_PARAM);
       requestUrl.searchParams.delete("trust");
+      const nextPath = safeRedirectTarget(`${requestUrl.pathname}${requestUrl.search}`);
+      if (!(await consumeLoginCode(loginCode))) {
+        sendLogin(response, "一次性登录链接无效、已使用或已过期，请重新生成或手动输入访问密钥。", {
+          nextPath,
+          userAgent: request.headers["user-agent"] || "",
+          trustedDeviceDays: trustedDays,
+        });
+        return;
+      }
       const setCookieHeader =
         trustFlag === "0" || trustFlag === "false"
           ? mintTemporarySession()
@@ -1169,9 +1240,20 @@ export function createPrivateGateway({
               })
             ).cookieHeader;
       securityHeaders(response);
+      response.writeHead(303, { Location: nextPath, "Set-Cookie": setCookieHeader });
+      response.end();
+      return;
+    }
+
+    // Legacy `?token=<master token>` links no longer sign anyone in. Strip the
+    // secret from the address bar (and keep it away from upstream apps).
+    const legacyToken = requestUrl.searchParams.get("token");
+    if (legacyToken && equalSecret(legacyToken, token)) {
+      requestUrl.searchParams.delete("token");
+      requestUrl.searchParams.delete("trust");
+      securityHeaders(response);
       response.writeHead(303, {
         Location: safeRedirectTarget(`${requestUrl.pathname}${requestUrl.search}`),
-        "Set-Cookie": setCookieHeader,
       });
       response.end();
       return;

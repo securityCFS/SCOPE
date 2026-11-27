@@ -117,7 +117,7 @@ scope token --show
 cloudflared tunnel login
 scope expose cloudflare --domain scope.yourdomain.com
 scope service install --with-gateway --with-cloudflared --tunnel scope-hub
-scope token --show --url https://scope.yourdomain.com
+scope token --url https://scope.yourdomain.com
 ```
 
 > 完整配置步骤、Cloudflare Access 双重认证避坑说明与 `/scope-port/<port>/` 远程服务代理请见 **[手机端与远程部署教程](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md)**。

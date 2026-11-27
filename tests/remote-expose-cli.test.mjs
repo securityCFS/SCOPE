@@ -40,8 +40,8 @@ test("remote-expose helpers validate domains/tunnels and render safe cloudflared
   assert.match(yaml, /service: http_status:404/);
 
   assert.equal(
-    buildLoginUrl("https://scope.example.dev", "abc123token"),
-    "https://scope.example.dev/?token=abc123token",
+    buildLoginUrl("https://scope.example.dev", "abc123code"),
+    "https://scope.example.dev/?scope_login=abc123code",
   );
 
   const units = renderSystemdUnits({
@@ -70,7 +70,7 @@ test("remote-expose helpers validate domains/tunnels and render safe cloudflared
   assert.match(units[2].content, /cloudflared tunnel --no-autoupdate --config \/home\/dev\/\.cloudflared\/config\.yml run scope-hub/);
 });
 
-test("scope token hides secret by default, prints login URL with --show, and rotates cleanly", () => {
+test("scope token hides secret by default, prints single-use login URLs, and rotates cleanly", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "scope-token-cli-"));
   try {
     const hiddenOut = execFileSync(
@@ -88,7 +88,22 @@ test("scope token hides secret by default, prints login URL with --show, and rot
       { encoding: "utf8" },
     );
     assert.ok(shownOut.includes(`Token:     ${saved1.token}`));
-    assert.ok(shownOut.includes(`Login URL: https://scope.example.dev/?token=${saved1.token}`));
+    const loginLine = shownOut.split("\n").find((line) => line.startsWith("Login URL: "));
+    assert.match(loginLine, /^Login URL: https:\/\/scope\.example\.dev\/\?scope_login=[A-Za-z0-9_-]{32}$/);
+    assert.equal(loginLine.includes(saved1.token), false);
+    const withCode = JSON.parse(readFileSync(path.join(dir, "private-access.json"), "utf8"));
+    assert.equal(withCode.token, saved1.token);
+    assert.equal(withCode.loginCodes.length, 1);
+    assert.equal(JSON.stringify(withCode.loginCodes).includes(loginLine.split("=").pop()), false);
+
+    // --url alone prints a single-use URL without revealing the master token.
+    const urlOnlyOut = execFileSync(
+      process.execPath,
+      [cli, "token", "--url", "https://scope.example.dev", "--state-dir", dir],
+      { encoding: "utf8" },
+    );
+    assert.match(urlOnlyOut, /Login URL: https:\/\/scope\.example\.dev\/\?scope_login=/);
+    assert.equal(urlOnlyOut.includes(saved1.token), false);
 
     const rotatedOut = execFileSync(
       process.execPath,

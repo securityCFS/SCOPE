@@ -10,6 +10,7 @@ All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in thi
 
 ### Security
 
+- **Single-use login URLs**: `scope token --url <https://host>` now prints a `?scope_login=` link with a one-time code that expires after 10 minutes and is consumed on first use; the master access token never appears in a URL (use `--show` to print it for manual entry). Legacy `?token=<master token>` links are stripped from the address bar but no longer sign in. The Windows `enable-private-access.ps1` bootstrap uses the same single-use links.
 - **Revocable temporary gateway sessions**: Untrusted-device logins no longer receive a cookie deterministically derived from the master access token (which could never be revoked short of rotating the token). Each login now mints a random secret held only in gateway memory with a 24h server-side expiry; **Sign out**, **Revoke others**, upgrading to a trusted device, or restarting the gateway invalidates it. Cookies issued by older versions stop working, so every browser must sign in once after upgrading.
 
 ## [0.2.3] — 2026-11-25

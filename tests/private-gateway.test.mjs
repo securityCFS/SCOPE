@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WebSocket, WebSocketServer } from "ws";
 import {
+  createLoginCode,
   createPrivateGateway,
   inferDeviceName,
   listTrustedDevices,
@@ -49,9 +50,13 @@ test("private gateway authenticates, strips the token, and proxies UI/API", asyn
   const uiTarget = await listen(ui);
   const bridgeTarget = await listen(bridge);
   const token = "test-token-that-is-definitely-longer-than-32-characters";
-  const gateway = createPrivateGateway({ token, uiTarget, bridgeTarget });
+  const stateDir = mkdtempSync(path.join(tmpdir(), "scope-login-code-"));
+  const stateFile = path.join(stateDir, "private-access.json");
+  writeFileSync(stateFile, JSON.stringify({ token, trustedDevices: [] }));
+  const gateway = createPrivateGateway({ token, stateFile, uiTarget, bridgeTarget });
   const gatewayUrl = await listen(gateway);
   t.after(async () => {
+    rmSync(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     await Promise.all([close(gateway), close(ui), close(bridge)]);
   });
 
@@ -64,8 +69,19 @@ test("private gateway authenticates, strips the token, and proxies UI/API", asyn
   });
   assert.equal(invalid.status, 401);
 
-  const bootstrap = await fetch(
+  // A legacy master-token link is stripped from the URL but no longer signs in.
+  const legacy = await fetch(
     `${gatewayUrl}/somewhere?token=${encodeURIComponent(token)}&view=jobs`,
+    { redirect: "manual" },
+  );
+  assert.equal(legacy.status, 303);
+  assert.equal(legacy.headers.get("location"), "/somewhere?view=jobs");
+  assert.equal(legacy.headers.get("set-cookie"), null);
+
+  const { code } = await createLoginCode(stateFile);
+  assert.equal(readFileSync(stateFile, "utf8").includes(code), false);
+  const bootstrap = await fetch(
+    `${gatewayUrl}/somewhere?scope_login=${encodeURIComponent(code)}&view=jobs`,
     { redirect: "manual" },
   );
   assert.equal(bootstrap.status, 303);
@@ -77,6 +93,17 @@ test("private gateway authenticates, strips the token, and proxies UI/API", asyn
   assert.match(setCookie ?? "", /Expires=/i);
   assert.doesNotMatch(setCookie ?? "", new RegExp(token));
   const cookie = setCookie.split(";", 1)[0];
+
+  // Login codes are single-use.
+  const replay = await fetch(`${gatewayUrl}/?scope_login=${encodeURIComponent(code)}`, { redirect: "manual" });
+  assert.equal(replay.status, 401);
+  assert.match(await replay.text(), /一次性登录链接无效/);
+  assert.equal(JSON.parse(readFileSync(stateFile, "utf8")).loginCodes.length, 0);
+
+  // Expired codes are rejected.
+  const expired = await createLoginCode(stateFile, { ttlMs: -1 });
+  const late = await fetch(`${gatewayUrl}/?scope_login=${encodeURIComponent(expired.code)}`, { redirect: "manual" });
+  assert.equal(late.status, 401);
 
   const uiResponse = await fetch(gatewayUrl, {
     headers: { cookie },
@@ -158,8 +185,11 @@ test("private gateway authenticates and routes terminal WebSockets to Bridge", a
     await Promise.all([close(gateway), close(ui), close(bridge)]);
   });
 
-  const bootstrap = await fetch(`${gatewayUrl}/?token=${encodeURIComponent(token)}`, {
+  const bootstrap = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
     redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
   });
   const cookie = bootstrap.headers.get("set-cookie").split(";", 1)[0];
   const socketUrl = gatewayUrl.replace(/^http/, "ws") +
@@ -306,8 +336,11 @@ test("private gateway proxies authenticated allowlisted /scope-port HTTP & WebSo
   const unauth = await fetch(`${gatewayUrl}/scope-port/${appPort}/`);
   assert.equal(unauth.status, 401);
 
-  const bootstrap = await fetch(`${gatewayUrl}/?token=${encodeURIComponent(token)}`, {
+  const bootstrap = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
     redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
   });
   const cookie = bootstrap.headers.get("set-cookie").split(";", 1)[0];
 
@@ -631,8 +664,9 @@ test("private gateway temporary sessions are random, revocable, and never derive
   assert.equal(await status(first), 200);
   assert.equal(await status(second), 200);
 
-  // ?token=…&trust=0 also mints a random temporary session.
-  const queryLogin = await fetch(`${gatewayUrl}/?token=${encodeURIComponent(token)}&trust=0`, { redirect: "manual" });
+  // A one-time login link with trust=0 also mints a random temporary session.
+  const { code: tempCode } = await createLoginCode(stateFile);
+  const queryLogin = await fetch(`${gatewayUrl}/?scope_login=${encodeURIComponent(tempCode)}&trust=0`, { redirect: "manual" });
   assert.equal(queryLogin.status, 303);
   const third = (queryLogin.headers.get("set-cookie") || "").split(";", 1)[0];
   assert.match(third, /^scope_private=s\./);

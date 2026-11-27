@@ -100,10 +100,20 @@ if (-not $DnsName) {
   throw "Tailscale did not report a MagicDNS name."
 }
 $DnsName = $DnsName.TrimEnd(".")
-$PrivateState = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
-$BootstrapUrl = "https://$DnsName/?token=$($PrivateState.token)"
+# Mint a single-use login code instead of embedding the master token in a URL.
+$ScopeCli = Join-Path $RepoRoot "bin\scope.mjs"
+$StateDir = Split-Path -Parent $StateFile
+$TokenOutput = & (Get-Command node.exe).Source $ScopeCli token --url "https://$DnsName/" --state-dir $StateDir
+if ($LASTEXITCODE -ne 0) {
+  throw "Failed to create a one-time SCOPE login URL."
+}
+$LoginMatch = $TokenOutput | Select-String -Pattern '^Login URL: (\S+)$' | Select-Object -First 1
+if (-not $LoginMatch) {
+  throw "scope token did not print a Login URL."
+}
+$BootstrapUrl = $LoginMatch.Matches[0].Groups[1].Value
 Set-Content -LiteralPath $UrlFile -Value $BootstrapUrl -Encoding utf8
 
 Write-Host "SCOPE is available inside your tailnet at https://$DnsName/"
-Write-Host "The one-time bootstrap URL was written to $UrlFile"
+Write-Host "A single-use bootstrap URL (expires in 10 minutes) was written to $UrlFile"
 Write-Host "Open that file locally and send the URL to your phone through a private channel."
