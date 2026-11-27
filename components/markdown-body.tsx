@@ -83,7 +83,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       : <MarkdownImage key={String(src)} src={typeof src === "string" ? src : ""} alt={alt} title={title} />,
     a: ({ href, children, node: _node, className: linkClassName, ...props }) => {
       if (href && isVideoSource(href)) return <MarkdownVideo key={href} src={href} label={children} />;
-      if (remoteHost && remoteHost !== "@local" && RemotePortLink) {
+      if (remoteHost && RemotePortLink) {
         const portTarget = remotePortTargetFromMarkdownHref(href);
         if (portTarget) {
           return (

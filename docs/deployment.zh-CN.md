@@ -16,14 +16,15 @@ SCOPE 采用 **本机优先、单操作者控制面** 架构，将浏览器界�
 | **Web 工作台** (`bridge/ui-server.mjs`) | `127.0.0.1:3000` | 生产环境 Next.js / `vinext` 前端页面 |
 | **Bridge 服务** (`bridge/server.mjs`) | `127.0.0.1:4815` | HTTP / SSE / WebSocket API、SSH 调度、额度探测、插件宿主、任务并发池 |
 | **本地通知中继**（内置于 Bridge） | `127.0.0.1:4822` | 接收远端 `scope-notify` 通过 SSH `-R` 隧道回传的完成/异常通知 |
-| **Tailscale 私有网关** (`bridge/private-start.mjs`) | `127.0.0.1:4880` | 可选口令鉴权代理，配合 Tailscale Serve 使用 |
+| **私有访问网关** (`bridge/private-start.mjs`) | `127.0.0.1:4820` | 口令鉴权代理，配合 Tailscale Serve 或 Cloudflare Tunnel + Access 使用（内置 `/scope-port/<port>/` 端口代理） |
 | **局域网共享网关** (`bridge/shared-start.mjs`) | 指定内网 IP（如 `:8844`） | 可选 HTTPS 代理，强制来源 IP 白名单 + 访问口令 |
 
 ```mermaid
 flowchart TB
   Browser["浏览器（电脑 / 平板 / 手机）"]
   subgraph OptionalGateway["可选远程访问层"]
-    TS["Tailscale Serve -> 127.0.0.1:4880\n(private-gateway + 口令)"]
+    TS["Tailscale Serve -> 127.0.0.1:4820\n(私网 Tailnet + 口令)"]
+    CF["Cloudflare Tunnel + Zero Trust Access -> 127.0.0.1:4820\n(自定义域名 + 双重认证)"]
     LAN["局域网 HTTPS 网关 :8844\n(shared-gateway + TLS + IP 白名单)"]
   end
   subgraph ControlMachine["控制端（仅监听 127.0.0.1）"]
@@ -37,7 +38,8 @@ flowchart TB
   end
 
   Browser -->|本机回环直连| UI
-  Browser -.->|跨网私有访问| TS --> UI
+  Browser -.->|Tailnet 私有访问| TS --> UI
+  Browser -.->|自定义域名双重认证| CF --> UI
   Browser -.->|局域网白名单访问| LAN --> UI
   UI <-->|HTTP / SSE / WS| Bridge
   Bridge --- State
@@ -107,26 +109,23 @@ npm run scope
 
 ### 模式 B：Linux 服务器常驻部署（`systemd --user`）
 
-适合把 SCOPE 长期部署在跳板机或实验室 Linux 主机上，随时从任意电脑通过 SSH 端口转发访问。
+适合把 SCOPE 长期部署在云主机、跳板机或实验室 Linux 主机上。
+
+**通过 npm CLI 一键安装常驻服务（无需克隆源码）：**
+
+```sh
+npm install -g @godchaser/scope
+scope service install --with-gateway
+loginctl enable-linger "$USER"
+scope service status
+```
+
+**或从源码目录安装：**
 
 ```sh
 git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 bash scripts/install-remote-server.sh
-```
-
-脚本会自动完成：
-1. 检查 Node.js `>= 22.13` 与 `python3`。
-2. 执行 `npm ci` 与 `npm run build`。
-3. 写入并启动 `~/.config/systemd/user/scope-workbench.service`（运行 `node bridge/start.mjs --skip-build`，仍只监听 `127.0.0.1`）。
-4. 若当前环境未启用 `systemd --user`（如容器内），自动打印 `nohup` 后台启动命令。
-
-确保退出 SSH 后服务不停止，并查看运行状态：
-
-```sh
-loginctl enable-linger "$USER"
-systemctl --user status scope-workbench.service
-journalctl --user -u scope-workbench.service -f
 ```
 
 在自己电脑上通过 SSH 隧道安全访问：
@@ -139,20 +138,37 @@ ssh -N -L 3000:127.0.0.1:3000 -L 4815:127.0.0.1:4815 <跳板机别名>
 
 ---
 
-### 模式 C：远程 / 手机 / 局域网安全访问网关
+### 模式 C：远程 / 手机 / 自定义域名安全访问网关
 
-#### 方案 C1：Tailscale Serve（推荐跨网 / 手机端访问）
+> 完整保姆级教程（包含 Cloudflare Zero Trust Access 策略避坑与手机端 `/scope-port/<port>/` 端口代理）请直接阅读 **[远程与手机端部署教程](./remote-access.zh-CN.md)**。
+
+#### 方案 C1：Tailscale Serve（2 分钟零域名私网访问）
 
 ```sh
-npm run scope
-npm run private-gateway
-tailscale serve --bg http://127.0.0.1:4880
+npm install -g @godchaser/scope
+scope start --gateway             # 同时启动前端 (:3000)、Bridge (:4815) 与私有网关 (:4820)
+scope expose tailscale            # 自动执行 `tailscale serve --bg --https=443 http://127.0.0.1:4820`
+scope token --show                # 查看或轮换 (`--rotate`) 0600 私有访问密钥
 ```
 
-- `bridge/private-start.mjs` 在 `127.0.0.1:4880` 启动带口令校验的网关，并在 `.scope/private-access.json`（`0600`）生成随机访问口令。
 - **重要**：请仅使用 Tailnet 内部可见的 `tailscale serve`，切勿使用公开到公网的 `tailscale funnel`。
 
-#### 方案 C2：局域网 HTTPS + 来源 IP 白名单网关
+#### 方案 C2：自定义 Cloudflare 域名 + Named Tunnel + Zero Trust Access
+
+```sh
+npm install -g @godchaser/scope
+cloudflared tunnel login
+scope expose cloudflare --domain scope.yourdomain.com --tunnel scope-hub
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub
+loginctl enable-linger "$USER"
+scope token --show --url https://scope.yourdomain.com
+```
+
+- 将 `https://scope.yourdomain.com` 安全映射到本机 `http://127.0.0.1:4820`，**服务器防火墙零开放端口**。
+- 强烈建议在 Cloudflare Zero Trust 中为该域名开启 **Access**（Policy `Include` 中仅填自己的 `Emails`，切勿把 `Login Methods` 放进 `Include`），实现双重防护。
+- 内置 `/scope-port/<port>/` 认证端口代理（HTTP + WebSocket），在手机端可直接打开白名单内的 `@local` 与 SSH 转发服务。
+
+#### 方案 C3：局域网 HTTPS + 来源 IP 白名单网关
 
 1. 在 `.scope/shared-access/` 放入自签或内网证书 `server.crt`、`server.key`：
    ```sh
@@ -231,6 +247,11 @@ SCOPE 自动读取 `~/.ssh/config`（可通过 `SCOPE_SSH_CONFIG` 覆盖），�
 
 | 变量名 | 默认值 | 说明 |
 | --- | --- | --- |
+| `SCOPE_UI_PORT` | `3000` | 本机回环前端端口 |
+| `SCOPE_BRIDGE_PORT` | `4815` | 本机回环 Bridge API 端口 |
+| `SCOPE_PRIVATE_PORT` | `4820` | 本机回环私有访问网关端口 |
+| `SCOPE_STATE_DIR` | `./.scope` 或 `~/.scope` | 本地状态与 `0600` 凭据存储目录 |
+| `SCOPE_WITH_GATEWAY` | *（空）* | 设为 `1` 时随 `scope start` 一并拉起私有网关 |
 | `SCOPE_SSH_CONFIG` | `~/.ssh/config` | 自定义 SSH 配置文件路径 |
 | `SCOPE_HOST_BOOTSTRAP_COMMAND` | *（空）* | 首次发现 `proxyBootstrapHosts` 主机时执行的默认引导命令 |
 | `SCOPE_EMAIL_SMTP_USER` / `SCOPE_EMAIL_SMTP_PASS` | *（空）* | 覆盖本地 `.scope/email-smtp-secret.json` 的 SMTP 账号密码 |
@@ -279,8 +300,8 @@ systemctl --user restart scope-workbench.service   # Linux systemd
 
 ## 8. 上线前安全自检清单
 
-- [ ] `3000`、`4815`、`4822`、`4880` 端口仅监听在 `127.0.0.1`。
-- [ ] 远程访问只使用 SSH 端口转发、Tailscale **Serve**（禁止 Funnel）或带 TLS + IP 白名单的 `shared-gateway`。
+- [ ] `3000`、`4815`、`4820`、`4822` 端口仅监听在 `127.0.0.1`。
+- [ ] 远程访问只使用 SSH 端口转发、Tailscale **Serve**（禁止 Funnel）、Cloudflare Named Tunnel + Zero Trust Access（仅白名单邮箱）或带 TLS + IP 白名单的 `shared-gateway`。
 - [ ] `.scope/` 在 `.gitignore` 中且敏感文件保持 `0600` 权限。
 - [ ] `.scope/extensions/` 中仅启用经过源码审计的插件。
 - [ ] 提交代码或公开仓库前已通过 `npm run export:opensource -- --check`。

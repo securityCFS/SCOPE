@@ -18,6 +18,8 @@ export type ActivePortForward = {
   host: string;
   remotePort: number;
   localPort: number;
+  localHost?: string;
+  localOnly?: boolean;
   localUrl: string;
   status: "connecting" | "connected" | "reconnecting" | "stopped" | "error";
   label: string;
@@ -75,9 +77,11 @@ export async function requestPortForward(
 export function usePortForwards(
   host: string | undefined,
   cwd: string | undefined,
-  { open = false }: { open?: boolean } = {},
+  { open = false, allowLocal = false }: { open?: boolean; allowLocal?: boolean } = {},
 ) {
-  const isRemote = Boolean(host && host !== LOCAL_HOST);
+  const isLocal = host === LOCAL_HOST;
+  const isRemote = Boolean(host && !isLocal);
+  const enabled = Boolean(host && (isRemote || (isLocal && allowLocal)));
   const [state, setState] = useState<HostPortForwardsState | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyPort, setBusyPort] = useState<number | null>(null);
@@ -86,7 +90,7 @@ export function usePortForwards(
 
   const fetchState = useCallback(
     async ({ scan = true, force = false }: { scan?: boolean; force?: boolean } = {}) => {
-      if (!isRemote || !host) return;
+      if (!enabled || !host) return;
       setLoading(true);
       try {
         const params = new URLSearchParams({ host });
@@ -99,7 +103,7 @@ export function usePortForwards(
         );
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || "无法读取远端端口状态");
+          throw new Error(data.error || "无法读取监听端口状态");
         }
         setState(data);
         setActionError("");
@@ -109,11 +113,11 @@ export function usePortForwards(
         setLoading(false);
       }
     },
-    [host, cwd, isRemote],
+    [host, cwd, enabled],
   );
 
   useEffect(() => {
-    if (!isRemote || !host) return;
+    if (!enabled || !host) return;
     let cancelled = false;
     const params = new URLSearchParams({ host, scan: "1" });
     if (cwd) params.set("cwd", cwd);
@@ -123,7 +127,7 @@ export function usePortForwards(
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || "无法读取远端端口状态");
+          throw new Error(data.error || "无法读取监听端口状态");
         }
         if (!cancelled) {
           setState(data);
@@ -136,10 +140,10 @@ export function usePortForwards(
     return () => {
       cancelled = true;
     };
-  }, [host, cwd, isRemote]);
+  }, [host, cwd, enabled]);
 
   useEffect(() => {
-    if (!isRemote || !host) return;
+    if (!enabled || !host) return;
     const onChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ host?: string }>).detail;
       if (!detail?.host || detail.host === host) {
@@ -148,17 +152,17 @@ export function usePortForwards(
     };
     window.addEventListener(PORT_FORWARDS_EVENT, onChanged);
     return () => window.removeEventListener(PORT_FORWARDS_EVENT, onChanged);
-  }, [host, isRemote, fetchState]);
+  }, [host, enabled, fetchState]);
 
   const shouldPoll = Boolean(open || state?.autoForward || (state?.forwards?.length ?? 0) > 0);
   useEffect(() => {
-    if (!isRemote || !host || !shouldPoll) return;
+    if (!enabled || !host || !shouldPoll) return;
     const intervalMs = open ? 8_000 : 18_000;
     const timer = setInterval(() => {
       if (!document.hidden) void fetchState({ scan: true, force: false });
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [isRemote, host, shouldPoll, open, fetchState]);
+  }, [enabled, host, shouldPoll, open, fetchState]);
 
   const forwardPort = useCallback(
     async (remotePort: number, label?: string, localPort?: number | null) => {
@@ -230,10 +234,12 @@ export function usePortForwards(
     [host, cwd],
   );
 
-  const activeState = isRemote && host && state?.host === host ? state : null;
+  const activeState = enabled && host && state?.host === host ? state : null;
 
   return {
     isRemote,
+    isLocal,
+    enabled,
     state: activeState,
     loading,
     busyPort,

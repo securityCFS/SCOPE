@@ -4,7 +4,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { remotePortTargetFromMarkdownHref } from "../lib/remote-ports.js";
+import {
+  isRemoteBrowserLocation,
+  portForwardAccessUrl,
+  remotePortTargetFromMarkdownHref,
+} from "../lib/remote-ports.js";
 import {
   detectServiceLabel,
   filterDiscoveredPorts,
@@ -198,6 +202,147 @@ test("PortForwardManager handles local port conflicts, hardened ssh -L args, aut
     );
     assert.equal(responses[1].status, 200);
     assert.equal(responses[1].payload.forward.localPort, 8080);
+  } finally {
+    manager.stop();
+    await manager.writes;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("portForwardAccessUrl routes remote browsers through /scope-port and keeps loopback direct", () => {
+  assert.equal(
+    isRemoteBrowserLocation({ hostname: "127.0.0.1", origin: "http://127.0.0.1:3000" }),
+    false,
+  );
+  assert.equal(
+    isRemoteBrowserLocation({ hostname: "localhost", origin: "http://localhost:3000" }),
+    false,
+  );
+  assert.equal(
+    isRemoteBrowserLocation({ hostname: "scope.example.dev", origin: "https://scope.example.dev" }),
+    true,
+  );
+
+  assert.equal(
+    portForwardAccessUrl(4871, {
+      pathAndQuery: "/docs?q=1",
+      location: { hostname: "127.0.0.1", origin: "http://127.0.0.1:3000" },
+    }),
+    "http://127.0.0.1:4871/docs?q=1",
+  );
+  assert.equal(
+    portForwardAccessUrl(4871, {
+      pathAndQuery: "/docs?q=1",
+      location: { hostname: "scope.example.dev", origin: "https://scope.example.dev" },
+    }),
+    "https://scope.example.dev/scope-port/4871/docs?q=1",
+  );
+  assert.equal(
+    portForwardAccessUrl(6006, {
+      location: { hostname: "scope.example.dev", origin: "https://scope.example.dev" },
+    }),
+    "https://scope.example.dev/scope-port/6006/",
+  );
+});
+
+test("PortForwardManager supports @local discovery & zero-SSH exposure when allowLocal is enabled", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "scope-local-ports-"));
+  const spawned = [];
+  const listeningPorts = new Set([4871, 8080]);
+  let lastExcludePorts = null;
+
+  const filtered = filterDiscoveredPorts(
+    [
+      { port: 3000, procName: "node", cmdline: "ui-server", cwd: "/opt/scope" },
+      { port: 4815, procName: "node", cmdline: "bridge/server.mjs", cwd: "/opt/scope" },
+      { port: 4820, procName: "node", cmdline: "private-gateway", cwd: "/opt/scope" },
+      { port: 2019, procName: "caddy", cmdline: "caddy run", cwd: "/" },
+      { port: 7860, procName: "ssh", cmdline: "ssh -NT -L 127.0.0.1:7860:127.0.0.1:7860 gpu-a", cwd: "/" },
+      { port: 4871, procName: "python3", cmdline: "python3 -m http.server 4871", cwd: "/workspace/demo" },
+    ],
+    { cwd: "/workspace/demo", excludePorts: [3000] },
+  );
+  assert.deepEqual(
+    filtered.map((item) => item.port),
+    [4871],
+  );
+
+  const manager = new PortForwardManager({
+    stateDir: dir,
+    allowLocal: true,
+    getHost: (alias) => (alias === "gpu-a" ? { alias: "gpu-a", reachable: true } : null),
+    runSsh: async () => ({ code: 0, stdout: "", stderr: "" }),
+    discoverPorts: async ({ excludePorts }) => {
+      lastExcludePorts = excludePorts ? new Set(excludePorts) : null;
+      return [
+        { port: 4871, bind: "127.0.0.1", pid: 201, procName: "python3", label: "Python HTTP", cmdline: "python3 -m http.server 4871", cwd: "/workspace/demo", inProject: true },
+      ];
+    },
+    checkLocalPortFree: async () => true,
+    probeTcpListening: async (port) => listeningPorts.has(port) || port === 9090,
+    spawnProcess: (bin, args) => {
+      const child = makeFakeChild();
+      spawned.push({ bin, args, child });
+      return child;
+    },
+  });
+
+  try {
+    await manager.load();
+
+    // Blocked SCOPE/system ports must never be exposed locally
+    for (const blocked of [22, 2019, 3000, 4815, 4820, 4822]) {
+      await assert.rejects(
+        () => manager.forward({ host: "@local", remotePort: blocked }),
+        /系统保留端口/,
+      );
+    }
+
+    // Unlistening local port is rejected cleanly
+    await assert.rejects(
+      () => manager.forward({ host: "@local", remotePort: 9999 }),
+      /未检测到监听服务/,
+    );
+
+    // Listening @local port registers without spawning SSH
+    const res = await manager.forward({ host: "@local", remotePort: 4871, label: "Demo Web" });
+    assert.equal(res.alreadyActive, false);
+    assert.equal(res.forward.host, "@local");
+    assert.equal(res.forward.remotePort, 4871);
+    assert.equal(res.forward.localPort, 4871);
+    assert.equal(res.forward.localOnly, true);
+    assert.equal(res.forward.status, "connected");
+    assert.equal(spawned.length, 0);
+
+    // Repeat call is idempotent
+    const again = await manager.forward({ host: "@local", remotePort: 4871 });
+    assert.equal(again.alreadyActive, true);
+    assert.equal(spawned.length, 0);
+
+    // Remote SSH forward on localPort 9090 blocks colliding @local exposure & is excluded from @local scan
+    await manager.forward({ host: "gpu-a", remotePort: 9090 });
+    assert.equal(spawned.length, 1);
+    await assert.rejects(
+      () => manager.forward({ host: "@local", remotePort: 9090 }),
+      /已被远端主机/,
+    );
+    await manager.scan("@local", { cwd: "/workspace/demo", force: true });
+    assert.equal(lastExcludePorts?.has(4815), true);
+    assert.equal(lastExcludePorts?.has(3000), true);
+    assert.equal(lastExcludePorts?.has(9090), true);
+
+    // Stop revokes @local exposure immediately
+    const afterStop = manager.stopForward("@local", 4871);
+    assert.equal(afterStop.forwards.length, 0);
+
+    // Auto-expose persistence works for @local when allowLocal is enabled
+    await manager.setAutoForward("@local", true, { cwd: "/workspace/demo" });
+    assert.equal(manager.state("@local").forwards.some((f) => f.remotePort === 4871 && f.localOnly), true);
+    const reloaded = await new PortForwardManager({
+      stateDir: dir,
+      allowLocal: true,
+    }).load();
+    assert.equal(reloaded.state("@local").autoForward, true);
   } finally {
     manager.stop();
     await manager.writes;

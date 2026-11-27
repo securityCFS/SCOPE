@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Bot, List, Pencil, RefreshCw, Save, Sliders, User } from "lucide-react";
 import { ChoiceMenu } from "@/components/choice-menu";
 import { SubagentDisplayToggles } from "@/components/subagent-display-toggles";
+import { TrustedDevicesCard } from "@/features/settings/TrustedDevicesCard";
 import type { WorkbenchConfig, WorkbenchState } from "@/features/command-center/types";
 import type { Host, ModelOption } from "@/features/workspace/types";
 import { bridgeUrl } from "@/features/workspace/shared";
@@ -485,6 +486,8 @@ export function GeneralSettingsTab({
         </div>
         <SubagentDisplayToggles variant="settings" />
       </div>
+
+      <TrustedDevicesCard />
     </div>
   );
 }

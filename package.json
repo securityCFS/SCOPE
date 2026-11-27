@@ -30,7 +30,9 @@
     "CHANGELOG.md",
     "LICENSE",
     "README.md",
-    "README.zh-CN.md"
+    "README.zh-CN.md",
+    "docs/remote-access.md",
+    "docs/remote-access.zh-CN.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -44,6 +46,11 @@
     "ssh",
     "gpu-cluster",
     "tmux",
+    "tailscale",
+    "cloudflare-tunnel",
+    "remote-access",
+    "local-first",
+    "self-hosted",
     "developer-tools"
   ],
   "license": "MIT",

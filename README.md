@@ -10,8 +10,9 @@
 </p>
 
 <p align="center">
-  <b>English</b> · <a href="https://github.com/securityCFS/SCOPE/blob/main/README.zh-CN.md">简体中文</a> ·
-  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md">Deployment Guide</a> ·
+  <b>English</b> | <a href="https://github.com/securityCFS/SCOPE/blob/main/README.zh-CN.md">简体中文</a> |
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md">Phone &amp; Remote Access (Tailscale / Cloudflare)</a> |
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md">Deployment Guide</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md">Plugin Guide</a>
 </p>
 
@@ -19,6 +20,7 @@
   <a href="https://www.npmjs.com/package/@godchaser/scope"><img src="https://img.shields.io/npm/v/%40godchaser%2Fscope.svg" alt="npm version" /></a>
   <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
+  <img src="https://img.shields.io/badge/telemetry-zero-10b981.svg" alt="Zero Telemetry" />
   <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="Local-first Loopback" />
 </p>
@@ -43,6 +45,8 @@
 
 ## Why SCOPE?
 
+- **Zero telemetry, zero cloud relay, zero credential upload**: 100% self-hosted on your own machine (`127.0.0.1` loopback by default) with only 2 runtime dependencies (`ws`, `nodemailer`). Session transcripts, SSH keys, and Claude/Codex/AGY OAuth tokens never leave the host where they live.
+- **3-minute phone & remote access (Tailscale Serve or Cloudflare Custom Domain)**: Built-in `scope start --gateway`, `scope expose tailscale`, `scope expose cloudflare --domain scope.yourdomain.com`, and `scope service install` give you mobile-ready PWA control plus authenticated `/scope-port/<port>/` HTTP & WebSocket proxying for remote dev servers (TensorBoard, Gradio, Jupyter, localhost previews) with zero open inbound ports.
 - **One monitor for all agent sessions**: Automatically discovers native sessions you already started in VS Code, terminals, or `tmux` (`~/.codex/sessions`, `~/.claude/projects`, `~/.gemini/antigravity-cli`) and resumes them by native session ID—zero lock-in, zero broken CLI history.
 - **Live streaming, approvals & background subagents**: Approve file edits and shell commands, answer interactive forms (`requestUserInput`, `AskUserQuestion`, ACP forms), queue follow-up messages, switch models/reasoning effort, interrupt turns safely, and watch live **background subagents** (`Claude Code` & `Antigravity`) working in real time.
 - **Multi-agent account hub & live `/usage` quotas**: Inspect login state and live remaining subscription quotas across **Codex** (`app-server` rate limits + multi-profile failover), **Claude Code** (5h / 7d OAuth usage), and **Antigravity** (grouped 5h / weekly quota via `agy -p /usage --output-format json`), plus one-click built-in Web SSH Terminal login.
@@ -90,20 +94,35 @@ flowchart LR
 - **Remote servers**: Linux with **Python 3**, key-based non-interactive SSH (`BatchMode=yes`), and `tmux` (for durable Codex sessions)
 - **Agent CLIs**: Installed on the target machines where you run them (`codex`, `claude`, `agy`, or optional `dsh`)
 
-### Option A: Run via npm Package (`scope` CLI)
+### Option A: Run via npm Package (`@godchaser/scope`)
 
 ```sh
 # Install globally
 npm install -g @godchaser/scope
 scope
 
-# Or run directly without cloning
-npx @godchaser/scope
-# Try zero-SSH interactive preview immediately:
+# Or try zero-SSH interactive preview immediately:
 npx @godchaser/scope preview --en
 ```
 
-### Option B: Clone & Run from Source
+### Option B: Remote & Phone Access (Tailscale Serve or Custom Cloudflare Domain)
+
+```sh
+# Track 1: Private Tailnet HTTPS (no domain needed, ~2 min)
+scope start --gateway
+scope expose tailscale
+scope token --show
+
+# Track 2: Custom Domain + Cloudflare Tunnel + Zero Trust Access (~3 min, zero open ports)
+cloudflared tunnel login
+scope expose cloudflare --domain scope.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub
+scope token --show --url https://scope.yourdomain.com
+```
+
+> Full step-by-step instructions (including Cloudflare Access double-auth policy rules and `/scope-port/<port>/` remote dev-server proxying): **[Remote & Mobile Access Guide](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md)**.
+
+### Option C: Clone & Run from Source
 
 ```sh
 git clone https://github.com/securityCFS/SCOPE.git scope
@@ -129,7 +148,8 @@ All runtime state—host pre-launch commands, SMTP secrets (`0600`), remote tunn
 
 ## Documentation
 
-- **[Complete Deployment Guide](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md)** — Workstation mode, persistent Linux `systemd --user` server deployment, Tailscale Serve & LAN HTTPS gateways, SSH/proxy setup, concurrency pools, multi-agent quotas, operations, and troubleshooting
+- **[Remote & Mobile Access Guide (Tailscale Serve & Cloudflare Custom Domain)](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md)** — Zero-telemetry privacy model, 2-minute Tailscale Serve, 3-minute Cloudflare Tunnel + Zero Trust Access double auth, `systemd --user` persistence, and `/scope-port/<port>/` proxying
+- **[Complete Deployment Guide](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md)** — Workstation mode, persistent Linux `systemd --user` server deployment, Tailscale / Cloudflare / LAN HTTPS gateways, SSH/proxy setup, concurrency pools, multi-agent quotas, operations, and troubleshooting
 - **[Plugin Integration & Development Guide (v1)](https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md)** — End-to-end guide to authoring, inspecting, installing, calling, and securing SCOPE plugins (plus extending built-in views & new agent providers)
 - [Quickstart & SSH Setup](https://github.com/securityCFS/SCOPE/blob/main/docs/getting-started.md) — Short setup reference
 - [Agents, Sessions & Approvals](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.md) — Codex multi-account failover, Claude/AGY streaming, attachments, and reversible archiving
@@ -143,7 +163,7 @@ All runtime state—host pre-launch commands, SMTP secrets (`0600`), remote tunn
 
 SCOPE is currently at an early milestone—we have completed the core multi-agent framework, native session discovery/resume, rich-media rendering, and local-first SSH workbench foundation. Planned next steps include:
 
-- [ ] **Self-hosted Cloud Relay & Multi-Device Control**: Customizable cloud-server relay and mobile-first remote control so you can monitor jobs, approve tool calls, and steer agent sessions securely from phones and tablets anywhere.
+- [x] **Self-hosted Remote Access & Mobile Control**: Built-in Private Gateway (`scope start --gateway`), one-command Tailscale Serve (`scope expose tailscale`), Cloudflare Custom Domain Tunnel + Zero Trust Access (`scope expose cloudflare`), responsive iPhone/mobile UI, and authenticated `/scope-port/<port>/` dev-server proxy.
 - [ ] **Customizable Home & Workspace UI**: Configurable dashboard layouts, custom themes/panels, pinned widgets, and plugin-contributed UI views tailored to your workflow.
 - [ ] **Broader IDE & Editor Integrations**: Native jump-to-line and session handoff beyond VS Code Remote SSH—including Cursor, Windsurf, JetBrains Gateway, Zed, and Neovim.
 - [ ] **Expanded Agent & Cluster Ecosystem**: Additional coding-agent backends, Slurm / Kubernetes / Ray cluster plugins, and richer push notification channels (Webhook, Telegram, Lark/Feishu, Slack, Discord).

@@ -5,8 +5,31 @@ import path from "node:path";
 import { LOCAL_HOST } from "../../lib/execution-host.js";
 import { discoverRemotePorts } from "./probe.mjs";
 
-const RESERVED_LOCAL_PORTS = new Set([3000, 4815, 4822, 4880]);
+export const BLOCKED_PROXY_PORTS = new Set([
+  22, 53, 2019, 3000, 4815, 4820, 4822, 4880, 4922,
+]);
+const RESERVED_LOCAL_PORTS = new Set([2019, 3000, 4815, 4820, 4822, 4880]);
 const MAX_AUTO_FORWARDS_PER_HOST = 8;
+
+function envPort(name) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= 1 && value <= 65_535 ? value : null;
+}
+
+function buildBlockedLocalPorts(extra = []) {
+  const ports = new Set(BLOCKED_PROXY_PORTS);
+  for (const name of ["SCOPE_UI_PORT", "SCOPE_BRIDGE_PORT", "SCOPE_PRIVATE_PORT"]) {
+    const parsed = envPort(name);
+    if (parsed) ports.add(parsed);
+  }
+  for (const port of extra || []) {
+    const parsed = Number(port);
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 65_535) {
+      ports.add(parsed);
+    }
+  }
+  return ports;
+}
 
 function validHostAlias(host) {
   return (
@@ -55,9 +78,9 @@ function defaultPickEphemeralPort() {
   });
 }
 
-function defaultProbeTcpListening(port, timeoutMs = 250) {
+function defaultProbeTcpListening(port, timeoutMs = 250, host = "127.0.0.1") {
   return new Promise((resolve) => {
-    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const socket = net.createConnection({ host, port });
     let done = false;
     const finish = (ok) => {
       if (done) return;
@@ -77,6 +100,8 @@ export class PortForwardManager {
     stateDir,
     getHost,
     runSsh,
+    allowLocal = false,
+    blockedLocalPorts = [],
     spawnProcess = spawn,
     sshBinary = process.platform === "win32" ? "ssh.exe" : "ssh",
     checkLocalPortFree = defaultCheckLocalPortFree,
@@ -88,6 +113,8 @@ export class PortForwardManager {
     this.configFile = path.join(stateDir, "port-forwards.json");
     this.getHost = getHost;
     this.runSsh = runSsh;
+    this.allowLocal = Boolean(allowLocal);
+    this.blockedLocalPorts = buildBlockedLocalPorts(blockedLocalPorts);
     this.spawnProcess = spawnProcess;
     this.sshBinary = sshBinary;
     this.checkLocalPortFree = checkLocalPortFree;
@@ -120,7 +147,9 @@ export class PortForwardManager {
     this.autoForwardHosts.clear();
     if (Array.isArray(loaded?.autoForwardHosts)) {
       for (const host of loaded.autoForwardHosts) {
-        if (validHostAlias(host)) this.autoForwardHosts.add(host);
+        if (validHostAlias(host) || (this.allowLocal && host === LOCAL_HOST)) {
+          this.autoForwardHosts.add(host);
+        }
       }
     }
     return this;
@@ -145,7 +174,13 @@ export class PortForwardManager {
     return this.writes;
   }
 
-  #requireRemoteHost(host) {
+  #requireHost(host) {
+    if (host === LOCAL_HOST) {
+      if (!this.allowLocal) {
+        throw new Error("仅支持对远端 SSH 主机执行端口转发");
+      }
+      return { alias: LOCAL_HOST, local: true, reachable: true };
+    }
     if (!validHostAlias(host)) {
       throw new Error("仅支持对远端 SSH 主机执行端口转发");
     }
@@ -156,8 +191,21 @@ export class PortForwardManager {
     return candidate;
   }
 
+  async #probeLocalListener(port) {
+    if (await this.probeTcpListening(port, 350)) {
+      return "127.0.0.1";
+    }
+    if (
+      this.probeTcpListening === defaultProbeTcpListening &&
+      (await defaultProbeTcpListening(port, 250, "::1"))
+    ) {
+      return "::1";
+    }
+    return null;
+  }
+
   #usedLocalPorts() {
-    const used = new Set(RESERVED_LOCAL_PORTS);
+    const used = new Set([...RESERVED_LOCAL_PORTS, ...this.blockedLocalPorts]);
     for (const entry of this.forwards.values()) {
       if (entry.status !== "stopped" && entry.localPort) {
         used.add(entry.localPort);
@@ -201,6 +249,8 @@ export class PortForwardManager {
       host: entry.host,
       remotePort: entry.remotePort,
       localPort: entry.localPort,
+      localHost: entry.localHost || "127.0.0.1",
+      localOnly: Boolean(entry.localOnly),
       localUrl: `http://127.0.0.1:${entry.localPort}`,
       status: entry.status,
       label: entry.label || `Port ${entry.remotePort}`,
@@ -245,7 +295,7 @@ export class PortForwardManager {
   }
 
   async setAutoForward(host, enabled, { cwd = "" } = {}) {
-    this.#requireRemoteHost(host);
+    this.#requireHost(host);
     if (enabled) {
       this.autoForwardHosts.add(host);
       this.dismissedPorts.delete(host);
@@ -260,7 +310,7 @@ export class PortForwardManager {
   }
 
   async scan(host, { cwd = "", force = false } = {}) {
-    this.#requireRemoteHost(host);
+    this.#requireHost(host);
     const cached = this.discoveryCache.get(host);
     const ageMs = cached?.scannedAt
       ? Date.now() - Date.parse(cached.scannedAt)
@@ -275,10 +325,24 @@ export class PortForwardManager {
     }
     const task = (async () => {
       try {
+        let excludePorts = null;
+        if (host === LOCAL_HOST) {
+          excludePorts = new Set(this.blockedLocalPorts);
+          for (const entry of this.forwards.values()) {
+            if (
+              entry.host !== LOCAL_HOST &&
+              entry.status !== "stopped" &&
+              entry.localPort
+            ) {
+              excludePorts.add(entry.localPort);
+            }
+          }
+        }
         const ports = await this.discoverPorts({
           host,
           cwd,
           run: this.runSsh,
+          excludePorts,
         });
         this.discoveryCache.set(host, {
           ports,
@@ -291,7 +355,9 @@ export class PortForwardManager {
         this.discoveryCache.set(host, {
           ports: prev?.ports || [],
           scannedAt: new Date().toISOString(),
-          error: error.message || "远端端口扫描失败",
+          error:
+            error.message ||
+            (host === LOCAL_HOST ? "本机端口扫描失败" : "远端端口扫描失败"),
         });
       } finally {
         this.scanInFlight.delete(host);
@@ -351,20 +417,74 @@ export class PortForwardManager {
     label = "",
     auto = false,
   }) {
-    this.#requireRemoteHost(host);
+    this.#requireHost(host);
     const parsedRemote = Number(remotePort);
     if (!validRemotePort(parsedRemote)) {
-      throw new Error("远端端口必须是 1–65535 之间的整数");
-    }
-    const parsedLocal =
-      localPort != null && localPort !== "" ? Number(localPort) : null;
-    if (parsedLocal !== null && !validLocalPort(parsedLocal)) {
-      throw new Error("本地端口必须是 1024–65535 之间的整数");
+      throw new Error("端口必须是 1–65535 之间的整数");
     }
 
     const key = forwardKey(host, parsedRemote);
     const dismissed = this.dismissedPorts.get(host);
     if (dismissed && !auto) dismissed.delete(parsedRemote);
+
+    if (host === LOCAL_HOST) {
+      if (this.blockedLocalPorts.has(parsedRemote)) {
+        throw new Error(`端口 ${parsedRemote} 为系统保留端口，不允许直接暴露`);
+      }
+      const remoteTunnelConflict = [...this.forwards.values()].find(
+        (item) =>
+          item.host !== LOCAL_HOST &&
+          item.status !== "stopped" &&
+          item.localPort === parsedRemote,
+      );
+      if (remoteTunnelConflict) {
+        throw new Error(
+          `端口 ${parsedRemote} 当前已被远端主机 ${remoteTunnelConflict.host} 的 SSH 转发占用`,
+        );
+      }
+      const existing = this.forwards.get(key);
+      const listeningHost = await this.#probeLocalListener(parsedRemote);
+      if (!listeningHost) {
+        if (existing) {
+          this.#stopEntry(existing);
+          this.forwards.delete(key);
+        }
+        throw new Error(`本机端口 ${parsedRemote} 当前未检测到监听服务`);
+      }
+      if (existing && existing.localOnly && existing.status === "connected") {
+        existing.localHost = listeningHost;
+        if (label && !existing.label) existing.label = label;
+        return { alreadyActive: true, forward: this.publicForward(existing) };
+      }
+      const discoveredMatch = this.discoveryCache
+        .get(host)
+        ?.ports?.find((p) => p.port === parsedRemote);
+      const entry = {
+        host: LOCAL_HOST,
+        remotePort: parsedRemote,
+        localPort: parsedRemote,
+        localHost: listeningHost,
+        localOnly: true,
+        label: label || discoveredMatch?.label || `Port ${parsedRemote}`,
+        auto: Boolean(auto),
+        status: "connected",
+        failures: 0,
+        missedScans: 0,
+        connectedAt: new Date().toISOString(),
+        lastError: null,
+        child: null,
+        timer: null,
+        manualStop: false,
+      };
+      this.forwards.set(key, entry);
+      return { alreadyActive: false, forward: this.publicForward(entry) };
+    }
+
+    const parsedLocal =
+      localPort != null && localPort !== "" ? Number(localPort) : null;
+    if (parsedLocal !== null && !validLocalPort(parsedLocal)) {
+      throw new Error("本地端口必须是 1024–65535 之间的整数");
+    }
 
     const existing = this.forwards.get(key);
     if (
@@ -390,6 +510,8 @@ export class PortForwardManager {
       host,
       remotePort: parsedRemote,
       localPort: chosenLocal,
+      localHost: "127.0.0.1",
+      localOnly: false,
       label: label || discoveredMatch?.label || `Port ${parsedRemote}`,
       auto: Boolean(auto),
       status: "connecting",

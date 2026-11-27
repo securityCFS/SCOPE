@@ -16,14 +16,15 @@ SCOPE is a **local-first, single-operator control plane**. It deliberately separ
 | **Web UI** (`bridge/ui-server.mjs`) | `127.0.0.1:3000` | Production Next.js / `vinext` web workbench |
 | **Bridge Server** (`bridge/server.mjs`) | `127.0.0.1:4815` | HTTP / SSE / WebSocket API, SSH multiplexer, quota probes, plugin host, scheduler |
 | **Notification Relay** (inside Bridge) | `127.0.0.1:4822` | Authenticated loopback relay receiving remote `scope-notify` events over SSH `-R` tunnels |
-| **Private Gateway** (`bridge/private-start.mjs`) | `127.0.0.1:4880` | Optional token-authenticated proxy designed for Tailscale Serve |
+| **Private Gateway** (`bridge/private-start.mjs`) | `127.0.0.1:4820` | Token-authenticated proxy for Tailscale Serve or Cloudflare Tunnel + Zero Trust Access (incl. `/scope-port/<port>/` proxy) |
 | **Shared LAN Gateway** (`bridge/shared-start.mjs`) | Configured LAN IP (e.g. `:8844`) | Optional HTTPS proxy with strict client IP allowlist + bearer token |
 
 ```mermaid
 flowchart TB
   Browser["Browser (Workstation / Phone)"]
   subgraph OptionalGateway["Optional Remote Access Layer"]
-    TS["Tailscale Serve -> 127.0.0.1:4880\n(private-gateway + token)"]
+    TS["Tailscale Serve -> 127.0.0.1:4820\n(Private Tailnet + Token)"]
+    CF["Cloudflare Tunnel + Zero Trust Access -> 127.0.0.1:4820\n(Custom Domain + Double Auth)"]
     LAN["HTTPS LAN Gateway :8844\n(shared-gateway + TLS + IP allowlist)"]
   end
   subgraph ControlMachine["Control Machine (127.0.0.1 only)"]
@@ -37,7 +38,8 @@ flowchart TB
   end
 
   Browser -->|Direct loopback| UI
-  Browser -.->|Remote access| TS --> UI
+  Browser -.->|Tailnet access| TS --> UI
+  Browser -.->|Custom domain| CF --> UI
   Browser -.->|LAN access| LAN --> UI
   UI <-->|HTTP / SSE / WS| Bridge
   Bridge --- State
@@ -107,19 +109,24 @@ npm run scope
 
 ### Topology B: Persistent Linux Server (`systemd --user`)
 
-Best when you want SCOPE running 24/7 on a Linux jump host or lab workstation and accessing it from any laptop over SSH forwarding.
+Best when you want SCOPE running 24/7 on a Linux jump host, VPS, or lab workstation.
+
+**Via npm CLI (no git clone required):**
+
+```sh
+npm install -g @godchaser/scope
+scope service install --with-gateway
+loginctl enable-linger "$USER"
+scope service status
+```
+
+**Or from a source checkout:**
 
 ```sh
 git clone https://github.com/securityCFS/SCOPE.git scope
 cd scope
 bash scripts/install-remote-server.sh
 ```
-
-What `scripts/install-remote-server.sh` does:
-1. Verifies Node.js `>= 22.13` and `python3`.
-2. Runs `npm ci` and `npm run build`.
-3. Registers and starts `~/.config/systemd/user/scope-workbench.service` running `node bridge/start.mjs --skip-build` bound strictly to `127.0.0.1`.
-4. If `systemd --user` is unavailable (e.g., inside minimal containers), prints a `nohup` fallback command.
 
 Keep the user service alive after SSH logout:
 
@@ -129,7 +136,7 @@ systemctl --user status scope-workbench.service
 journalctl --user -u scope-workbench.service -f
 ```
 
-Access safely from your laptop:
+Access safely from your laptop over SSH:
 
 ```sh
 ssh -N -L 3000:127.0.0.1:3000 -L 4815:127.0.0.1:4815 <jump-host>
@@ -141,18 +148,35 @@ Then open **http://127.0.0.1:3000/** locally.
 
 ### Topology C: Remote / Mobile Access Gateways
 
-#### Option C1: Tailscale Serve (Recommended for Phone / Off-Network Access)
+> For the full step-by-step phone & custom-domain walkthrough (including Cloudflare Zero Trust Access policy setup and `/scope-port/<port>/` remote dev server proxying), see the **[Remote & Mobile Access Guide](./remote-access.md)**.
+
+#### Option C1: Tailscale Serve (2-Minute Private Tailnet Access)
 
 ```sh
-npm run scope
-npm run private-gateway
-tailscale serve --bg http://127.0.0.1:4880
+npm install -g @godchaser/scope
+scope start --gateway             # Starts UI (:3000) + Bridge (:4815) + Private Gateway (:4820)
+scope expose tailscale            # Runs `tailscale serve --bg --https=443 http://127.0.0.1:4820`
+scope token --show                # View or rotate (`--rotate`) the 0600 gateway secret
 ```
 
-- `bridge/private-start.mjs` starts a loopback-only authenticated gateway (`127.0.0.1:4880`) and generates a random token in `.scope/private-access.json` (`0600`).
-- **Important**: Always use `tailscale serve` (private to your tailnet), **never** `tailscale funnel` (public internet).
+- **Important**: Always use `tailscale serve` (private to your tailnet), **never** `tailscale funnel`.
 
-#### Option C2: Restricted LAN HTTPS Gateway (TLS + Client IP Allowlist)
+#### Option C2: Custom Domain via Cloudflare Named Tunnel + Zero Trust Access
+
+```sh
+npm install -g @godchaser/scope
+cloudflared tunnel login
+scope expose cloudflare --domain scope.yourdomain.com --tunnel scope-hub
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub
+loginctl enable-linger "$USER"
+scope token --show --url https://scope.yourdomain.com
+```
+
+- Routes `https://scope.yourdomain.com` strictly to `http://127.0.0.1:4820` with **zero open inbound server ports**.
+- Pair with **Cloudflare Zero Trust Access** (Self-hosted application with **Emails-only** `Include` rule; never place `Login Methods` inside `Include` since `Include` rules are OR'd).
+- Supports authenticated `/scope-port/<port>/` HTTP + WebSocket proxying for allowlisted `@local` and SSH-forwarded dev servers.
+
+#### Option C3: Restricted LAN HTTPS Gateway (TLS + Client IP Allowlist)
 
 1. Generate or place a TLS certificate and private key inside `.scope/shared-access/`:
    ```sh
@@ -235,6 +259,11 @@ Open **Accounts** from the topbar (or inside any Claude/AGY conversation header)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `SCOPE_UI_PORT` | `3000` | Loopback Web UI port |
+| `SCOPE_BRIDGE_PORT` | `4815` | Loopback Bridge API port |
+| `SCOPE_PRIVATE_PORT` | `4820` | Loopback Private Access Gateway port |
+| `SCOPE_STATE_DIR` | `./.scope` or `~/.scope` | Directory storing local state & `0600` secrets |
+| `SCOPE_WITH_GATEWAY` | *(unset)* | Set to `1` to launch Private Gateway alongside UI + Bridge |
 | `SCOPE_SSH_CONFIG` | `~/.ssh/config` | Custom SSH config file path |
 | `SCOPE_HOST_BOOTSTRAP_COMMAND` | *(unset)* | Optional command for hosts listed in `.scope/deployment.json` `proxyBootstrapHosts` |
 | `SCOPE_EMAIL_SMTP_USER` / `SCOPE_EMAIL_SMTP_PASS` | *(unset)* | Override local `.scope/email-smtp-secret.json` SMTP credentials |
@@ -284,8 +313,8 @@ All persistent runtime state resides in `.scope/` (never commit it to Git):
 
 ## 8. Pre-Deployment Security Checklist
 
-- [ ] Ports `3000`, `4815`, `4822`, and `4880` listen on `127.0.0.1` only.
-- [ ] Remote access uses SSH port forwarding, Tailscale **Serve** (never Funnel), or `shared-gateway` with TLS + strict `allowedClients`.
+- [ ] Ports `3000`, `4815`, `4820`, and `4822` listen on `127.0.0.1` only.
+- [ ] Remote access uses SSH port forwarding, Tailscale **Serve** (never Funnel), Cloudflare Named Tunnel + Zero Trust Access (Emails-only `Include`), or `shared-gateway` with TLS + strict `allowedClients`.
 - [ ] `.scope/` is git-ignored and secret files keep `0600` permissions.
 - [ ] Only audited plugins are installed under `.scope/extensions/`.
 - [ ] `npm run export:opensource -- --check` passes before pushing any fork or contribution.

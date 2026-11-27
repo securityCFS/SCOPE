@@ -13,24 +13,39 @@ const rest = argv[0] && !argv[0].startsWith("-") ? argv.slice(1) : argv;
 
 function printHelp() {
   console.log(`SCOPE — One monitor for all agent sessions (v${pkg.version})
+Zero telemetry, zero cloud relay, 100% self-hosted on 127.0.0.1.
 
 Usage:
-  scope [start] [options]                  Start SCOPE Web UI + Bridge (127.0.0.1)
-  scope preview [--en]                     Launch isolated zero-SSH preview mode
-  scope bootstrap <action> <host|@local>   Run remote inspect / deploy / sync-protocol / remove
-  scope plugin <subcommand> [args...]      Inspect, install, call, or remove SCOPE plugins
-  scope --version                          Print version
-  scope --help                             Show this help
+  scope [start] [options]                    Start Web UI + Bridge (optionally + Private Gateway)
+  scope gateway [options]                    Start standalone Private Access Gateway (127.0.0.1:4820)
+  scope token [--show] [--rotate] [--url U]  Inspect, show, or rotate Private Gateway access token
+  scope devices [list | revoke <id|--all>]   List or revoke trusted mobile/browser devices
+  scope expose tailscale [options]           Expose Private Gateway privately over Tailscale Serve
+  scope expose cloudflare --domain <fqdn>    Configure Cloudflare Named Tunnel (+ Access checklist)
+  scope service <install|status|restart|uninstall> [options]
+                                             Manage Linux systemd --user persistent services
+  scope preview [--en]                       Launch isolated zero-SSH preview mode
+  scope bootstrap <action> <host|@local>     Run remote inspect / deploy / sync-protocol / remove
+  scope plugin <subcommand> [args...]        Inspect, install, call, or remove SCOPE plugins
+  scope --version                            Print version
+  scope --help                               Show this help
 
 Start options:
   --port <port>          Web UI port (default: 3000, env: SCOPE_UI_PORT)
   --bridge-port <port>   Bridge API port (default: 4815, env: SCOPE_BRIDGE_PORT)
+  --gateway              Also start Private Access Gateway (127.0.0.1:4820) under one supervisor
+  --gateway-port <port>  Private Gateway port (default: 4820, env: SCOPE_PRIVATE_PORT)
   --state-dir <dir>      State directory (default: ./.scope in repo or ~/.scope globally)
   --skip-build           Use prebuilt UI bundle without rebuilding
   --build                Force rebuild UI before starting (source checkout only)
   --dev                  Start Vite/vinext development server (source checkout only)
 
-Repository: https://github.com/securityCFS/SCOPE`);
+Quick Remote Access Examples:
+  scope start --gateway && scope expose tailscale
+  scope expose cloudflare --domain scope.yourdomain.com --dry-run
+  scope service install --with-gateway --with-cloudflared --tunnel scope-hub
+
+Docs: https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md`);
 }
 
 if (argv.includes("--version") || argv.includes("-v")) {
@@ -79,11 +94,14 @@ function defaultStateDir(explicit) {
 if (command === "start") {
   const uiPort = readFlag(rest, "--port");
   const bridgePort = readFlag(rest, "--bridge-port");
+  const gatewayPort = readFlag(rest, "--gateway-port");
+  const withGateway = rest.includes("--gateway") || rest.includes("--private-gateway");
   const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
   const forwardArgs = [];
   if (rest.includes("--dev")) forwardArgs.push("--dev");
   if (rest.includes("--skip-build")) forwardArgs.push("--skip-build");
   if (rest.includes("--build")) forwardArgs.push("--build");
+  if (withGateway) forwardArgs.push("--gateway");
   const prebuiltReady = existsSync(path.join(packageRoot, "dist", "server", "index.js"));
   if (prebuiltReady && !forwardArgs.includes("--dev") && !forwardArgs.includes("--build") && !forwardArgs.includes("--skip-build")) {
     forwardArgs.push("--skip-build");
@@ -92,6 +110,24 @@ if (command === "start") {
     SCOPE_STATE_DIR: stateDir,
     ...(uiPort ? { SCOPE_UI_PORT: uiPort } : {}),
     ...(bridgePort ? { SCOPE_BRIDGE_PORT: bridgePort } : {}),
+    ...(gatewayPort ? { SCOPE_PRIVATE_PORT: gatewayPort } : {}),
+    ...(withGateway ? { SCOPE_WITH_GATEWAY: "1" } : {}),
+  });
+} else if (command === "gateway") {
+  const gatewayPort = readFlag(rest, "--port") || readFlag(rest, "--gateway-port");
+  const uiPort = readFlag(rest, "--ui-port");
+  const bridgePort = readFlag(rest, "--bridge-port");
+  const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
+  runScript("bridge/private-start.mjs", [], {
+    SCOPE_STATE_DIR: stateDir,
+    ...(gatewayPort ? { SCOPE_PRIVATE_PORT: gatewayPort } : {}),
+    ...(uiPort ? { SCOPE_UI_PORT: uiPort } : {}),
+    ...(bridgePort ? { SCOPE_BRIDGE_PORT: bridgePort } : {}),
+  });
+} else if (command === "token" || command === "devices" || command === "expose" || command === "service") {
+  const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
+  runScript("scripts/remote-expose-cli.mjs", [command, ...rest], {
+    SCOPE_STATE_DIR: stateDir,
   });
 } else if (command === "preview") {
   const isEn = rest.includes("--en") || rest.includes("--english");

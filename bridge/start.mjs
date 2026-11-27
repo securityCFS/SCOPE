@@ -5,9 +5,14 @@ import { fileURLToPath } from "node:url";
 
 const UI_PORT = Number(process.env.SCOPE_UI_PORT || 3000);
 const BRIDGE_PORT = Number(process.env.SCOPE_BRIDGE_PORT || 4815);
+const GATEWAY_PORT = Number(process.env.SCOPE_PRIVATE_PORT || 4820);
 const developmentMode = process.argv.includes("--dev");
 const forceBuild = process.argv.includes("--build");
 const skipBuild = process.argv.includes("--skip-build");
+const withGateway =
+  process.argv.includes("--gateway") ||
+  process.argv.includes("--private-gateway") ||
+  process.env.SCOPE_WITH_GATEWAY === "1";
 
 function portIsOpen(port) {
   return new Promise((resolve) => {
@@ -63,19 +68,22 @@ async function isScopeUi() {
   }
 }
 
-const [uiPortOpen, bridgePortOpen] = await Promise.all([
+const [uiPortOpen, bridgePortOpen, gatewayPortOpen] = await Promise.all([
   portIsOpen(UI_PORT),
   portIsOpen(BRIDGE_PORT),
+  withGateway ? portIsOpen(GATEWAY_PORT) : false,
 ]);
 
-if (uiPortOpen || bridgePortOpen) {
+if (uiPortOpen || bridgePortOpen || gatewayPortOpen) {
   const [scopeUi, scopeBridge] = await Promise.all([
     uiPortOpen ? isScopeUi() : false,
     bridgePortOpen ? isScopeBridge() : false,
   ]);
-  if (scopeUi && scopeBridge) {
+  if (scopeUi && scopeBridge && (!withGateway || gatewayPortOpen)) {
     console.log(
-      `SCOPE 已在运行：http://localhost:${UI_PORT}（Bridge ${BRIDGE_PORT}）`,
+      withGateway
+        ? `SCOPE 已在运行：http://localhost:${UI_PORT}（Bridge ${BRIDGE_PORT}，Gateway ${GATEWAY_PORT}）`
+        : `SCOPE 已在运行：http://localhost:${UI_PORT}（Bridge ${BRIDGE_PORT}）`,
     );
     process.exit(0);
   }
@@ -83,6 +91,7 @@ if (uiPortOpen || bridgePortOpen) {
   const occupied = [
     uiPortOpen ? UI_PORT : null,
     bridgePortOpen ? BRIDGE_PORT : null,
+    gatewayPortOpen ? GATEWAY_PORT : null,
   ].filter(Boolean);
   console.error(
     `[scope] 无法启动：本机端口 ${occupied.join(", ")} 已被其他或不完整的服务占用。`,
@@ -91,6 +100,7 @@ if (uiPortOpen || bridgePortOpen) {
 }
 
 const bridgeEntry = fileURLToPath(new URL("./server.mjs", import.meta.url));
+const gatewayEntry = fileURLToPath(new URL("./private-start.mjs", import.meta.url));
 const vinextEntry = fileURLToPath(
   new URL("../node_modules/vinext/dist/cli.js", import.meta.url),
 );
@@ -146,6 +156,7 @@ const childSpecs = [
           String(UI_PORT),
         ],
   },
+  ...(withGateway ? [{ name: "PrivateGateway", args: [gatewayEntry] }] : []),
 ];
 let stopping = false;
 const children = new Set();

@@ -10,8 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/securityCFS/SCOPE/blob/main/README.md">English</a> · <b>简体中文</b> ·
-  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md">完备部署指南</a> ·
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/README.md">English</a> | <b>简体中文</b> |
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md">手机端与远程部署（Tailscale / Cloudflare）</a> |
+  <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md">完备部署指南</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md">插件接入指南</a>
 </p>
 
@@ -19,6 +20,7 @@
   <a href="https://www.npmjs.com/package/@godchaser/scope"><img src="https://img.shields.io/npm/v/%40godchaser%2Fscope.svg" alt="npm version" /></a>
   <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
+  <img src="https://img.shields.io/badge/telemetry-zero-10b981.svg" alt="零遥测" />
   <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="支持 Agent" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="本机回环监听" />
 </p>
@@ -43,6 +45,8 @@
 
 ## 核心特性
 
+- **零遥测、零云端中转、零凭据上传**：100% 自托管运行在你自己的设备上（默认仅监听 `127.0.0.1`），运行时仅 2 个依赖（`ws`、`nodemailer`）。所有对话记录、SSH 密钥与 Claude/Codex/AGY 凭据绝不离开所在主机。
+- **3 分钟手机端远程部署（Tailscale Serve / 自定义 Cloudflare 域名）**：内置 `scope start --gateway`、`scope expose tailscale`、`scope expose cloudflare --domain scope.yourdomain.com` 与 `scope service install`，开箱即享移动端响应式工作台与认证 `/scope-port/<port>/` 端口代理（TensorBoard、Gradio、Jupyter、本机开发服务直接从手机打开），服务器防火墙零开放端口。
 - **One monitor for all agent sessions**：零侵入扫描你在终端、VS Code 或 `tmux` 里启动过的原生会话（`~/.codex/sessions`、`~/.claude/projects`、`~/.gemini/antigravity-cli`），直接按原生会话 ID 续聊，不破坏原有 CLI 历史。
 - **实时流式交互、审批与后台子代理**：支持 Codex、Claude Code 和 Antigravity 的文件修改/命令审批、交互问答卡片、运行中追加消息、模型/推理强度切换、安全中断，以及 **Claude Code / Antigravity 后台子代理实时工作状态** 追踪。
 - **多 Agent 账号中心与实时 `/usage` 额度**：统一查看 **Codex**（多 Profile 池 + 故障自动切换 + 5h/周额度）、**Claude Code**（本地 OAuth 实时 5h/7d 额度）和 **Antigravity**（官方 `agy -p /usage --output-format json` 分组 5h/周额度）的登录态与余量，并支持一键打开内置 Web SSH 终端登录/切换账号。
@@ -97,13 +101,28 @@ flowchart LR
 npm install -g @godchaser/scope
 scope
 
-# 或无需克隆直接运行
-npx @godchaser/scope
 # 免配 SSH 立即体验完整交互预览：
 npx @godchaser/scope preview
 ```
 
-### 方式 B：克隆源码启动
+### 方式 B：手机端与远程安全访问（Tailscale Serve 或自定义 Cloudflare 域名）
+
+```sh
+# 路线 1：Tailscale Serve 私网 HTTPS（免域名，约 2 分钟）
+scope start --gateway
+scope expose tailscale
+scope token --show
+
+# 路线 2：自定义域名 + Cloudflare 命名隧道 + Zero Trust Access（零开放端口，约 3 分钟）
+cloudflared tunnel login
+scope expose cloudflare --domain scope.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub
+scope token --show --url https://scope.yourdomain.com
+```
+
+> 完整配置步骤、Cloudflare Access 双重认证避坑说明与 `/scope-port/<port>/` 远程服务代理请见 **[手机端与远程部署教程](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md)**。
+
+### 方式 C：克隆源码启动
 
 ```sh
 git clone https://github.com/securityCFS/SCOPE.git scope
@@ -129,7 +148,8 @@ npm run scope
 
 ## 完整文档导航
 
-- **[完备部署指南](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md)** — 本机模式、Linux `systemd --user` 常驻部署、Tailscale / 局域网 HTTPS 私有网关、代理与环境配置、并发池、多 Agent 额度、运维排障与安全清单
+- **[手机端与远程部署教程（Tailscale Serve / 自定义 Cloudflare 域名）](https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md)** — 零遥测隐私边界、2 分钟 Tailscale Serve、3 分钟 Cloudflare Tunnel + Zero Trust Access 双重认证、`systemd --user` 常驻与 `/scope-port/<port>/` 端口代理
+- **[完备部署指南](https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md)** — 本机模式、Linux `systemd --user` 常驻部署、Tailscale / Cloudflare / 局域网 HTTPS 私有网关、代理与环境配置、并发池、多 Agent 额度、运维排障与安全清单
 - **[插件接入与开发指南 (v1)](https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md)** — 从零编写、校验、安装、调用与卸载 SCOPE 插件的完整手册（含协议字段、生命周期、HTTP API、扩展新 Agent 说明）
 - [快速上手速查](https://github.com/securityCFS/SCOPE/blob/main/docs/getting-started.zh-CN.md) — 精简版启动与 SSH 配置说明
 - [多 Agent 会话、审批与账号管理](https://github.com/securityCFS/SCOPE/blob/main/docs/agents-and-sessions.zh-CN.md) — Codex 多账号故障切换、Claude/AGY 实时交互、附件上传与可逆归档
@@ -143,7 +163,7 @@ npm run scope
 
 目前 SCOPE 仅初步完成了多 Agent 统一监控框架、原生会话接管、富媒体渲染与本机优先 SSH 工作台的基础能力，后续重点 TODO 包括：
 
-- [ ] **自定义云服务器多端控制方案（如手机端控制）**：提供可自建的云服务器中继与移动端友好交互方案，随时随地通过手机、平板安全查看任务进度、审批高风险操作并向 Agent 追加指令。
+- [x] **自建远程访问与手机端多端控制**：已内置私有网关（`scope start --gateway`）、一键 Tailscale Serve（`scope expose tailscale`）、自定义 Cloudflare 域名隧道 + Zero Trust Access 双重防护（`scope expose cloudflare`）、移动端自适应界面与认证 `/scope-port/<port>/` 服务代理。
 - [ ] **主界面与工作台高度自定义**：支持自定义首页布局、主题风格、快捷看板、置顶模块与插件自定义视图，按团队或个人科研/研发习惯灵活编排界面。
 - [ ] **更多 IDE 与编辑器深度联动**：在现有 VS Code Remote SSH 跳转之外，扩展支持 Cursor、Windsurf、JetBrains Gateway、Zed、Neovim 等主流 IDE/编辑器的双向联动。
 - [ ] **更多 Agent 后端与集群插件生态**：持续接入更多编程 Agent、Slurm / Kubernetes / Ray 等集群调度器插件，以及 Webhook、飞书、钉钉、Slack、Telegram 等多渠道推送。

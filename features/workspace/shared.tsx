@@ -29,7 +29,12 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { LOCAL_HOST } from "@/lib/execution-host";
+import {
+  isRemoteBrowserLocation,
+  portForwardAccessUrl,
+} from "@/lib/remote-ports";
 
 export const MAX_INSTRUCTION_ATTACHMENTS = 8;
 
@@ -673,6 +678,8 @@ export function RemoteMarkdownFileLink({
   );
 }
 
+const noopSubscribe = () => () => {};
+
 function RemoteMarkdownPortLink({
   host,
   port,
@@ -693,9 +700,19 @@ function RemoteMarkdownPortLink({
   const [state, setState] = useState<"idle" | "opening" | "ready" | "error">("idle");
   const [forwardedUrl, setForwardedUrl] = useState("");
   const [error, setError] = useState("");
+  const isRemoteView = useSyncExternalStore(
+    noopSubscribe,
+    () => isRemoteBrowserLocation(),
+    () => false,
+  );
+  const isLocalHost = host === LOCAL_HOST;
 
   async function forwardAndOpen() {
     if (state === "opening") return;
+    if (isLocalHost && !isRemoteBrowserLocation()) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
     if (forwardedUrl) {
       window.open(forwardedUrl, "_blank", "noopener,noreferrer");
       return;
@@ -718,9 +735,14 @@ function RemoteMarkdownPortLink({
       });
       const data = await response.json();
       if (!response.ok || !data?.forward?.localPort) {
-        throw new Error(data?.error || "SSH 端口转发失败");
+        throw new Error(
+          data?.error || (isLocalHost ? "端口代理开放失败" : "SSH 端口转发失败"),
+        );
       }
-      const nextUrl = `${protocol}//127.0.0.1:${data.forward.localPort}${pathAndQuery}`;
+      const nextUrl = portForwardAccessUrl(data.forward.localPort, {
+        pathAndQuery,
+        protocol,
+      });
       setForwardedUrl(nextUrl);
       setState("ready");
       if (typeof window !== "undefined") {
@@ -736,7 +758,11 @@ function RemoteMarkdownPortLink({
     } catch (openError) {
       if (popup && !popup.closed) popup.close();
       setError(
-        openError instanceof Error ? openError.message : "SSH 端口转发失败",
+        openError instanceof Error
+          ? openError.message
+          : isLocalHost
+            ? "端口代理开放失败"
+            : "SSH 端口转发失败",
       );
       setState("error");
     }
@@ -745,9 +771,15 @@ function RemoteMarkdownPortLink({
   const title =
     state === "error"
       ? error
-      : forwardedUrl
-        ? `已转发 ${host}:${port} → ${forwardedUrl}（点击打开）`
-        : `点击一键通过 SSH 转发 ${host}:${port} 并在本地浏览器打开 (${href})`;
+      : isLocalHost && !isRemoteView
+        ? `点击在新标签页打开本机链接 (${href})`
+        : forwardedUrl
+          ? `已开放 ${host}:${port} → ${forwardedUrl}（点击打开）`
+          : isLocalHost
+            ? `点击一键开放 ${host}:${port} 并通过 /scope-port 安全代理打开 (${href})`
+            : isRemoteView
+              ? `点击一键通过 SSH 转发 ${host}:${port} 并经 /scope-port 安全代理打开 (${href})`
+              : `点击一键通过 SSH 转发 ${host}:${port} 并在本地浏览器打开 (${href})`;
 
   return (
     <button
@@ -766,7 +798,7 @@ function RemoteMarkdownPortLink({
         <LoaderCircle aria-hidden="true" size={11} className="is-spinning" />
       ) : state === "error" ? (
         <AlertTriangle aria-hidden="true" size={11} />
-      ) : state === "ready" ? (
+      ) : state === "ready" || (isLocalHost && !isRemoteView) ? (
         <ExternalLink aria-hidden="true" size={11} />
       ) : (
         <Cable aria-hidden="true" size={11} />

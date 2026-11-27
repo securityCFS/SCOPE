@@ -142,6 +142,10 @@ function NativeSubagentsPanel({
   const body = (
     <div className="native-subagents-list">
       {subagents.map((item) => {
+        const statusLabel = statusLabels[item.status] || item.status;
+        const showLastAction = Boolean(
+          item.lastAction && item.lastAction.trim() !== statusLabel,
+        );
         const inner = (
           <>
             <div className="native-subagent-meta">
@@ -151,14 +155,14 @@ function NativeSubagentsPanel({
                 ) : (
                   <Bot size={11} />
                 )}
-                {statusLabels[item.status] || item.status}
+                {statusLabel}
               </span>
               <strong title={item.role}>{item.role}</strong>
               {item.typeName && <small>{item.typeName}</small>}
               {item.model && <small>{item.model}</small>}
             </div>
             <span className="native-subagent-right">
-              {item.lastAction && (
+              {showLastAction && (
                 <span className="native-subagent-action" title={item.lastAction}>
                   {item.lastAction}
                 </span>
@@ -576,8 +580,12 @@ export function NativeConversation({
                 )}
               </span>
             )}
-            {entry.host !== LOCAL_HOST && (
-              <PortForwardsPopover host={entry.host} cwd={entry.cwd} />
+            {(entry.host !== LOCAL_HOST || localCliSupported) && (
+              <PortForwardsPopover
+                host={entry.host}
+                cwd={entry.cwd}
+                allowLocal={localCliSupported}
+              />
             )}
             {subagentPrefs.showHeaderBadge &&
               entry.provider === "claude" &&
@@ -913,7 +921,9 @@ export function NativeConversation({
             </button>
           </footer>
         </form>
-        <p className="native-note">
+        <p
+          className={`native-note${!isLocalReadOnly && !isExternalLocked ? " native-compose-hint" : ""}`}
+        >
           {isLocalReadOnly
             ? tr(
                 "本机历史只读 · 新建 Claude / Antigravity 会话请选择远程设备",

@@ -94,7 +94,7 @@
         <div class="hero-kicker">
           <span class="pulse-dot" aria-hidden="true"></span>
           <span data-i18n="heroKicker">
-            MIT Open Source, Local-First, 13 MB Install
+            MIT Open Source, Zero Telemetry, Local-First, 13 MB Install
           </span>
         </div>
 
@@ -379,9 +379,9 @@
       <section id="architecture" class="section container">
         <div class="section-head">
           <span class="section-tag" data-i18n="archTag">Local-First &amp; Self-Hosted Remote</span>
-          <h2 data-i18n="archTitle">127.0.0.1 by default. Private mobile access on your terms.</h2>
+          <h2 data-i18n="archTitle">Zero telemetry. 127.0.0.1 by default. Private mobile access on your terms.</h2>
           <p data-i18n="archDesc">
-            No third-party cloud relay, no telemetry, no account lock-in. Expose your personal workbench to your phone or laptop via Tailscale Serve or your own Caddy + SSH reverse tunnel.
+            Zero cloud relay, zero credential upload, zero transcript harvesting. Every session log and OAuth token stays strictly on your own hosts. Expose privately to your phone in 2–3 minutes via Tailscale Serve or your own Cloudflare domain + Zero Trust Access.
           </p>
         </div>
 
@@ -390,7 +390,7 @@
             <div class="arch-step">01</div>
             <h3 data-i18n="a1Title">Workstation or Private Linux Hub</h3>
             <p data-i18n="a1Desc">
-              UI (:3000) and SSH Bridge (:4815) bind strictly to 127.0.0.1. Credentials and config stay in .scope/ with 0600 permissions.
+              UI (:3000) and Bridge (:4815) bind strictly to 127.0.0.1. Claude, Codex, and AGY credentials never leave the host where they live.
             </p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
@@ -398,15 +398,15 @@
             <div class="arch-step">02</div>
             <h3 data-i18n="a2Title">Built-in Private Gateway (:4820)</h3>
             <p data-i18n="a2Desc">
-              Merges UI, API, SSE, and WebSocket terminal onto one loopback port protected by a 32-byte secret and HttpOnly Secure SameSite=Strict cookie.
+              Merges UI, API, SSE, WebSocket terminal, and allowlisted /scope-port/&lt;port&gt;/ dev-server proxying behind a 32-byte secret and HttpOnly Secure cookie.
             </p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-box">
             <div class="arch-step">03</div>
-            <h3 data-i18n="a3Title">Tailscale Serve or Your Own Caddy</h3>
+            <h3 data-i18n="a3Title">Tailscale Serve or Custom Cloudflare Domain</h3>
             <p data-i18n="a3Desc">
-              Zero exposed ports with Tailscale Serve, or reverse-proxy over an outbound autossh -R tunnel to your personal VM with automatic HTTPS + BasicAuth.
+              Run scope expose tailscale for private tailnet HTTPS, or scope expose cloudflare --domain scope.yourdomain.com with Cloudflare Access double auth and zero open inbound ports.
             </p>
           </div>
         </div>
@@ -496,6 +496,15 @@
             >
               <span data-i18n="qsFork">Fork it &amp; make it yours</span>
               <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              class="btn-secondary"
+              href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md"
+              target="_blank"
+              rel="noreferrer"
+              id="remote-docs-link"
+            >
+              <span data-i18n="qsRemote">Tailscale &amp; Cloudflare Guide</span>
             </a>
             <a
               class="btn-secondary"

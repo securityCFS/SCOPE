@@ -3124,7 +3124,8 @@ const handleRemoteBootstrap = remoteBootstrapRoutes({
 const portForwardManager = await new PortForwardManager({
   stateDir: STATE_DIR,
   getHost: (alias) => snapshot.hosts.find((host) => host.alias === alias),
-  runSsh: runSshCommand,
+  runSsh: runHostCommand,
+  allowLocal: LOCAL_NATIVE_CLI_SUPPORTED,
 }).load();
 const handlePortForwards = portForwardRoutes({
   portForwards: portForwardManager,

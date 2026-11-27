@@ -6,7 +6,7 @@
       navArch: "Remote & Privacy",
       navPlugins: "Plugins",
       navQuickstart: "Quickstart",
-      heroKicker: "MIT Open Source, Local-First, 13 MB Install",
+      heroKicker: "MIT Open Source, Zero Telemetry, Local-First, 13 MB Install",
       heroTitle: "One lightweight web control plane for all your coding agents.",
       heroSubtitle:
         "Monitor, resume, and steer Claude Code, Codex, and Antigravity across local and remote SSH GPU servers — no heavy Electron wrapper, no remote daemons, no IDE bloat.",
@@ -61,19 +61,19 @@
       mockLockK: "TTY Guard",
       mockLockV: "External pts/11 (Read-only)",
       mockMediaK: "Rich Media",
-      archTag: "Local-First & Self-Hosted Remote",
-      archTitle: "127.0.0.1 by default. Private mobile access on your terms.",
+      archTag: "Zero-Telemetry & Self-Hosted Remote",
+      archTitle: "Zero telemetry. 127.0.0.1 by default. Private mobile access on your terms.",
       archDesc:
-        "No third-party cloud relay, no telemetry, no account lock-in. Expose your personal workbench to your phone or laptop via Tailscale Serve or your own Caddy + SSH reverse tunnel.",
+        "Zero cloud relay, zero credential upload, zero transcript harvesting. Every session log and OAuth token stays strictly on your own hosts. Expose privately to your phone in 2-3 minutes via Tailscale Serve or your own Cloudflare domain + Zero Trust Access.",
       a1Title: "Workstation or Private Linux Hub",
       a1Desc:
-        "UI (:3000) and SSH Bridge (:4815) bind strictly to 127.0.0.1. Credentials and config stay in .scope/ with 0600 permissions.",
+        "UI (:3000) and Bridge (:4815) bind strictly to 127.0.0.1. Claude, Codex, and AGY credentials never leave the host where they live.",
       a2Title: "Built-in Private Gateway (:4820)",
       a2Desc:
-        "Merges UI, API, SSE, and WebSocket terminal onto one loopback port protected by a 32-byte secret and HttpOnly Secure SameSite=Strict cookie.",
-      a3Title: "Tailscale Serve or Your Own Caddy",
+        "Merges UI, API, SSE, WebSocket terminal, and allowlisted /scope-port/<port>/ dev-server proxying behind a 32-byte secret and HttpOnly Secure cookie.",
+      a3Title: "Tailscale Serve or Custom Cloudflare Domain",
       a3Desc:
-        "Zero exposed ports with Tailscale Serve, or reverse-proxy over an outbound autossh -R tunnel to your personal VM with automatic HTTPS + BasicAuth.",
+        "Run scope expose tailscale for private tailnet HTTPS, or scope expose cloudflare --domain scope.yourdomain.com with Cloudflare Access double auth and zero open inbound ports.",
       plugTag: "Plugin Protocol v1",
       plugTitle: "Extend SCOPE without touching a line of core code.",
       plugDesc:
@@ -89,6 +89,7 @@
       qsPreview: "Instant Preview (Zero SSH)",
       qsInstall: "Global Install (Linux / macOS / Windows)",
       qsFork: "Fork it & make it yours",
+      qsRemote: "Tailscale & Cloudflare Guide",
       qsDeploy: "Deployment Guide",
       footerTagline: "Lightweight web control plane for coding agents (MIT)",
     },
@@ -97,7 +98,7 @@
       navArch: "本地隐私与远程",
       navPlugins: "插件协议",
       navQuickstart: "快速上手",
-      heroKicker: "MIT 开源，纯本机优先，全量安装仅 13 MB",
+      heroKicker: "MIT 开源，零遥测，纯本机优先，全量安装仅 13 MB",
       heroTitle: "极致轻量的 Web 控制台\n一屏驾驭所有 Coding Agent",
       heroSubtitle:
         "统一监控与操控本机及多台远程 SSH GPU 服务器上的 Claude Code、Codex 与 Antigravity——无 Electron 重壳，远端零常驻，不做重型 IDE 绑定。",
@@ -152,19 +153,19 @@
       mockLockK: "终端保护",
       mockLockV: "外部 pts/11（只读同步）",
       mockMediaK: "富媒体渲染",
-      archTag: "本机优先 & 私人自建转发",
-      archTitle: "默认严守 127.0.0.1，手机远程访问完全掌握在你自己手里。",
+      archTag: "零遥测隐私架构 & 自托管远程访问",
+      archTitle: "零遥测，默认严守 127.0.0.1，手机远程访问完全掌握在你自己手里。",
       archDesc:
-        "不经任何第三方托管中继、零遥测。通过 Tailscale Serve 或自有云服务器 Caddy + 反向隧道，手机和平板也能安全 HTTPS 审批与遥控。",
+        "无第三方云端中继，零凭据上传，零对话采集。所有会话日志与 OAuth 密钥严格留在对应主机本地。3 分钟通过 Tailscale Serve 或自有 Cloudflare 域名 + Zero Trust Access 在手机安全操控。",
       a1Title: "本机工作站或私人 Linux 中枢",
       a1Desc:
-        "前端 (:3000) 与 SSH Bridge (:4815) 严格仅监听 127.0.0.1，所有凭据与配置以 0600 权限留存本地 .scope/。",
+        "前端 (:3000) 与 Bridge (:4815) 严格仅监听 127.0.0.1，Claude、Codex 与 AGY 凭据绝不离开所在主机。",
       a2Title: "内置单端口私有网关 (:4820)",
       a2Desc:
-        "将页面、API、SSE 流与 WebSocket 终端合入单一回环端口，由 32 位随机密钥与 HttpOnly Secure SameSite=Strict Cookie 双重守护。",
-      a3Title: "Tailscale Serve 或自建 Caddy 反代",
+        "将页面、API、SSE、WebSocket 终端与白名单 /scope-port/<port>/ 端口代理统一收入单端口，由 32 字节密钥与 HttpOnly Secure Cookie 守护。",
+      a3Title: "Tailscale Serve 或自定义 Cloudflare 域名",
       a3Desc:
-        "Tailscale Serve 实现公网 0 端口暴露；或通过出站 autossh -R 反代至自有云机 Caddy，自动 HTTPS + BasicAuth 手机直开。",
+        "执行 scope expose tailscale 开通私网 HTTPS，或执行 scope expose cloudflare --domain scope.yourdomain.com 配合 Cloudflare Access 双重认证，服务器零开放端口。",
       plugTag: "开放插件协议 v1",
       plugTitle: "不改一行核心源码，按协议自由扩展你的工作台。",
       plugDesc:
@@ -180,6 +181,7 @@
       qsPreview: "5 秒零配预览（虚拟数据）",
       qsInstall: "全局正式安装（Linux / macOS / Windows）",
       qsFork: "MIT 开源，随便魔改",
+      qsRemote: "Tailscale / Cloudflare 教程",
       qsDeploy: "查看完备部署指南",
       footerTagline: "轻量化多 Coding Agent 统一控制台（MIT 开源协议）",
     },
@@ -202,6 +204,7 @@
   const qsCmd1 = document.getElementById("qs-cmd-1");
   const docsLink = document.getElementById("cta-docs-link");
   const pluginDocsLink = document.getElementById("plugin-docs-link");
+  const remoteDocsLink = document.getElementById("remote-docs-link");
   const deployDocsLink = document.getElementById("deploy-docs-link");
   const demoToggle = document.getElementById("demo-subagent-toggle");
   const demoPreview = document.getElementById("demo-subagent-preview");
@@ -252,6 +255,12 @@
         lang === "zh"
           ? "https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md"
           : "https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md";
+    }
+    if (remoteDocsLink) {
+      remoteDocsLink.href =
+        lang === "zh"
+          ? "https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md"
+          : "https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md";
     }
     if (deployDocsLink) {
       deployDocsLink.href =

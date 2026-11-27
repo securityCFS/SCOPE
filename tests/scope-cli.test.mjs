@@ -24,6 +24,11 @@ test("scope CLI supports --version and --help without touching network or state"
   assert.equal(version, `${pkg.name} v${pkg.version}`);
   const help = execFileSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
   assert.match(help, /One monitor for all agent sessions/);
+  assert.match(help, /scope gateway/);
+  assert.match(help, /scope token/);
+  assert.match(help, /scope expose tailscale/);
+  assert.match(help, /scope expose cloudflare/);
+  assert.match(help, /scope service/);
   assert.match(help, /scope preview/);
   assert.match(help, /sync-protocol/);
   assert.match(help, /https:\/\/github\.com\/securityCFS\/SCOPE/);

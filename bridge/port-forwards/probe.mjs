@@ -1,7 +1,9 @@
-const IGNORED_PORTS = new Set([22, 53, 4922]);
+const IGNORED_PORTS = new Set([22, 53, 2019, 4815, 4820, 4822, 4880, 4922]);
 
 const IGNORED_PROC_PATTERNS = [
-  /^sshd$/i,
+  /^sshd(?:-session)?$/i,
+  /^ssh$/i,
+  /^cloudflared$/i,
   /^systemd-/i,
   /^cupsd$/i,
   /^rpcbind$/i,
@@ -91,9 +93,11 @@ export function shouldIncludeDiscoveredPort({
   procName = "",
   cmdline = "",
   inProject = false,
+  excludePorts = null,
 }) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) return false;
   if (IGNORED_PORTS.has(port)) return false;
+  if (excludePorts && excludePorts.has(port)) return false;
   if (IGNORED_PROC_PATTERNS.some((re) => re.test(procName))) return false;
   if (INTERNAL_CMD_PATTERNS.some((re) => re.test(cmdline))) return false;
   // High ephemeral ports are noisy unless clearly a dev/research server or in current project.
@@ -105,7 +109,11 @@ export function shouldIncludeDiscoveredPort({
   return true;
 }
 
-export function filterDiscoveredPorts(rawEntries = [], { cwd = "" } = {}) {
+export function filterDiscoveredPorts(
+  rawEntries = [],
+  { cwd = "", excludePorts = null } = {},
+) {
+  const excluded = excludePorts ? new Set(excludePorts) : null;
   const byPort = new Map();
   for (const item of rawEntries) {
     const port = Number(item?.port);
@@ -117,7 +125,15 @@ export function filterDiscoveredPorts(rawEntries = [], { cwd = "" } = {}) {
       ? Number(item.pid)
       : null;
     const inProject = cwdMatchesProject(procCwd, cwd);
-    if (!shouldIncludeDiscoveredPort({ port, procName, cmdline, inProject })) {
+    if (
+      !shouldIncludeDiscoveredPort({
+        port,
+        procName,
+        cmdline,
+        inProject,
+        excludePorts: excluded,
+      })
+    ) {
       continue;
     }
     const label = detectServiceLabel(procName, cmdline, port);
@@ -264,11 +280,52 @@ except Exception:
                     "cwd": "",
                 })
 
+def loopback_ssh_config_ports():
+    ports = set()
+    cfg = os.path.expanduser("~/.ssh/config")
+    try:
+        with open(cfg, "r", encoding="utf-8", errors="replace") as f:
+            hostname = ""
+            block_ports = []
+            def flush():
+                if hostname in ("127.0.0.1", "localhost", "::1"):
+                    ports.update(block_ports)
+            for raw in f:
+                line = raw.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                parts = line.split(None, 1)
+                if len(parts) < 2:
+                    continue
+                key, val = parts[0].lower(), parts[1].strip()
+                if key == "host":
+                    flush()
+                    hostname = ""
+                    block_ports = []
+                elif key == "hostname":
+                    hostname = val.lower()
+                elif key == "port" and val.isdigit():
+                    block_ports.append(int(val))
+            flush()
+    except Exception:
+        pass
+    return ports
+
+ssh_tunnel_ports = loopback_ssh_config_ports()
+entries = [
+    e for e in entries
+    if not (e.get("pid") is None and e.get("port") in ssh_tunnel_ports)
+]
 print(json.dumps({"ports": entries}))
 `.trim();
 }
 
-export async function discoverRemotePorts({ host, cwd = "", run }) {
+export async function discoverRemotePorts({
+  host,
+  cwd = "",
+  run,
+  excludePorts = null,
+}) {
   const result = await run(
     host,
     "python3 -",
@@ -278,11 +335,11 @@ export async function discoverRemotePorts({ host, cwd = "", run }) {
   );
   if (result.code !== 0) {
     throw new Error(
-      (result.stderr || result.stdout || "远端监听端口扫描失败").trim().slice(-400),
+      (result.stderr || result.stdout || "监听端口扫描失败").trim().slice(-400),
     );
   }
   const text = (result.stdout || "").trim();
   const parsed = text ? JSON.parse(text) : { ports: [] };
   const raw = Array.isArray(parsed?.ports) ? parsed.ports : [];
-  return filterDiscoveredPorts(raw, { cwd });
+  return filterDiscoveredPorts(raw, { cwd, excludePorts });
 }

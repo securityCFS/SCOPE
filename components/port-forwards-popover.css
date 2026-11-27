@@ -14,12 +14,17 @@
   flex-shrink: 0;
 }
 
+.port-forwards-backdrop {
+  display: none;
+}
+
 .port-forwards-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 120;
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 1600;
   width: min(410px, calc(100vw - 28px));
+  max-height: min(560px, calc(100dvh - 88px));
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -38,6 +43,19 @@
   padding: 11px 14px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--panel-2);
+  flex-shrink: 0;
+}
+
+.port-forwards-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.port-forwards-close-btn {
+  padding: 0 !important;
+  width: 26px;
 }
 
 .port-forwards-head-title {
@@ -171,8 +189,11 @@
 }
 
 .port-forwards-body {
-  max-height: 320px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 360px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
@@ -290,12 +311,13 @@
   padding: 10px 14px;
   border-top: 1px solid var(--line-soft);
   background: var(--panel-2);
+  flex-shrink: 0;
 }
 
 .port-forwards-manual input {
   flex: 1;
   min-width: 0;
-  height: 28px;
+  height: 30px;
   padding: 0 9px;
   border-radius: 7px;
   border: 1px solid var(--line);
@@ -303,6 +325,14 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.port-forwards-manual input::-webkit-outer-spin-button,
+.port-forwards-manual input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .port-forwards-manual input:focus {
