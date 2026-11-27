@@ -10,7 +10,7 @@ import { runLocalPython } from "./local/python-probe.mjs";
 const QUOTA_CACHE_TTL_MS = 45_000;
 
 export const PROVIDER_AUTH_PROBE_PY = `
-import base64, concurrent.futures, datetime, glob, json, os, pathlib, re, shutil, subprocess, sys, time, urllib.error, urllib.request
+import base64, concurrent.futures, datetime, glob, json, os, pathlib, re, shutil, subprocess, sys
 
 cfg = json.loads(base64.urlsafe_b64decode(sys.argv[1] + "=="))
 home = pathlib.Path.home()
@@ -71,130 +71,129 @@ def parse_iso_epoch(value):
     except Exception:
         return None
 
-def read_claude_oauth():
-    cred_path = home / ".claude/.credentials.json"
-    if cred_path.is_file():
+CLAUDE_USAGE_LINE = re.compile(
+    r"^\\s*Current\\s+(session|week)(?:\\s*\\(([^)]*)\\))?\\s*:\\s*(\\d+(?:\\.\\d+)?)%\\s*used(?:.*?\\bresets\\s+(.+?))?\\s*$",
+    re.IGNORECASE,
+)
+
+def parse_claude_reset(text, now=None):
+    """Parse Claude Code /usage reset labels such as "Nov 27, 8:19am (UTC)"."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    raw = text.strip()
+    tz = datetime.timezone.utc
+    tz_match = re.search(r"\\(([^)]+)\\)\\s*$", raw)
+    if tz_match:
+        raw = raw[: tz_match.start()].strip()
+        tz_name = tz_match.group(1).strip()
+        if tz_name.upper() not in ("UTC", "GMT"):
+            try:
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo(tz_name)
+            except Exception:
+                return None
+    raw = re.sub(r"\\s+at\\s+", ", ", raw.replace(".", ""), flags=re.IGNORECASE)
+    raw = re.sub(r"\\s+", " ", raw).strip()
+    now = now or datetime.datetime.now(tz)
+    for fmt, has_date in (
+        ("%b %d, %I:%M%p", True), ("%b %d, %I%p", True),
+        ("%b %d %I:%M%p", True), ("%b %d %I%p", True),
+        ("%I:%M%p", False), ("%I%p", False),
+    ):
         try:
-            data = json.loads(cred_path.read_text(encoding="utf-8", errors="replace"))
-            oauth = data.get("claudeAiOauth") if isinstance(data, dict) else None
-            if isinstance(oauth, dict) and oauth.get("accessToken"):
-                return oauth
-        except Exception:
-            pass
-    if sys.platform == "darwin":
-        try:
-            proc = subprocess.run(
-                ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=4,
-            )
-            if proc.returncode == 0 and proc.stdout.strip():
-                data = json.loads(proc.stdout.strip())
-                oauth = data.get("claudeAiOauth") if isinstance(data, dict) else None
-                if isinstance(oauth, dict) and oauth.get("accessToken"):
-                    return oauth
-        except Exception:
-            pass
+            parsed = datetime.datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+        if has_date:
+            dt = parsed.replace(year=now.year, tzinfo=tz)
+            if dt < now - datetime.timedelta(days=30):
+                dt = dt.replace(year=now.year + 1)
+        else:
+            dt = now.replace(hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0)
+            if dt < now - datetime.timedelta(minutes=1):
+                dt = dt + datetime.timedelta(days=1)
+        return int(dt.timestamp())
     return None
 
-def probe_claude_quota(out):
-    oauth = read_claude_oauth()
-    if not isinstance(oauth, dict):
-        return
-    token = str(oauth.get("accessToken") or "").strip()
-    if not token:
-        return
-    expires = oauth.get("expiresAt")
-    if isinstance(expires, (int, float)) and expires > 0:
-        exp_ms = expires if expires > 1e12 else expires * 1000
-        if exp_ms < time.time() * 1000:
-            out["quotaError"] = "Claude OAuth 令牌已过期，请刷新登录或发起一次对话"
-            return
-    if not out.get("subscriptionType") and oauth.get("subscriptionType"):
-        out["subscriptionType"] = str(oauth.get("subscriptionType"))[:80]
-    if not out.get("planTier") and oauth.get("rateLimitTier"):
-        out["planTier"] = str(oauth.get("rateLimitTier")).replace("default_claude_", "")[:80]
-    test_url = os.environ.get("SCOPE_TEST_CLAUDE_USAGE_URL", "").strip()
-    url = test_url if test_url.startswith("http://127.0.0.1:") else "https://api.anthropic.com/api/oauth/usage"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "anthropic-beta": "oauth-2025-04-20",
-            "Accept": "application/json",
-            "User-Agent": "claude-code",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            body = json.loads(resp.read().decode("utf-8", errors="replace"))
-    except urllib.error.HTTPError as err:
-        if err.code in (401, 403):
-            out["quotaError"] = "Claude OAuth 令牌已失效或无权限，请重新登录"
-        elif err.code == 429:
-            out["quotaError"] = "Claude 用量接口触发限流，请稍后再试"
-        else:
-            out["quotaError"] = f"Claude 用量接口返回 HTTP {err.code}"
-        return
-    except Exception:
-        out["quotaError"] = "无法连接 Anthropic 用量接口（请检查主机代理或网络配置）"
-        return
-    if not isinstance(body, dict):
-        return
-    def make_win(raw, mins):
-        if not isinstance(raw, dict):
-            return None
-        util = raw.get("utilization")
-        if util is None:
-            return None
-        try:
-            used = max(0, min(100, round(float(util))))
-        except (TypeError, ValueError):
-            return None
-        return {
-            "usedPercent": used,
-            "windowDurationMins": mins,
-            "resetsAt": parse_iso_epoch(raw.get("resets_at")),
-        }
-    primary = make_win(body.get("five_hour"), 300)
-    secondary = make_win(body.get("seven_day"), 10080)
+def parse_claude_usage_text(text):
+    primary = None
+    secondary = None
     groups = []
-    for key, label in (("seven_day_sonnet", "Sonnet"), ("seven_day_opus", "Opus")):
-        sub_win = make_win(body.get(key), 10080)
-        if sub_win:
-            groups.append({"name": label, "primary": None, "secondary": sub_win})
-    credits = None
-    extra = body.get("extra_usage")
-    if isinstance(extra, dict) and extra.get("is_enabled"):
-        used_c = extra.get("used_credits")
-        limit_c = extra.get("monthly_limit")
-        currency = str(extra.get("currency") or "USD").upper()
-        bal = None
-        if isinstance(used_c, (int, float)) and isinstance(limit_c, (int, float)) and limit_c > 0:
-            rem_c = max(0.0, float(limit_c) - float(used_c))
-            bal = f"{rem_c:.2f} / {float(limit_c):.2f} {currency}"
-        elif isinstance(used_c, (int, float)):
-            bal = f"已用 {float(used_c):.2f} {currency}"
-        credits = {
-            "hasCredits": True,
-            "unlimited": limit_c is None,
-            "balance": bal,
+    for line in (text or "").splitlines():
+        m = CLAUDE_USAGE_LINE.match(line)
+        if not m:
+            continue
+        kind, label, pct, reset = m.group(1).lower(), (m.group(2) or "").strip(), m.group(3), m.group(4)
+        win = {
+            "usedPercent": max(0, min(100, round(float(pct)))),
+            "windowDurationMins": 300 if kind == "session" else 10080,
+            "resetsAt": parse_claude_reset(reset),
         }
-    if primary or secondary or credits or groups:
-        quota = {
-            "planType": out.get("planTier") or out.get("subscriptionType") or None,
-            "primary": primary,
-            "secondary": secondary,
-            "credits": credits,
-        }
-        if groups:
-            quota["groups"] = [
-                {"name": "全部模型", "primary": primary, "secondary": secondary},
-                *groups,
-            ]
-        out["quota"] = quota
+        if kind == "session":
+            primary = primary or win
+        elif not label or label.lower() in ("all models", "all"):
+            secondary = secondary or win
+        else:
+            name = re.sub(r"\\s+only$", "", label, flags=re.IGNORECASE)[:120]
+            groups.append({"name": name, "primary": None, "secondary": win})
+    return primary, secondary, groups
+
+def run_claude_usage(exe):
+    # Ask the unmodified Claude Code binary for its own /usage report. It is a
+    # local slash command (zero tokens); SCOPE never reads Claude credentials.
+    base = [exe, "-p", "/usage", "--output-format", "json"]
+    hardening = ["--no-session-persistence", "--strict-mcp-config"]
+    proc = None
+    for argv in (base + hardening, base):
+        proc = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=25,
+            cwd=str(home),
+        )
+        err = (proc.stderr or "").lower()
+        if proc.returncode == 0 or not ("unknown option" in err or "unknown argument" in err):
+            break
+    return proc
+
+def probe_claude_quota(exe, out):
+    if not exe:
+        return
+    try:
+        proc = run_claude_usage(exe)
+    except subprocess.TimeoutExpired:
+        out["quotaError"] = "查询 Claude /usage 超时（请检查主机网络或代理配置）"
+        return
+    except Exception as err:
+        out["quotaError"] = f"执行 claude /usage 失败：{str(err)[:140]}"
+        return
+    parsed = parse_json_object((proc.stdout or "").strip())
+    if not isinstance(parsed, dict) or "result" not in parsed:
+        detail = ((proc.stderr or "").strip() or (proc.stdout or "").strip())[:160]
+        out["quotaError"] = f"Claude /usage 未返回可解析结果{('：' + detail) if detail else ''}"
+        return
+    text = str(parsed.get("result") or "")
+    if parsed.get("is_error"):
+        out["quotaError"] = f"Claude /usage 返回错误：{text.strip()[:160]}"
+        return
+    primary, secondary, groups = parse_claude_usage_text(text)
+    if not (primary or secondary or groups):
+        out["quotaError"] = "Claude /usage 输出中未找到订阅额度（API Key 计费或 Claude Code 版本过旧）"
+        return
+    quota = {
+        "planType": out.get("planTier") or out.get("subscriptionType") or None,
+        "primary": primary,
+        "secondary": secondary,
+        "credits": None,
+    }
+    if groups:
+        quota["groups"] = [
+            {"name": "全部模型", "primary": primary, "secondary": secondary},
+            *groups,
+        ]
+    out["quota"] = quota
 
 def probe_claude(exe_name):
     exe = find_exe(exe_name or "claude")
@@ -242,7 +241,7 @@ def probe_claude(exe_name):
                     "error": None,
                 })
                 if out["loggedIn"]:
-                    probe_claude_quota(out)
+                    probe_claude_quota(exe, out)
                 return out
         except Exception as err:
             out["error"] = str(err)[:200]
@@ -255,7 +254,7 @@ def probe_claude(exe_name):
             out["orgName"] = str(acct.get("organizationName") or "")[:160]
             out["authMethod"] = "claude.ai"
             out["error"] = None
-            probe_claude_quota(out)
+            probe_claude_quota(exe, out)
     except Exception:
         pass
     return out

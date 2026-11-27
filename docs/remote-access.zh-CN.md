@@ -15,6 +15,7 @@
 | **遥测与数据回传** | **零遥测。** 无统计埋点、无崩溃上报、无需注册第三方云账号。 |
 | **对话记录与提示词** | 仅由你自己掌控的控制端直接读取原生 CLI 文件（`~/.codex`、`~/.claude`、`~/.gemini`），绝不上传到任何外部服务器。 |
 | **Claude / Codex / AGY 凭据与 SSH 密钥** | **凭据永不离开所在主机。** `/usage` 额度查询直接在目标主机本地完成，只回传数值百分比，不回传 OAuth Token 或 Cookie。 |
+| **出站连接** | 不存在任何 SCOPE 运营的服务器。SCOPE 自身只会连接：你的 SSH 主机；通过**未修改的官方 CLI** 访问各服务商（如 `claude -p /usage`、`codex app-server`、`agy -p /usage`）；**仅在你点击 Codex 升级检查时**访问 `registry.npmjs.org`；以及启用邮件通知时你自己的 SMTP 服务器。SCOPE 不读取 Claude 凭据文件或 macOS 钥匙串；Codex 的 `auth.json` 只在其所在主机本地读取，用于显示账号身份和切换已保存的 Profile，SCOPE 不会将其发送到任何地方。 |
 | **默认网络监听** | 前端（`127.0.0.1:3000`）、Bridge（`127.0.0.1:4815`）与私有网关（`127.0.0.1:4820`）默认全部仅监听本机回环。 |
 | **轻量可审计开源** | MIT 协议，生产运行时仅 2 个依赖（`ws`、`nodemailer`），内置防泄漏扫描（`npm run export:opensource -- --check`）。 |
 

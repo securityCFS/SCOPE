@@ -226,7 +226,7 @@ SCOPE 自动读取 `~/.ssh/config`（可通过 `SCOPE_SSH_CONFIG` 覆盖），�
 ### 4.4 多 Agent 账号登录与实时 `/usage` 额度
 点击顶栏（或 Claude / AGY 会话右上角）的 **账号管理**：
 - **Codex**：本机自动读取 `~/.codex/auth.json` 与额度；远端主机支持多账号 Profile 保存、Device Auth 登录、配额耗尽自动故障切换及逐账号 5h/周额度查询。
-- **Claude Code**：支持多行 `claude auth status` 解析，并通过目标主机本地 `~/.claude/.credentials.json` OAuth 凭据（沿用主机 `preLaunchCommand`）实时查询 **5 小时会话额度** 与 **7 天周额度**（令牌不出目标主机）。远端支持一键打开 Web SSH 终端执行 `claude auth login`。
+- **Claude Code**：支持多行 `claude auth status` 解析，并通过官方零 Token 消耗命令 `claude -p /usage --output-format json --no-session-persistence --strict-mcp-config`（沿用主机 `preLaunchCommand`）实时查询 **5 小时会话额度**、**7 天周额度** 与按模型的周额度。SCOPE 不读取任何 Claude 凭据文件或 macOS 钥匙串，额度由未修改的 Claude Code 自己上报。远端支持一键打开 Web SSH 终端执行 `claude auth login`。
 - **Antigravity (`agy`)**：读取 `~/.gemini/antigravity-cli/antigravity-oauth-token` 元数据与 `settings.json`，并通过目标主机官方零 Token 消耗命令 `agy -p /usage --output-format json`（沿用主机 `preLaunchCommand`）实时查询各模型分组（如 Gemini Models、Claude & GPT Models）的 **5 小时与周剩余额度**。
 
 ### 4.5 邮件通知与远端一键 `scope-notify`
@@ -292,7 +292,7 @@ systemctl --user restart scope-workbench.service   # Linux systemd
 | --- | --- | --- |
 | 主机显示 **离线 / 认证失败** | SSH 需要输入密码或主机指纹未确认 | 执行 `ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes <主机> true` 确认免密且已写入 `known_hosts` |
 | Claude / AGY 额度查询超时 | 远端主机访问官方 API 需要出口代理 | 在 **设置 → 远程主机与部署** 配置 `preLaunchCommand`，再到 **账号管理** 点击 **刷新** |
-| Claude 提示 `OAuth 令牌已过期` | `~/.claude/.credentials.json` 中的访问令牌已过期 | 打开内置 SSH 终端发起一次 `claude` 对话或重新执行 `claude auth login` |
+| Claude 额度提示 `未找到订阅额度` | Claude Code 使用 API Key 计费，或版本过旧不支持 `/usage` | 在目标主机执行 `claude -p /usage` 确认；升级 Claude Code 或在内置 SSH 终端重新执行 `claude auth login` |
 | 启动提示端口 `3000` / `4815` 被占用 | 旧版 `bridge/start.mjs` 守护进程仍在运行 | 先结束守护进程再结束子进程，然后重新启动 `node bridge/start.mjs --skip-build` |
 | `npm run build` 报错 | Node.js 版本低于 `22.13` | 升级至 Node.js `>= 22.13` 后重新执行 `npm ci && npm run build` |
 

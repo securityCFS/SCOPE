@@ -457,14 +457,14 @@ export function AccountsDialog({
                   <p>
                     {locale === "en" ? (
                       <>
-                        Run <code>claude auth login</code> in an interactive terminal to authorize via OAuth (credentials stay in <code>~/.claude</code> on the host). SCOPE queries Claude&apos;s OAuth usage endpoint directly on the host without exporting tokens; run <code>/usage</code> in CLI to cross-check.
+                        Run <code>claude auth login</code> in an interactive terminal to authorize via OAuth (credentials stay in <code>~/.claude</code> on the host). SCOPE never reads Claude credentials; quotas are reported by Claude Code itself via <code>claude -p /usage</code> on the host (zero tokens).
                       </>
                     ) : (
                       <>
                         Claude Code 通过交互式终端执行{" "}
                         <code>claude auth login</code> 完成浏览器 OAuth 授权（凭据保存在目标主机{" "}
-                        <code>~/.claude</code>）。SCOPE 会在目标主机本地直接查询 Claude OAuth 用量接口（不回传令牌），也可以在 CLI 中运行{" "}
-                        <code>/usage</code> 核对。
+                        <code>~/.claude</code>）。SCOPE 不读取 Claude 凭据，额度由目标主机上的 Claude Code 通过{" "}
+                        <code>claude -p /usage</code> 自行上报（零 Token 消耗）。
                       </>
                     )}
                   </p>

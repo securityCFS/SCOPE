@@ -15,6 +15,7 @@ Before exposing any coding-agent workbench outside `localhost`, verify what leav
 | **Telemetry & analytics** | **None.** Zero background beacons, zero crash reporters, zero cloud accounts. |
 | **Session transcripts & prompts** | Read directly from native CLI files (`~/.codex`, `~/.claude`, `~/.gemini`) only on your own control plane — never synced to third-party servers. |
 | **Agent OAuth tokens & SSH keys** | **Never leave the host where they live.** Quota checks (`/usage`) execute locally on each host and return only numeric percentages. |
+| **Outbound connections** | No SCOPE-operated server exists. SCOPE itself only contacts: your SSH hosts; provider services through their **unmodified official CLIs** (e.g. `claude -p /usage`, `codex app-server`, `agy -p /usage`); `registry.npmjs.org` **only when you click a Codex upgrade check**; and your own SMTP server if you enable email notifications. SCOPE never reads Claude credential files or the macOS keychain; Codex `auth.json` is read only on its own host to display account identity and switch saved profiles, and is never sent anywhere by SCOPE. |
 | **Network binding** | Web UI (`127.0.0.1:3000`), Bridge (`127.0.0.1:4815`), and Private Gateway (`127.0.0.1:4820`) bind strictly to loopback by default. |
 | **Auditable open source** | MIT-licensed, 2 runtime dependencies (`ws`, `nodemailer`), built-in secret scanner (`npm run export:opensource -- --check`). |
 

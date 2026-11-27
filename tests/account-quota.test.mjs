@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import http from "node:http";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -390,7 +389,7 @@ test("readProviderAuthStatuses probes Claude & Antigravity state without exposin
   assert.equal(sshCalls, 2);
 });
 
-test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, and honors host preLaunchCommand", async (t) => {
+test("readProviderAuthStatuses queries Claude and AGY /usage via their CLIs, and honors host preLaunchCommand", async (t) => {
   const home = await mkdtemp(path.join(tmpdir(), "scope-provider-quota-"));
   t.after(() => rm(home, { recursive: true, force: true }));
 
@@ -433,25 +432,53 @@ test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, an
     JSON.stringify({ model: "model-default", useG1Credits: true }),
   );
 
-  const fiveHourReset = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
-  const sevenDayReset = new Date(Date.now() + 5 * 86400 * 1000).toISOString();
-  let seenAuthHeader = "";
-  let seenBetaHeader = "";
-  const server = http.createServer((req, res) => {
-    seenAuthHeader = String(req.headers.authorization || "");
-    seenBetaHeader = String(req.headers["anthropic-beta"] || "");
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify({
-        five_hour: { utilization: 12.4, resets_at: fiveHourReset },
-        seven_day: { utilization: 5.0, resets_at: sevenDayReset },
-        extra_usage: { is_enabled: false },
-      }),
-    );
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => server.close());
-  const port = server.address().port;
+  const minuteNow = Math.floor(Date.now() / 60_000) * 60_000;
+  const fiveHourResetDate = new Date(minuteNow + 2 * 3600 * 1000);
+  const sevenDayResetDate = new Date(minuteNow + 5 * 86400 * 1000);
+  const fiveHourReset = fiveHourResetDate.toISOString();
+  const sevenDayReset = sevenDayResetDate.toISOString();
+  // Mirrors Claude Code's /usage labels, e.g. "Nov 27, 8:19am (UTC)" or "Nov 29, 6pm (UTC)".
+  const claudeResetLabel = (date) => {
+    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getUTCMonth()];
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const clock = `${hours % 12 || 12}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""}${hours >= 12 ? "pm" : "am"}`;
+    return `${month} ${date.getUTCDate()}, ${clock} (UTC)`;
+  };
+  const claudeUsageText = [
+    "You are currently using your subscription to power your Claude Code usage",
+    "",
+    `Current session: 12% used · resets ${claudeResetLabel(fiveHourResetDate)}`,
+    `Current week (all models): 5% used · resets ${claudeResetLabel(sevenDayResetDate)}`,
+    `Current week (Sonnet only): 30% used · resets ${claudeResetLabel(sevenDayResetDate)}`,
+  ].join("\n");
+  const claudeArgvLog = path.join(home, "claude-argv.jsonl");
+  const claudeHelper = path.join(home, "fake_claude.py");
+  await writeFile(
+    claudeHelper,
+    [
+      "import json, sys",
+      "args = sys.argv[1:]",
+      `with open(${JSON.stringify(claudeArgvLog)}, "a", encoding="utf-8") as log:`,
+      "    log.write(json.dumps(args) + \"\\n\")",
+      "if args[:2] == ['auth', 'status']:",
+      `    print(${JSON.stringify(JSON.stringify({ loggedIn: true, authMethod: "claude.ai", email: "claude-quota@example.com", subscriptionType: "max", planTier: "max_20x", orgName: "Example Org" }))})`,
+      "elif '/usage' in args:",
+      `    print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "local_command": "usage", "result": ${JSON.stringify(claudeUsageText)}}))`,
+      "else:",
+      "    sys.exit(2)",
+      "",
+    ].join("\n"),
+  );
+  let claudeExe;
+  if (process.platform === "win32") {
+    claudeExe = path.join(home, "fake-claude.cmd");
+    await writeFile(claudeExe, `@echo off\r\n"${pythonExecutable()}" "${claudeHelper}" %*\r\n`);
+  } else {
+    claudeExe = path.join(home, "fake-claude");
+    await writeFile(claudeExe, `#!/bin/sh\nexec "${pythonExecutable()}" "${claudeHelper}" "$@"\n`);
+    await chmod(claudeExe, 0o755);
+  }
 
   const agyUsagePayload = JSON.stringify({
     conversation_id: "",
@@ -506,7 +533,7 @@ test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, an
     sshTimeoutMs: 5000,
     getSnapshot: () => ({ hosts: [{ alias: LOCAL_HOST }, { alias: "gpu-proxy" }] }),
     providerSettings: (p) => ({
-      executable: p === "antigravity" ? agyExe : "nonexistent-test-claude",
+      executable: p === "antigravity" ? agyExe : claudeExe,
       preLaunchCommand: "",
     }),
     localPython: (script, args) =>
@@ -523,7 +550,6 @@ test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, an
             HTTPS_PROXY: "",
             http_proxy: "",
             https_proxy: "",
-            SCOPE_TEST_CLAUDE_USAGE_URL: `http://127.0.0.1:${port}/api/oauth/usage`,
           },
           windowsHide: true,
         });
@@ -554,13 +580,20 @@ test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, an
   });
 
   const local = await service.readProviderAuthStatuses(LOCAL_HOST, { force: true });
-  assert.equal(seenAuthHeader, `Bearer ${claudeSecret}`);
-  assert.equal(seenBetaHeader, "oauth-2025-04-20");
+  const claudeCalls = (await readFile(claudeArgvLog, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  const usageCall = claudeCalls.find((args) => args.includes("/usage"));
+  assert.ok(usageCall, "Claude quota must come from the claude CLI /usage command");
+  assert.ok(usageCall.includes("--no-session-persistence"));
+  assert.ok(usageCall.includes("--strict-mcp-config"));
   assert.equal(local.claude?.quota?.primary?.usedPercent, 12);
   assert.equal(local.claude?.quota?.primary?.remainingPercent, 88);
   assert.equal(local.claude?.quota?.primary?.windowMinutes, 300);
   assert.equal(local.claude?.quota?.secondary?.remainingPercent, 95);
   assert.equal(local.claude?.quota?.secondary?.windowMinutes, 10080);
+  assert.equal(local.claude?.quota?.primary?.resetsAt, Math.floor(fiveHourResetDate.getTime() / 1000));
+  assert.equal(local.claude?.quota?.secondary?.resetsAt, Math.floor(sevenDayResetDate.getTime() / 1000));
+  assert.equal(local.claude?.quota?.groups?.[1]?.name, "Sonnet");
+  assert.equal(local.claude?.quota?.groups?.[1]?.secondary?.remainingPercent, 70);
   assert.equal(local.claude?.quotaError, null);
 
   assert.equal(local.antigravity?.quota?.primary?.remainingPercent, 96);
@@ -577,4 +610,8 @@ test("readProviderAuthStatuses queries Claude OAuth usage, AGY /usage groups, an
   await service.readProviderAuthStatuses("gpu-proxy", { force: true });
   assert.equal(remoteCmds.length, 1);
   assert.match(remoteCmds[0], /WRAPPED\(\{ source ~\/\.proxy_env; \} >&2 \|\| exit \$\?\)/);
+});
+
+test("provider probe never reads Claude credentials or calls Anthropic OAuth endpoints directly", () => {
+  assert.doesNotMatch(PROVIDER_AUTH_PROBE_PY, /\.credentials\.json|api\/oauth\/usage|find-generic-password|Claude Code-credentials|accessToken/);
 });

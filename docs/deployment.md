@@ -234,7 +234,7 @@ Under **Settings → General & Coordinator** (or per host under **Hosts & Remote
 ### 4.4 Multi-Agent Login & Live Quota Setup (`/usage`)
 Open **Accounts** from the topbar (or inside any Claude/AGY conversation header):
 - **Codex**: Supports local `~/.codex/auth.json` + live quota, and on remote SSH hosts supports multi-profile saving, browser Device Auth login, automatic failover, and per-profile 5h / 7d remaining quota.
-- **Claude Code**: Detects `claude auth status` (multi-line JSON) and queries live **5h session** and **7d weekly** remaining quotas on the target host using local `~/.claude/.credentials.json` OAuth credentials (`https://api.anthropic.com/api/oauth/usage`) through the host's configured `preLaunchCommand`—tokens never leave the target machine. Use **Open SSH Terminal** for one-click `claude auth login`.
+- **Claude Code**: Detects `claude auth status` (multi-line JSON) and reads live **5h session**, **7d weekly**, and per-model weekly quotas via the official zero-token command `claude -p /usage --output-format json --no-session-persistence --strict-mcp-config` through the host's configured `preLaunchCommand`. SCOPE never reads Claude credential files or the macOS keychain; the unmodified Claude Code binary reports its own usage. Use **Open SSH Terminal** for one-click `claude auth login`.
 - **Antigravity (`agy`)**: Detects `~/.gemini/antigravity-cli/antigravity-oauth-token` metadata and `settings.json`, and reads live grouped **5h / weekly** remaining quotas (e.g., Gemini Models & Claude/GPT Models) via the official zero-token command `agy -p /usage --output-format json` through the host's configured `preLaunchCommand`.
 
 ### 4.5 Email Notifications & One-Click Remote `scope-notify`
@@ -305,7 +305,7 @@ All persistent runtime state resides in `.scope/` (never commit it to Git):
 | --- | --- | --- |
 | Remote host shows **Offline / Auth failed** | Interactive passphrase or unverified host key | Test `ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes <host> true`; load SSH agent key and accept host key once |
 | Claude or AGY quota times out | Host requires proxy to reach Anthropic / Google | Set **Pre-launch command** under **Settings → Hosts & Remote Deploy** and click **Refresh** in **Accounts** |
-| Claude shows `OAuth 令牌已过期` | Cached access token in `~/.claude/.credentials.json` expired | Run one `claude` turn or re-run `claude auth login` in the built-in SSH terminal |
+| Claude quota shows `未找到订阅额度` | Claude Code uses API-key billing, or the installed version predates `/usage` | Run `claude -p /usage` on the host; update Claude Code or re-run `claude auth login` in the built-in SSH terminal |
 | Port `3000` or `4815` already occupied | Previous `bridge/start.mjs` supervisor still running | Stop the supervisor process first (so it doesn't respawn children), then start `node bridge/start.mjs --skip-build` |
 | `npm run build` fails on Node 20 | Node.js below minimum version | Upgrade to Node.js `>= 22.13` (`nvm use 22`) |
 

@@ -2,6 +2,12 @@
 
 All notable changes to **SCOPE** (`scope-agent-workbench`) are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Claude Code quota via official `/usage`**: Claude 5h / weekly / per-model quotas are now read from the unmodified Claude Code binary (`claude -p /usage --output-format json --no-session-persistence --strict-mcp-config`, zero tokens). SCOPE no longer reads `~/.claude/.credentials.json` or the macOS keychain and no longer calls Anthropic's OAuth usage endpoint with the user's token, in line with Anthropic's policy that third-party tools must not collect or intermediate Claude.ai credentials. Extra-usage credit balances are no longer shown for Claude.
+
 ## [0.2.3] — 2026-11-25
 
 ### Added
