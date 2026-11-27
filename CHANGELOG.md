@@ -2,17 +2,23 @@
 
 All notable changes to **SCOPE** (`@godchaser/scope`, formerly `scope-agent-workbench`) are documented in this file.
 
-## [Unreleased]
+## [0.2.6] — 2026-11-27
 
 ### Security
 
 - **Isolated port-proxy origin**: Set `SCOPE_PORT_ORIGIN` (or `--port-origin`) to serve `/scope-port/*` from a separate hostname. The control-plane origin then never executes forwarded apps; it issues a single-use 60-second ticket and redirects to the port origin, which only serves `/scope-port/*` with its own `scope_port` cookie and has no access to `/scope-api`. Sign-out and device revocation drop all port sessions. `scope expose cloudflare --port-domain` and `scope service install --port-origin` configure it.
 - **Port proxy hardening (always on)**: Forwarded responses can no longer set `Service-Worker-Allowed` or `Clear-Site-Data`, service-worker script fetches through `/scope-port` are refused, and the `scope_port` cookie is neither forwarded to nor settable by proxied apps.
-- **nodemailer 10.6.1**: Upgrade from `^9` to `^10.6.1`, clearing 12 published advisories affecting `<=10.1.3` (SMTP credential disclosure via shared TLS servername cache, parser DoS, header injection). The only breaking change upstream is Node.js >= 20, already below SCOPE's `>=22.13` floor.
+- **nodemailer 10.6.1**: Upgrade from `^9` to `^10.6.1`, clearing 12 published advisories affecting `<=10.1.3` (SMTP credential disclosure via shared TLS servername cache, parser DoS, header injection). The only breaking change upstream is Node.js >= 20, already below SCOPE's `>=22.13` floor (`npm audit --omit=dev` now reports 0 vulnerabilities).
+
+### Added
+
+- **One-Click Remote Launch Scripts**: Added `scripts/setup-remote-tailscale.sh` (Linux/macOS Tailscale Serve), `scripts/setup-remote-cloudflare.sh` (Linux/macOS Cloudflare Tunnel with optional `--port-domain` separate-origin isolation), and `scripts/setup-remote-cloudflare.ps1` (Windows PowerShell with optional `-PortDomain`), all supporting `--dry-run` / `-DryRun` and printing single-use `?scope_login=` URLs.
+- **Security & Lightweight Homepage Overhaul (`site/`)**: Highlighted Claude Code official `claude -p /usage` zero-credential-read protocol, single-use login codes and revocable trusted devices, separate-origin `/scope-port/` isolation, 2-dependency `4.3 MB` runtime footprint with 0 production advisories, and interactive Tailscale vs. Cloudflare Tunnel setup tabs with bilingual docs links.
 
 ### Fixed
 
 - `scope expose` hints now print `scope token --url` (single-use links) instead of the removed `--show --url` flow.
+- **Homepage iPhone Mobile Layout (`375px` / `390px`)**: Fixed quickstart code card horizontal overflow inside `.cta-banner`, responsive wrapping in the Subagent Workflow mockup row, compact `375px` navbar spacing, and single-line Hero kicker/command bar scaling.
 
 ## [0.2.5] — 2026-11-27
 
