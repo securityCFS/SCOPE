@@ -92,19 +92,27 @@
     <main id="top">
       <!-- HERO -->
       <section class="hero container">
-        <div class="hero-kicker">
-          <span class="pulse-dot" aria-hidden="true"></span>
-          <span data-i18n="heroKicker">
-            MIT Open Source, 13 MB Install, Zero Telemetry, Zero Credential Collection
+        <div class="hero-kicker" aria-label="Core pillars">
+          <span class="kicker-chip">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <span data-i18n="heroPill1">Open-Source Self-Hosted</span>
+          </span>
+          <span class="kicker-chip">
+            <span class="pulse-dot is-sky" aria-hidden="true"></span>
+            <span data-i18n="heroPill2">Ultra-Light 13 MB</span>
+          </span>
+          <span class="kicker-chip">
+            <span class="pulse-dot is-indigo" aria-hidden="true"></span>
+            <span data-i18n="heroPill3">Zero Sensitive Data Access</span>
           </span>
         </div>
 
         <h1 class="hero-title" data-i18n="heroTitle">
-          Ultra-lightweight, security-first web control plane for all your coding agents.
+          Local-hosted, multi-device Agent collaboration platform.
         </h1>
 
         <p class="hero-subtitle" data-i18n="heroSubtitle">
-          Monitor, resume, and steer Claude Code, Codex, and Antigravity across local machines and remote SSH GPU servers. 13 MB npm install, zero Electron or remote daemons, and strict protocol isolation that never reads Claude credentials or uploads transcripts.
+          Host Codex, Claude Code (CC), and Antigravity locally and manage every remote SSH agent reachable from your host. Multi-device collaboration across desktop and mobile, 13 MB install, zero remote daemons, and zero sensitive data access.
         </p>
 
         <div class="hero-cmd-box">
@@ -253,9 +261,9 @@
         </div>
         <div class="metric-card is-accent">
           <div class="metric-value">0</div>
-          <div class="metric-label" data-i18n="m4Title">Claude credentials read</div>
+          <div class="metric-label" data-i18n="m4Title">Sensitive credentials collected</div>
           <p class="metric-desc" data-i18n="m4Desc">
-            Never reads ~/.claude/.credentials.json or macOS Keychain. Official claude -p /usage protocol only.
+            Codex, CC, and Antigravity stay strictly on their official native CLIs. Never reads local auth secrets, Keychain, or uploads transcripts.
           </p>
         </div>
       </section>
@@ -279,11 +287,11 @@
                   <path d="m9 12 2 2 4-4" />
                 </svg>
               </span>
-              <span class="sec-pill" data-i18n="s1Pill">Claude Protocol Hardened</span>
+              <span class="sec-pill" data-i18n="s1Pill">Official CLI Protocol</span>
             </div>
-            <h3 data-i18n="s1Title">Zero Claude Credential Collection</h3>
+            <h3 data-i18n="s1Title">Zero Sensitive Data Access Across All Agents</h3>
             <p data-i18n="s1Desc">
-              SCOPE never reads ~/.claude/.credentials.json, never touches macOS Keychain, and never calls Anthropic OAuth endpoints directly. Claude 5h and weekly quotas come solely from the unmodified official binary (claude -p /usage --output-format json --no-session-persistence --strict-mcp-config, zero LLM tokens), backed by an automated regression test.
+              All three agents run strictly via their unmodified official CLIs: Codex native app-server and local profile pools, CC official claude -p /usage (never reads ~/.claude credentials or macOS Keychain), and Antigravity official agy -p /usage with isolated profiles. Auth tokens stay strictly on their own host.
             </p>
           </article>
 

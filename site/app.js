@@ -7,10 +7,12 @@
       navFeatures: "Features",
       navPlugins: "Plugins",
       navQuickstart: "Quickstart",
-      heroKicker: "MIT Open Source, 13 MB, Zero Telemetry, Zero Credential Reads",
-      heroTitle: "Ultra-lightweight, security-first web control plane for all your coding agents.",
+      heroPill1: "Open-Source Self-Hosted",
+      heroPill2: "Ultra-Light 13 MB",
+      heroPill3: "Zero Sensitive Data Access",
+      heroTitle: "Local-hosted, multi-device Agent collaboration platform.",
       heroSubtitle:
-        "Monitor, resume, and steer Claude Code, Codex, and Antigravity across local machines and remote SSH GPU servers. 13 MB npm install, zero Electron or remote daemons, and strict protocol isolation that never reads Claude credentials or uploads transcripts.",
+        "Host Codex, Claude Code (CC), and Antigravity locally and manage every remote SSH agent reachable from your host. Multi-device collaboration across desktop and mobile, 13 MB install, zero remote daemons, and zero sensitive data access.",
       cmdTabPreview: "5s Preview (No SSH)",
       cmdTabInstall: "Install & Launch",
       cmdTabRemote: "Mobile Remote",
@@ -31,17 +33,17 @@
       m3Title: "Remote daemons & relays",
       m3Desc:
         "Pure OpenSSH control plane bound strictly to 127.0.0.1. Zero third-party cloud relays or background agents.",
-      m4Title: "Claude credentials read",
+      m4Title: "Sensitive credentials collected",
       m4Desc:
-        "Never reads ~/.claude/.credentials.json or macOS Keychain. Official claude -p /usage protocol only.",
+        "Codex, CC, and Antigravity stay strictly on their official native CLIs. Never reads local auth secrets, Keychain, or uploads transcripts.",
       secTag: "Security & Protocol Protection",
       secTitle: "Lightweight by architecture. Verifiably private by default.",
       secDesc:
         "Every security guarantee below is enforced in open-source code, verified by automated unit tests and leak scanners on every release, and published via npm OIDC + Sigstore build provenance.",
-      s1Pill: "Claude Protocol Hardened",
-      s1Title: "Zero Claude Credential Collection",
+      s1Pill: "Official CLI Protocol",
+      s1Title: "Zero Sensitive Data Access Across All Agents",
       s1Desc:
-        "SCOPE never reads ~/.claude/.credentials.json, never touches macOS Keychain, and never calls Anthropic OAuth endpoints directly. Claude 5h and weekly quotas come solely from the unmodified official binary (claude -p /usage --output-format json --no-session-persistence --strict-mcp-config, zero LLM tokens), backed by an automated regression test.",
+        "All three agents run strictly via their unmodified official CLIs: Codex native app-server and local profile pools, CC official claude -p /usage (never reads ~/.claude credentials or macOS Keychain), and Antigravity official agy -p /usage with isolated profiles. Auth tokens stay strictly on their own host.",
       s2Pill: "Single-Use & Revocable",
       s2Title: "One-Time Login Links & Trusted Devices",
       s2Desc:
@@ -136,10 +138,12 @@
       navFeatures: "核心能力",
       navPlugins: "插件协议",
       navQuickstart: "快速上手",
-      heroKicker: "MIT 开源，13 MB 轻量，零遥测，零凭据读取",
-      heroTitle: "极致轻量的安全 Web 控制台\n一屏驾驭所有 Coding Agent",
+      heroPill1: "开源自托管",
+      heroPill2: "超轻量包体",
+      heroPill3: "不访问敏感数据",
+      heroTitle: "纯本地托管、多端部署的\nAgent 协同平台",
       heroSubtitle:
-        "在一张网页里监控、恢复和操控本机与远程 SSH GPU 服务器上的 Claude Code、Codex 和 Antigravity。安装仅 13 MB，无 Electron 重壳，远端无需装后台进程，严格走官方 CLI 协议，不读 Claude 凭据，不上传任何对话。",
+        "统一托管 CC（Claude Code）、Codex 与 Antigravity，完全管理部署机可连接的远程 Agent，支持桌面与手机多端协同。安装仅 13 MB，远端零常驻，不访问本地敏感凭据，不上传任何对话。",
       cmdTabPreview: "5 秒免 SSH 预览",
       cmdTabInstall: "安装与本地启动",
       cmdTabRemote: "手机远程托管",
@@ -160,17 +164,17 @@
       m3Title: "远端常驻与云端中转",
       m3Desc:
         "纯标准 OpenSSH 控制面，默认严守 127.0.0.1，零第三方云端中转，无需向服务器装后台程序。",
-      m4Title: "Claude 凭据读取",
+      m4Title: "敏感凭据采集",
       m4Desc:
-        "绝不读取 ~/.claude/.credentials.json 或 macOS 钥匙串，严格通过官方 claude -p /usage 获取配额。",
+        "Codex、CC 与 Antigravity 全部严守原生官方 CLI 协议，绝不读取本地认证密钥或钥匙串，不上传任何对话。",
       secTag: "安全与协议保护架构",
       secTitle: "架构足够轻，隐私默认可审计",
       secDesc:
         "每一条安全承诺均直接落在开源代码与自动化回归测试中，发版时通过防泄漏扫描与 npm OIDC + Sigstore 透明日志签名溯源。",
-      s1Pill: "Claude 协议保护强化",
-      s1Title: "绝不触碰 Claude 凭据，纯官方 CLI 协议",
+      s1Pill: "原生官方协议隔离",
+      s1Title: "三端均走官方 CLI，不访问敏感数据",
       s1Desc:
-        "SCOPE 从不读取 ~/.claude/.credentials.json、不访问 macOS Keychain、不代调 Anthropic OAuth 接口。Claude 的 5 小时与每周配额完全通过未经修改的官方程序（claude -p /usage --output-format json --no-session-persistence --strict-mcp-config，零 Token 消耗）读取，并有自动化回归测试严格护航。",
+        "Codex 走原生 app-server 与本地多号池，CC 仅通过官方 claude -p /usage 查额度（不读 ~/.claude 凭据或钥匙串），Antigravity 走官方 agy -p /usage 与隔离 Profile。各端登录态与敏感凭据始终留在自有主机上。",
       s2Pill: "一次性登录码与设备吊销",
       s2Title: "一次性快捷链接与可吊销受信任设备",
       s2Desc:
