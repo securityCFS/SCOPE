@@ -43,10 +43,28 @@ const SLIDING_RENEW_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const TOUCH_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const STATE_SYNC_INTERVAL_MS = 1_500;
 const PORT_PROXY_PREFIX_RE = /^\/scope-port\/(\d+)(?:(\/.*))?$/;
+const PUBLIC_SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{24,64}$/;
+const SHARE_ORIGIN_PREFIX_RE = /^\/s\/([A-Za-z0-9_-]{24,64})(?:(\/.*))?$/;
+const SAME_ORIGIN_SHARE_PREFIX_RE = /^\/scope-share\/([A-Za-z0-9_-]{24,64})(?:(\/.*))?$/;
+const PUBLIC_SHARE_ALLOWED_METHODS = new Set(["GET", "HEAD"]);
+const PUBLIC_SHARE_SAFE_UPSTREAM_HEADERS = [
+  "accept",
+  "accept-language",
+  "range",
+  "if-none-match",
+  "if-modified-since",
+  "user-agent",
+  "cache-control",
+  "pragma",
+];
 const PORT_PROXY_MAX_HTML_BYTES = 2 * 1024 * 1024;
 const BLOCKED_PROXY_PORTS = new Set([
   22, 53, 2019, 3000, 4815, 4820, 4822, 4880, 4922,
 ]);
+
+function escapeRegExp(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function isLoopbackHostname(hostname) {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
@@ -65,6 +83,21 @@ export function parsePortProxyPath(pathname = "") {
   const suffix = match[2] || "";
   return {
     port,
+    suffix,
+    needsTrailingSlash: suffix === "",
+  };
+}
+
+export function parsePublicSharePath(pathname = "", { sameOrigin = false } = {}) {
+  const re = sameOrigin ? SAME_ORIGIN_SHARE_PREFIX_RE : SHARE_ORIGIN_PREFIX_RE;
+  const match = re.exec(pathname);
+  if (!match) return null;
+  const token = match[1];
+  const suffix = match[2] || "";
+  const prefix = sameOrigin ? `/scope-share/${token}` : `/s/${token}`;
+  return {
+    token,
+    prefix,
     suffix,
     needsTrailingSlash: suffix === "",
   };
@@ -95,6 +128,38 @@ function portProxySecurityHeaders(response) {
   response.setHeader("Referrer-Policy", "same-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "SAMEORIGIN");
+}
+
+function publicShareSecurityHeaders(response) {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "SAMEORIGIN");
+}
+
+function sendPublicShareHtml(response, statusCode, { title, summary, detail = "" }) {
+  publicShareSecurityHeaders(response);
+  response.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
+  response.end(`<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>${escapeHtml(title)}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;background:#f8fafc;color:#0f172a;font:15px/1.6 system-ui,-apple-system,sans-serif}
+main{width:min(520px,100%);background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:26px 24px;box-shadow:0 12px 32px rgba(15,23,42,.08)}
+.code{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:12px;font-weight:700;margin-bottom:10px}
+h1{margin:0 0 8px;font-size:20px;line-height:1.3}
+p{margin:0 0 12px;color:#334155}
+pre{margin:0;padding:10px 12px;border-radius:10px;background:#f1f5f9;color:#475569;font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow:auto;white-space:pre-wrap;word-break:break-word}
+</style>
+<main>
+<span class="code">HTTP ${statusCode}</span>
+<h1>${escapeHtml(title)}</h1>
+<p>${escapeHtml(summary)}</p>
+${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}
+</main>`);
 }
 
 function acceptsHtml(request) {
@@ -136,9 +201,8 @@ ${tipsHtml}
 </main>`);
 }
 
-export function rewritePortProxyLocation(location, port, remotePort = port) {
+export function rewriteProxyLocation(location, prefix, port, remotePort = port) {
   if (typeof location !== "string" || !location) return location;
-  const prefix = `/scope-port/${port}`;
   if (location.startsWith("/") && !location.startsWith("//")) {
     if (location === prefix || location.startsWith(`${prefix}/`)) {
       return location;
@@ -167,13 +231,25 @@ export function rewritePortProxyLocation(location, port, remotePort = port) {
   return location;
 }
 
-export function rewritePortProxyCss(css, port) {
+export function rewritePortProxyLocation(location, port, remotePort = port) {
+  return rewriteProxyLocation(location, `/scope-port/${port}`, port, remotePort);
+}
+
+export function rewriteProxyCss(css, prefix) {
   if (typeof css !== "string" || !css) return css;
-  const prefix = `/scope-port/${port}`;
+  const escapedPrefix = escapeRegExp(prefix.replace(/^\//, ""));
+  const re = new RegExp(
+    `url\\(\\s*(["']?)\\/(?!\\/|${escapedPrefix}\\/)([^)"']*)\\1\\s*\\)`,
+    "gi",
+  );
   return css.replace(
-    /url\(\s*(["']?)\/(?!\/|scope-port\/)([^)"']*)\1\s*\)/gi,
+    re,
     (_m, quote, rest) => `url(${quote}${prefix}/${rest}${quote})`,
   );
+}
+
+export function rewritePortProxyCss(css, port) {
+  return rewriteProxyCss(css, `/scope-port/${port}`);
 }
 
 function rewritePortProxySetCookie(setCookie, port) {
@@ -212,18 +288,19 @@ function rewritePortProxySetCookie(setCookie, port) {
   return items.length ? items : null;
 }
 
-function buildPortProxyRuntimeShim(port) {
-  const prefix = `/scope-port/${port}`;
-  return `<script data-scope-port-shim>(function(){var P=${JSON.stringify(prefix)};function rw(u){if(typeof u!=="string"||!u)return u;if(u.indexOf(P+"/")===0||u===P)return u;if(u[0]==="/"&&u[1]!=="/")return P+u;try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.origin+P+x.pathname+x.search+x.hash;}if((x.protocol==="ws:"||x.protocol==="wss:")&&x.host===location.host&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.protocol+"//"+x.host+P+x.pathname+x.search+x.hash;}}catch(e){}return u;}var f=window.fetch;if(typeof f==="function"){window.fetch=function(i,n){if(typeof i==="string"){i=rw(i);}else if(i&&typeof Request!=="undefined"&&i instanceof Request){var ni=rw(i.url);if(ni!==i.url)i=new Request(ni,i);}return f.call(this,i,n);};}var X=window.XMLHttpRequest;if(X&&X.prototype&&X.prototype.open){var xo=X.prototype.open;X.prototype.open=function(m,u){var a=[].slice.call(arguments);if(typeof u==="string")a[1]=rw(u);return xo.apply(this,a);};}var W=window.WebSocket;if(typeof W==="function"){var SW=function(u,p){var nu=typeof u==="string"?rw(u):u;return p!==undefined?new W(nu,p):new W(nu);};SW.prototype=W.prototype;SW.CONNECTING=W.CONNECTING;SW.OPEN=W.OPEN;SW.CLOSING=W.CLOSING;SW.CLOSED=W.CLOSED;window.WebSocket=SW;}var E=window.EventSource;if(typeof E==="function"){var SE=function(u,c){return new E(typeof u==="string"?rw(u):u,c);};SE.prototype=E.prototype;window.EventSource=SE;}})();</script>`;
+function buildProxyRuntimeShim(prefix, { allowWebSocket = true } = {}) {
+  const wsPatch = allowWebSocket
+    ? `var W=window.WebSocket;if(typeof W==="function"){var SW=function(u,p){var nu=typeof u==="string"?rw(u):u;return p!==undefined?new W(nu,p):new W(nu);};SW.prototype=W.prototype;SW.CONNECTING=W.CONNECTING;SW.OPEN=W.OPEN;SW.CLOSING=W.CLOSING;SW.CLOSED=W.CLOSED;window.WebSocket=SW;}var E=window.EventSource;if(typeof E==="function"){var SE=function(u,c){return new E(typeof u==="string"?rw(u):u,c);};SE.prototype=E.prototype;window.EventSource=SE;}`
+    : "";
+  return `<script data-scope-port-shim>(function(){var P=${JSON.stringify(prefix)};function rw(u){if(typeof u!=="string"||!u)return u;if(u.indexOf(P+"/")===0||u===P)return u;if(u[0]==="/"&&u[1]!=="/")return P+u;try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.origin+P+x.pathname+x.search+x.hash;}if((x.protocol==="ws:"||x.protocol==="wss:")&&x.host===location.host&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.protocol+"//"+x.host+P+x.pathname+x.search+x.hash;}}catch(e){}return u;}var f=window.fetch;if(typeof f==="function"){window.fetch=function(i,n){if(typeof i==="string"){i=rw(i);}else if(i&&typeof Request!=="undefined"&&i instanceof Request){var ni=rw(i.url);if(ni!==i.url)i=new Request(ni,i);}return f.call(this,i,n);};}var X=window.XMLHttpRequest;if(X&&X.prototype&&X.prototype.open){var xo=X.prototype.open;X.prototype.open=function(m,u){var a=[].slice.call(arguments);if(typeof u==="string")a[1]=rw(u);return xo.apply(this,a);};}${wsPatch}})();</script>`;
 }
 
-export function rewritePortProxyHtml(
+export function rewriteProxyHtml(
   html,
-  port,
-  { injectRuntimeShim = true } = {},
+  prefix,
+  { injectRuntimeShim = true, allowWebSocket = true } = {},
 ) {
   if (typeof html !== "string" || !html) return html;
-  const prefix = `/scope-port/${port}`;
   let out = html;
   if (!/<base\b/i.test(out)) {
     const baseTag = `<base href="${prefix}/">`;
@@ -238,16 +315,18 @@ export function rewritePortProxyHtml(
       out = `${baseTag}${out}`;
     }
   }
-  out = out.replace(
-    /(\b(?:href|src|action|poster)\s*=\s*)(["'])\/(?!\/|scope-port\/)/gi,
-    `$1$2${prefix}/`,
+  const escapedPrefix = escapeRegExp(prefix.replace(/^\//, ""));
+  const attrRe = new RegExp(
+    `(\\b(?:href|src|action|poster)\\s*=\\s*)(["'])\\/(?!\\/|${escapedPrefix}\\/)`,
+    "gi",
   );
+  out = out.replace(attrRe, `$1$2${prefix}/`);
   out = out.replace(
     /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
-    (_m, open, body, close) => `${open}${rewritePortProxyCss(body, port)}${close}`,
+    (_m, open, body, close) => `${open}${rewriteProxyCss(body, prefix)}${close}`,
   );
   if (injectRuntimeShim && !out.includes("data-scope-port-shim")) {
-    const shim = buildPortProxyRuntimeShim(port);
+    const shim = buildProxyRuntimeShim(prefix, { allowWebSocket });
     if (/<script\b/i.test(out)) {
       out = out.replace(/<script\b/i, (tag) => `${shim}${tag}`);
     } else if (/<\/head>/i.test(out)) {
@@ -257,6 +336,17 @@ export function rewritePortProxyHtml(
     }
   }
   return out;
+}
+
+export function rewritePortProxyHtml(
+  html,
+  port,
+  { injectRuntimeShim = true } = {},
+) {
+  return rewriteProxyHtml(html, `/scope-port/${port}`, {
+    injectRuntimeShim,
+    allowWebSocket: true,
+  });
 }
 
 function loopbackTarget(value, label) {
@@ -831,6 +921,162 @@ function proxyPortRequest(
   request.pipe(upstream);
 }
 
+function sendPublicShareUpstreamError(request, response, message) {
+  if (acceptsHtml(request)) {
+    sendPublicShareHtml(response, 502, {
+      title: "分享文档暂时不可访问",
+      summary: "上游静态文档服务未返回有效的 HTTP 响应，请稍后重试或联系分享者确认服务正在运行。",
+      detail: message,
+    });
+    return;
+  }
+  publicShareSecurityHeaders(response);
+  response.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify({ error: message }));
+}
+
+function sanitizePublicShareHeaders(
+  request,
+  prefix,
+  { upstreamHostHeader },
+) {
+  const forwarded = {
+    host: upstreamHostHeader,
+    "accept-encoding": "identity",
+    "x-forwarded-prefix": prefix,
+    "x-forwarded-proto":
+      request.headers["x-forwarded-proto"] ||
+      (request.socket?.encrypted ? "https" : "http"),
+  };
+  for (const name of PUBLIC_SHARE_SAFE_UPSTREAM_HEADERS) {
+    const value = request.headers[name];
+    if (typeof value === "string" && value) {
+      forwarded[name] = value;
+    }
+  }
+  return forwarded;
+}
+
+function proxyPublicShareRequest(
+  request,
+  response,
+  target,
+  upstreamPath,
+  prefix,
+  { port, remotePort = port } = {},
+) {
+  const upstreamHostHeader = upstreamHostHeaderForPort(target, remotePort);
+  const upstream = http.request(
+    {
+      hostname: target.hostname.replace(/^\[|\]$/g, ""),
+      port: target.port,
+      method: request.method,
+      path: upstreamPath,
+      headers: sanitizePublicShareHeaders(request, prefix, {
+        upstreamHostHeader,
+      }),
+    },
+    (upstreamResponse) => {
+      const headers = { ...upstreamResponse.headers };
+      delete headers["set-cookie"];
+      delete headers["access-control-allow-origin"];
+      delete headers["access-control-allow-credentials"];
+      delete headers["www-authenticate"];
+      for (const name of PORT_PROXY_STRIPPED_RESPONSE_HEADERS) delete headers[name];
+      const statusCode = upstreamResponse.statusCode || 502;
+      if (
+        statusCode >= 300 &&
+        statusCode < 400 &&
+        typeof headers.location === "string"
+      ) {
+        headers.location = rewriteProxyLocation(
+          headers.location,
+          prefix,
+          port,
+          remotePort,
+        );
+      }
+      const contentType = String(headers["content-type"] || "").toLowerCase();
+      const isHtml =
+        request.method !== "HEAD" &&
+        contentType.includes("text/html") &&
+        !headers["content-encoding"];
+      const isCss =
+        request.method !== "HEAD" &&
+        contentType.includes("text/css") &&
+        !headers["content-encoding"];
+      if (!isHtml && !isCss) {
+        publicShareSecurityHeaders(response);
+        response.writeHead(statusCode, headers);
+        upstreamResponse.pipe(response);
+        return;
+      }
+
+      const chunks = [];
+      let totalBytes = 0;
+      let bypassed = false;
+      upstreamResponse.on("data", (chunk) => {
+        if (bypassed) {
+          response.write(chunk);
+          return;
+        }
+        totalBytes += chunk.length;
+        if (totalBytes > PORT_PROXY_MAX_HTML_BYTES) {
+          bypassed = true;
+          publicShareSecurityHeaders(response);
+          response.writeHead(statusCode, headers);
+          for (const prev of chunks) response.write(prev);
+          chunks.length = 0;
+          response.write(chunk);
+          return;
+        }
+        chunks.push(chunk);
+      });
+      upstreamResponse.on("end", () => {
+        if (bypassed) {
+          response.end();
+          return;
+        }
+        const rawText = Buffer.concat(chunks).toString("utf8");
+        const rewritten = isHtml
+          ? rewriteProxyHtml(rawText, prefix, {
+              injectRuntimeShim: !headers["content-security-policy"],
+              allowWebSocket: false,
+            })
+          : rewriteProxyCss(rawText, prefix);
+        const body = Buffer.from(rewritten, "utf8");
+        delete headers["transfer-encoding"];
+        headers["content-length"] = String(body.length);
+        publicShareSecurityHeaders(response);
+        response.writeHead(statusCode, headers);
+        response.end(body);
+      });
+      upstreamResponse.on("error", (error) => {
+        if (response.headersSent) response.destroy(error);
+        else {
+          sendPublicShareUpstreamError(
+            request,
+            response,
+            `Shared document service error: ${error.message}`,
+          );
+        }
+      });
+    },
+  );
+  upstream.on("error", (error) => {
+    if (response.headersSent) {
+      response.destroy(error);
+      return;
+    }
+    sendPublicShareUpstreamError(
+      request,
+      response,
+      `Shared document service unavailable: ${error.message}`,
+    );
+  });
+  upstream.end();
+}
+
 function proxyUpgrade(
   request,
   socket,
@@ -877,6 +1123,7 @@ function proxyUpgrade(
 }
 
 function fetchAllowedPortsFromBridge(bridge, blockedPorts) {
+  const empty = () => ({ ports: new Map(), shares: new Map() });
   return new Promise((resolve) => {
     const req = http.request(
       {
@@ -890,7 +1137,7 @@ function fetchAllowedPortsFromBridge(bridge, blockedPorts) {
       (res) => {
         if ((res.statusCode || 500) !== 200) {
           res.resume();
-          resolve(new Map());
+          resolve(empty());
           return;
         }
         const chunks = [];
@@ -906,6 +1153,8 @@ function fetchAllowedPortsFromBridge(bridge, blockedPorts) {
               ? payload.forwards
               : [];
             const allowedMap = new Map();
+            const sharesMap = new Map();
+            const nowMs = Date.now();
             for (const entry of forwards) {
               if (entry?.status !== "connected") continue;
               const localPort = Number(entry?.localPort);
@@ -927,19 +1176,37 @@ function fetchAllowedPortsFromBridge(bridge, blockedPorts) {
                   ? parsedRemote
                   : localPort;
               allowedMap.set(localPort, { port: localPort, remotePort, localHost });
+              const share = entry?.publicShare;
+              if (
+                share &&
+                typeof share.token === "string" &&
+                PUBLIC_SHARE_TOKEN_RE.test(share.token)
+              ) {
+                const expMs = share.expiresAt ? Date.parse(share.expiresAt) : null;
+                if (expMs === null || (Number.isFinite(expMs) && expMs > nowMs)) {
+                  sharesMap.set(share.token, {
+                    token: share.token,
+                    port: localPort,
+                    remotePort,
+                    localHost,
+                    label: typeof entry.label === "string" ? entry.label : "",
+                    expiresAt: share.expiresAt || null,
+                  });
+                }
+              }
             }
-            resolve(allowedMap);
+            resolve({ ports: allowedMap, shares: sharesMap });
           } catch {
-            resolve(new Map());
+            resolve(empty());
           }
         });
       },
     );
     req.on("timeout", () => {
       req.destroy();
-      resolve(new Map());
+      resolve(empty());
     });
-    req.on("error", () => resolve(new Map()));
+    req.on("error", () => resolve(empty()));
     req.end();
   });
 }
@@ -1112,6 +1379,8 @@ export function createPrivateGateway({
   trustedDeviceDays: explicitTrustedDeviceDays,
   portCacheTtlMs = 300,
   portOrigin = "",
+  shareOrigin = "",
+  allowSameOriginShare = false,
 } = {}) {
   if (typeof token !== "string" || token.length < 32) {
     throw new Error("A private access token of at least 32 characters is required");
@@ -1172,12 +1441,21 @@ export function createPrivateGateway({
   };
 
   const portOriginUrl = parsePortOrigin(portOrigin);
+  const shareOriginUrl = parsePortOrigin(shareOrigin);
+  if (portOriginUrl && shareOriginUrl && portOriginUrl.host === shareOriginUrl.host) {
+    throw new Error("Share origin must differ from port origin");
+  }
+  const sameOriginShareEnabled = Boolean(allowSameOriginShare);
   const portTickets = new Map();
   const portSessions = new Map();
 
   const isPortOriginRequest = (request) =>
     Boolean(portOriginUrl) &&
     String(request.headers.host || "").toLowerCase() === portOriginUrl.host;
+
+  const isShareOriginRequest = (request) =>
+    Boolean(shareOriginUrl) &&
+    String(request.headers.host || "").toLowerCase() === shareOriginUrl.host;
 
   const pruneExpiring = (map, now = Date.now()) => {
     for (const [key, entry] of map) {
@@ -1392,7 +1670,7 @@ export function createPrivateGateway({
   if (ui.port) blockedPorts.add(Number(ui.port));
   if (bridge.port) blockedPorts.add(Number(bridge.port));
 
-  let portCache = new Map();
+  let portCache = { ports: new Map(), shares: new Map() };
   let portCacheFetchedAt = 0;
   let portFetchInFlight = null;
 
@@ -1428,11 +1706,99 @@ export function createPrivateGateway({
     if (isBlockedProxyPort(port)) return null;
     const now = Date.now();
     const fresh = portCacheTtlMs > 0 && now - portCacheFetchedAt <= portCacheTtlMs;
-    if (fresh && portCache.has(port)) {
-      return portCache.get(port);
+    if (fresh && portCache.ports.has(port)) {
+      return portCache.ports.get(port);
     }
     const next = await refreshAllowedPorts();
-    return next.get(port) || null;
+    return next.ports.get(port) || null;
+  };
+
+  const resolvePublicShareTarget = async (shareToken) => {
+    if (typeof shareToken !== "string" || !PUBLIC_SHARE_TOKEN_RE.test(shareToken)) {
+      return null;
+    }
+    const now = Date.now();
+    const fresh = portCacheTtlMs > 0 && now - portCacheFetchedAt <= portCacheTtlMs;
+    let candidate = fresh ? portCache.shares.get(shareToken) || null : null;
+    if (!candidate) {
+      const next = await refreshAllowedPorts();
+      candidate = next.shares.get(shareToken) || null;
+    }
+    if (!candidate || !equalSecret(shareToken, candidate.token)) return null;
+    if (isBlockedProxyPort(candidate.port)) return null;
+    if (candidate.expiresAt) {
+      const expMs = Date.parse(candidate.expiresAt);
+      if (!Number.isFinite(expMs) || expMs <= Date.now()) return null;
+    }
+    return candidate;
+  };
+
+  const servePublicShare = async (
+    request,
+    response,
+    requestUrl,
+    { sameOrigin = false } = {},
+  ) => {
+    if (isServiceWorkerScriptRequest(request)) {
+      publicShareSecurityHeaders(response);
+      response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Service workers are not allowed on public share links");
+      return;
+    }
+    if (!PUBLIC_SHARE_ALLOWED_METHODS.has(request.method || "")) {
+      publicShareSecurityHeaders(response);
+      response.writeHead(405, {
+        Allow: "GET, HEAD",
+        "Content-Type": "application/json; charset=utf-8",
+      });
+      response.end(
+        JSON.stringify({
+          error: "Public document shares are read-only (GET/HEAD only)",
+        }),
+      );
+      return;
+    }
+    const parsed = parsePublicSharePath(requestUrl.pathname, { sameOrigin });
+    if (!parsed) {
+      publicShareSecurityHeaders(response);
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Not found");
+      return;
+    }
+    const targetInfo = await resolvePublicShareTarget(parsed.token);
+    if (!targetInfo) {
+      if (acceptsHtml(request)) {
+        sendPublicShareHtml(response, 404, {
+          title: "分享文档链接无效或已撤销",
+          summary: "此公网静态文档链接可能已过期、已被作者撤销，或对应静态服务已停止。",
+        });
+        return;
+      }
+      publicShareSecurityHeaders(response);
+      response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(
+        JSON.stringify({
+          error: "Public share link is invalid, expired, or revoked",
+        }),
+      );
+      return;
+    }
+    if (parsed.needsTrailingSlash) {
+      publicShareSecurityHeaders(response);
+      response.writeHead(307, {
+        Location: `${parsed.prefix}/${requestUrl.search}`,
+      });
+      response.end();
+      return;
+    }
+    proxyPublicShareRequest(
+      request,
+      response,
+      loopbackUrlForPort(targetInfo.localHost, targetInfo.port),
+      `${parsed.suffix}${requestUrl.search}`,
+      parsed.prefix,
+      { port: targetInfo.port, remotePort: targetInfo.remotePort },
+    );
   };
 
   const servePortProxy = async (request, response, requestUrl) => {
@@ -1527,6 +1893,16 @@ export function createPrivateGateway({
 
     if (isPortOriginRequest(request)) {
       await handlePortOriginRequest(request, response, requestUrl);
+      return;
+    }
+
+    if (isShareOriginRequest(request)) {
+      await servePublicShare(request, response, requestUrl, { sameOrigin: false });
+      return;
+    }
+
+    if (sameOriginShareEnabled && requestUrl.pathname.startsWith("/scope-share/")) {
+      await servePublicShare(request, response, requestUrl, { sameOrigin: true });
       return;
     }
 
@@ -1645,6 +2021,9 @@ export function createPrivateGateway({
           authMode: auth.mode,
           currentDeviceId: auth.device?.id || null,
           trustedDeviceDays: trustedDays,
+          shareOrigin: shareOriginUrl ? shareOriginUrl.origin : null,
+          sameOriginShareEnabled,
+          publicShareEnabled: Boolean(shareOriginUrl || sameOriginShareEnabled),
           devices,
         },
         auth.refreshCookie ? { "Set-Cookie": auth.refreshCookie } : {},
@@ -1896,6 +2275,10 @@ export function createPrivateGateway({
         await upgradePortProxy(request, socket, head, requestUrl);
         return;
       }
+      if (isShareOriginRequest(request) || requestUrl.pathname.startsWith("/scope-share/")) {
+        socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        return;
+      }
       const wsAuth = await resolveAuth(request);
       if (!wsAuth.ok) {
         socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
@@ -1945,6 +2328,9 @@ export async function startPrivateGateway({
   bridgeTarget = defaultBridgeTarget(),
   trustedDeviceDays,
   portOrigin = process.env.SCOPE_PORT_ORIGIN || "",
+  shareOrigin = process.env.SCOPE_SHARE_ORIGIN || "",
+  allowSameOriginShare = process.env.SCOPE_ALLOW_SAME_ORIGIN_SHARE === "1" ||
+    process.env.SCOPE_ALLOW_SAME_ORIGIN_SHARE === "true",
 } = {}) {
   if (!isLoopbackHostname(host)) {
     throw new Error("Private gateway must listen on loopback");
@@ -1959,10 +2345,21 @@ export async function startPrivateGateway({
     bridgeTarget,
     trustedDeviceDays,
     portOrigin,
+    shareOrigin,
+    allowSameOriginShare,
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, resolve);
   });
-  return { server, token, host, port, stateFile, portOrigin: portOrigin || null };
+  return {
+    server,
+    token,
+    host,
+    port,
+    stateFile,
+    portOrigin: portOrigin || null,
+    shareOrigin: shareOrigin || null,
+    allowSameOriginShare: Boolean(allowSameOriginShare),
+  };
 }

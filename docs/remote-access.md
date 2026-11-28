@@ -271,6 +271,36 @@ scope service install --with-gateway --with-cloudflared --tunnel scope-hub --por
 
 With `SCOPE_PORT_ORIGIN` set, the SCOPE origin never executes forwarded content: opening `/scope-port/<port>/` hands your browser a **single-use, 60-second ticket** and redirects to the port origin, which issues its own `scope_port` cookie (`Path=/scope-port/`, 12 h). The port origin serves **only** `/scope-port/*` — no UI, no `/scope-api`, no login — so a hostile forwarded page can at most affect other forwarded pages. Signing out or revoking devices in SCOPE drops all port sessions; simply reopen the port from the workbench.
 
+### Opt-in Public Static Document Sharing (Share Approved Ports via Unguessable Read-Only Links)
+
+If you want to share a static report, interactive HTML paper page, MkDocs/VitePress build, or experiment gallery running on a forwarded port with collaborators without asking them to sign in to Cloudflare Access, SCOPE supports **opt-in read-only public document links** strictly isolated on a dedicated share subdomain (e.g. `share.yourdomain.com`):
+
+1. **Zero exposure by default**: No port is ever public unless you explicitly click the globe icon (**Share**) next to an active forwarded port in SCOPE's **Ports** popover, choose an expiry (`24h`, `7d`, or manual revoke), and confirm.
+2. **Hard security boundary**:
+   - **Dedicated isolated origin (`SCOPE_SHARE_ORIGIN=https://share.yourdomain.com`, strongly recommended)**: `scope.yourdomain.com` stays 100% locked behind Cloudflare Access + `scope_private`. The share origin serves **only** `/s/<192-bit-token>/*` and returns `404` on `/`, `/scope-api/*`, `/scope-auth`, and `/scope-port/*`.
+   - **Read-only static contract**: Only `GET` and `HEAD` are allowed (`POST`/`PUT`/`DELETE`/`PATCH` return `405 Method Not Allowed`), WebSocket upgrades and `Service-Worker: script` are rejected (`403`), and all cookies/auth headers are stripped in both directions.
+   - **Anti-indexing & referrer protection**: Every response injects `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`, so search engines will not index shared docs and clicking external links inside a report never leaks the share token.
+   - **Instant revoke & auto-revoke**: Clicking **Revoke** or stopping the port forward invalidates the token immediately (`404`).
+
+```sh
+# Configure DNS + ~/.cloudflared/config.yml + systemd unit with an isolated share subdomain
+scope expose cloudflare --domain scope.yourdomain.com --share-domain share.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub --share-origin https://share.yourdomain.com
+```
+
+#### Required Cloudflare Inbound & Outbound Rules
+
+| Direction | Layer | Exact Rule / Configuration |
+| --- | --- | --- |
+| **Inbound** | DNS | CNAME `share.yourdomain.com` → `<TUNNEL_ID>.cfargotunnel.com` (**Proxied**, orange cloud). |
+| **Inbound** | Tunnel Ingress (`~/.cloudflared/config.yml`) | Add `- hostname: share.yourdomain.com` → `service: http://127.0.0.1:4820` above the final `http_status:404` catch-all. |
+| **Inbound** | Cloudflare Zero Trust Access | Keep your private Access app scoped strictly to `scope.yourdomain.com` (and optional `scope-ports.yourdomain.com`). Do **not** gate `share.yourdomain.com` (or if using a wildcard app, add a **Bypass** policy for `share.yourdomain.com/s/*` with `Include: Everyone`). |
+| **Inbound** | Cloudflare WAF Custom Rule (Free Tier) | Action: **Block** when `(http.host eq "share.yourdomain.com" and (not http.request.method in {"GET" "HEAD"} or not starts_with(http.request.uri.path, "/s/")))`. |
+| **Inbound** | Cloudflare WAF Rate Limiting (Free Tier) | On `http.host eq "share.yourdomain.com"`, e.g. `60 requests / 10 seconds` per IP → **Block**. |
+| **Outbound** | Host / Cloud Firewall (GCP / AWS / UFW) | **Zero inbound ports required.** Only standard `cloudflared` outbound connections to Cloudflare edge (**TCP/UDP 7844** for QUIC or **TCP 443** fallback for HTTP/2). |
+
+> **Single-domain fallback (not recommended unless you cannot add a subdomain)**: If you must share under your main hostname (`https://scope.yourdomain.com/scope-share/<token>/`), set `SCOPE_ALLOW_SAME_ORIGIN_SHARE=1` on Private Gateway and create a path-scoped Cloudflare Access **Bypass** application strictly for `scope.yourdomain.com/scope-share/*`, plus a WAF Custom Rule blocking non-`GET`/`HEAD` requests to `/scope-share/`. Because shared HTML runs on the same origin as SCOPE in fallback mode, only use it for static documents whose HTML/JS you fully control.
+
 ---
 
 ## Token Rotation & Operations

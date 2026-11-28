@@ -13,6 +13,7 @@ import {
   loadOrCreatePrivateAccessToken,
   parsePortOrigin,
   parsePortProxyPath,
+  parsePublicSharePath,
   revokeTrustedDevice,
   rewritePortProxyCss,
   rewritePortProxyHtml,
@@ -1017,4 +1018,282 @@ test("port proxy rewrites CSS urls, remapped remotePort redirects, runtime shim,
   assert.equal(closedHtml.status, 403);
   assert.match(closedHtml.headers.get("content-type") || "", /text\/html/);
   assert.match(await closedHtml.text(), /尚未在 SCOPE 中开放/);
+});
+
+test("opt-in public static share enforces isolated read-only GET/HEAD, strips cookies, blocks WS/SW, and honors revoke/expiry", async (t) => {
+  const token = "public-share-test-master-token-over-32-chars-long";
+  const validShareToken = "ShareToken_0123456789abcdefghijKLMN";
+  const shareOrigin = "http://share.localhost:4998";
+  const shareHost = "share.localhost:4998";
+  let activeShare = {
+    token: validShareToken,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    mode: "readonly-static",
+  };
+  const upstreamSeen = [];
+
+  assert.deepEqual(parsePublicSharePath(`/s/${validShareToken}`), {
+    token: validShareToken,
+    prefix: `/s/${validShareToken}`,
+    suffix: "",
+    needsTrailingSlash: true,
+  });
+  assert.deepEqual(
+    parsePublicSharePath(`/scope-share/${validShareToken}/docs/index.html`, { sameOrigin: true }),
+    {
+      token: validShareToken,
+      prefix: `/scope-share/${validShareToken}`,
+      suffix: "/docs/index.html",
+      needsTrailingSlash: false,
+    },
+  );
+  assert.equal(parsePublicSharePath("/s/too-short"), null);
+
+  const staticDoc = http.createServer((request, response) => {
+    upstreamSeen.push({
+      method: request.method,
+      url: request.url,
+      cookie: request.headers.cookie || "",
+      authorization: request.headers.authorization || "",
+      cfJwt: request.headers["cf-access-jwt-assertion"] || "",
+      origin: request.headers.origin || "",
+      referer: request.headers.referer || "",
+      range: request.headers.range || "",
+    });
+    if (request.url === "/style.css") {
+      response.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+      response.end('body{background:url("/assets/fig.png")}');
+      return;
+    }
+    if (request.url === "/go") {
+      response.writeHead(302, { Location: "/chapter/1" });
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": "leak=1; Path=/",
+      "Service-Worker-Allowed": "/",
+      "Clear-Site-Data": '"cookies"',
+      "Access-Control-Allow-Origin": "*",
+    });
+    response.end('<html><head><title>Report</title></head><body><img src="/assets/chart.png"><script src="/app.js"></script></body></html>');
+  });
+  const docTarget = await listen(staticDoc);
+  const docPort = Number(new URL(docTarget).port);
+
+  const bridge = http.createServer((request, response) => {
+    if (request.url === "/api/port-forwards") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          forwards: [
+            {
+              host: "@local",
+              remotePort: docPort,
+              localPort: docPort,
+              localHost: "127.0.0.1",
+              status: "connected",
+              label: "Static Docs",
+              publicShare: activeShare,
+            },
+          ],
+        }),
+      );
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ ok: true }));
+  });
+  const ui = http.createServer((_req, res) => res.end("scope-ui"));
+  const uiTarget = await listen(ui);
+  const bridgeTarget = await listen(bridge);
+
+  // Reject identical portOrigin and shareOrigin
+  assert.throws(
+    () =>
+      createPrivateGateway({
+        token,
+        uiTarget,
+        bridgeTarget,
+        portOrigin: "https://same.example.com",
+        shareOrigin: "https://same.example.com",
+      }),
+    /Share origin must differ from port origin/,
+  );
+
+  const gateway = createPrivateGateway({
+    token,
+    uiTarget,
+    bridgeTarget,
+    portCacheTtlMs: 0,
+    shareOrigin,
+  });
+  const gatewayUrl = await listen(gateway);
+  t.after(async () => {
+    await Promise.all([close(gateway), close(ui), close(bridge), close(staticDoc)]);
+  });
+
+  // Main origin stays locked; /scope-share/ is NOT served on main origin when allowSameOriginShare is false
+  assert.equal((await rawRequest(`${gatewayUrl}/`)).status, 401);
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-share/${validShareToken}/`)).status, 401);
+
+  // Authenticated /scope-auth/session reports shareOrigin & publicShareEnabled
+  const login = await fetch(`${gatewayUrl}/scope-auth`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  const mainCookie = (login.headers.get("set-cookie") || "").split(";", 1)[0];
+  const sessionInfo = await (
+    await fetch(`${gatewayUrl}/scope-auth/session`, { headers: { cookie: mainCookie } })
+  ).json();
+  assert.equal(sessionInfo.shareOrigin, shareOrigin);
+  assert.equal(sessionInfo.sameOriginShareEnabled, false);
+  assert.equal(sessionInfo.publicShareEnabled, true);
+
+  // Share origin refuses control-plane / non-share paths with 404
+  assert.equal((await rawRequest(`${gatewayUrl}/`, { host: shareHost })).status, 404);
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-api/api/health`, { host: shareHost })).status, 404);
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-port/${docPort}/`, { host: shareHost })).status, 404);
+
+  // Bare /s/<token> redirects with 307 to /s/<token>/
+  const bare = await rawRequest(`${gatewayUrl}/s/${validShareToken}?v=1`, { host: shareHost });
+  assert.equal(bare.status, 307);
+  assert.equal(bare.headers.location, `/s/${validShareToken}/?v=1`);
+
+  // Public unauthenticated GET works, rewrites paths, strips cookies & dangerous headers, sets noindex/no-referrer
+  const docRes = await rawRequest(`${gatewayUrl}/s/${validShareToken}/`, {
+    host: shareHost,
+    headers: {
+      cookie: `${mainCookie}; secret=leak`,
+      authorization: "Bearer secret",
+      "cf-access-jwt-assertion": "jwt-leak",
+      origin: "https://evil.example",
+      referer: "https://evil.example/ref",
+      range: "bytes=0-100",
+    },
+  });
+  assert.equal(docRes.status, 200);
+  assert.match(docRes.body, new RegExp(`<base href="/s/${validShareToken}/">`));
+  assert.match(docRes.body, new RegExp(`src="/s/${validShareToken}/assets/chart\\.png"`));
+  assert.match(docRes.body, /data-scope-port-shim/);
+  assert.equal(docRes.body.includes("window.WebSocket="), false);
+  assert.equal(docRes.headers["x-robots-tag"], "noindex, nofollow, noarchive");
+  assert.equal(docRes.headers["referrer-policy"], "no-referrer");
+  assert.equal(docRes.headers["set-cookie"], undefined);
+  assert.equal(docRes.headers["service-worker-allowed"], undefined);
+  assert.equal(docRes.headers["clear-site-data"], undefined);
+  assert.equal(docRes.headers["access-control-allow-origin"], undefined);
+  assert.equal(upstreamSeen.at(-1).cookie, "");
+  assert.equal(upstreamSeen.at(-1).authorization, "");
+  assert.equal(upstreamSeen.at(-1).cfJwt, "");
+  assert.equal(upstreamSeen.at(-1).origin, "");
+  assert.equal(upstreamSeen.at(-1).referer, "");
+  assert.equal(upstreamSeen.at(-1).range, "bytes=0-100");
+
+  // CSS and Location redirect rewriting under /s/<token>
+  const cssRes = await rawRequest(`${gatewayUrl}/s/${validShareToken}/style.css`, { host: shareHost });
+  assert.equal(cssRes.status, 200);
+  assert.match(cssRes.body, new RegExp(`url\\("/s/${validShareToken}/assets/fig\\.png"\\)`));
+  const redirRes = await rawRequest(`${gatewayUrl}/s/${validShareToken}/go`, { host: shareHost });
+  assert.equal(redirRes.status, 302);
+  assert.equal(redirRes.headers.location, `/s/${validShareToken}/chapter/1`);
+
+  // HEAD allowed; POST/PUT/DELETE rejected with 405; Service-Worker rejected with 403; WS rejected with 403
+  assert.equal((await rawRequest(`${gatewayUrl}/s/${validShareToken}/`, { host: shareHost, method: "HEAD" })).status, 200);
+  const postRes = await rawRequest(`${gatewayUrl}/s/${validShareToken}/submit`, {
+    host: shareHost,
+    method: "POST",
+    body: "x=1",
+  });
+  assert.equal(postRes.status, 405);
+  assert.equal(postRes.headers.allow, "GET, HEAD");
+  assert.equal(
+    (await rawRequest(`${gatewayUrl}/s/${validShareToken}/sw.js`, {
+      host: shareHost,
+      headers: { "service-worker": "script" },
+    })).status,
+    403,
+  );
+  const wsStatus = await new Promise((resolve) => {
+    const socket = new WebSocket(`${gatewayUrl.replace(/^http/, "ws")}/s/${validShareToken}/ws`, {
+      headers: { host: shareHost },
+    });
+    socket.once("unexpected-response", (_req, res) => resolve(res.statusCode));
+    socket.once("error", () => resolve("error"));
+  });
+  assert.equal(wsStatus, 403);
+
+  // Expiry immediately returns 404
+  activeShare = { ...activeShare, expiresAt: new Date(Date.now() - 1000).toISOString() };
+  const expiredHtml = await rawRequest(`${gatewayUrl}/s/${validShareToken}/`, {
+    host: shareHost,
+    headers: { accept: "text/html" },
+  });
+  assert.equal(expiredHtml.status, 404);
+  assert.match(expiredHtml.body, /分享文档链接无效或已撤销/);
+  assert.equal(expiredHtml.body.includes("返回 SCOPE"), false);
+
+  // Revoke immediately returns 404 JSON for API clients
+  activeShare = null;
+  const revokedJson = await rawRequest(`${gatewayUrl}/s/${validShareToken}/`, {
+    host: shareHost,
+    headers: { accept: "application/json" },
+  });
+  assert.equal(revokedJson.status, 404);
+});
+
+test("allowSameOriginShare enables unauthenticated read-only /scope-share/<token>/ while keeping main routes locked", async (t) => {
+  const token = "same-origin-share-test-master-token-over-32-chars";
+  const shareToken = "SameOriginShareToken_0123456789abcd";
+  const staticDoc = http.createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end('<html><head></head><body><a href="/next">Next</a></body></html>');
+  });
+  const docTarget = await listen(staticDoc);
+  const docPort = Number(new URL(docTarget).port);
+  const bridge = http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        forwards: [
+          {
+            host: "@local",
+            remotePort: docPort,
+            localPort: docPort,
+            localHost: "127.0.0.1",
+            status: "connected",
+            publicShare: { token: shareToken, expiresAt: null, mode: "readonly-static" },
+          },
+        ],
+      }),
+    );
+  });
+  const ui = http.createServer((_req, res) => res.end("ui"));
+  const uiTarget = await listen(ui);
+  const bridgeTarget = await listen(bridge);
+  const gateway = createPrivateGateway({
+    token,
+    uiTarget,
+    bridgeTarget,
+    portCacheTtlMs: 0,
+    allowSameOriginShare: true,
+  });
+  const gatewayUrl = await listen(gateway);
+  t.after(async () => {
+    await Promise.all([close(gateway), close(ui), close(bridge), close(staticDoc)]);
+  });
+
+  // Main app remains 401 without auth
+  assert.equal((await rawRequest(`${gatewayUrl}/`)).status, 401);
+  // Read-only GET on /scope-share/<token>/ works without auth
+  const res = await rawRequest(`${gatewayUrl}/scope-share/${shareToken}/`);
+  assert.equal(res.status, 200);
+  assert.match(res.body, new RegExp(`href="/scope-share/${shareToken}/next"`));
+  assert.equal(res.headers["x-robots-tag"], "noindex, nofollow, noarchive");
+  // POST rejected with 405
+  assert.equal((await rawRequest(`${gatewayUrl}/scope-share/${shareToken}/`, { method: "POST" })).status, 405);
 });

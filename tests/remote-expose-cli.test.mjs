@@ -199,3 +199,56 @@ test("isolated port domain adds a second ingress hostname and SCOPE_PORT_ORIGIN 
   assert.doesNotMatch(workbenchUnit, /SCOPE_PORT_ORIGIN/);
   assert.throws(() => renderSystemdUnits({ stateDir: "/s", withGateway: true, portOrigin: "http://insecure.example.dev" }));
 });
+
+test("isolated share domain adds ingress hostname and SCOPE_SHARE_ORIGIN to the gateway unit", () => {
+  const yaml = buildCloudflaredConfig({
+    tunnelId: "uuid-2",
+    credentialsFile: "/home/u/.cloudflared/uuid-2.json",
+    domain: "scope.example.dev",
+    portDomain: "scope-ports.example.dev",
+    shareDomain: "share.example.dev",
+  });
+  const hostnames = [...yaml.matchAll(/hostname: (\S+)/g)].map((match) => match[1]);
+  assert.deepEqual(hostnames, [
+    "scope.example.dev",
+    "scope-ports.example.dev",
+    "share.example.dev",
+  ]);
+  assert.equal((yaml.match(/service: http:\/\/127\.0\.0\.1:4820/g) || []).length, 3);
+  assert.throws(() =>
+    buildCloudflaredConfig({
+      tunnelId: "u",
+      credentialsFile: "/c",
+      domain: "scope.example.dev",
+      shareDomain: "scope.example.dev",
+    }),
+  );
+  assert.throws(() =>
+    buildCloudflaredConfig({
+      tunnelId: "u",
+      credentialsFile: "/c",
+      domain: "scope.example.dev",
+      portDomain: "share.example.dev",
+      shareDomain: "share.example.dev",
+    }),
+  );
+
+  const units = renderSystemdUnits({
+    nodeBin: "/usr/bin/node",
+    scopeBin: "/opt/scope/bin/scope.mjs",
+    stateDir: "/home/u/.scope",
+    withGateway: true,
+    portOrigin: "https://scope-ports.example.dev",
+    shareOrigin: "https://share.example.dev",
+  });
+  const gatewayUnit = units.find((unit) => unit.name === "scope-private-gateway.service").content;
+  assert.match(gatewayUnit, /^Environment=SCOPE_SHARE_ORIGIN=https:\/\/share\.example\.dev$/m);
+  assert.throws(() =>
+    renderSystemdUnits({
+      stateDir: "/s",
+      withGateway: true,
+      portOrigin: "https://same.example.dev",
+      shareOrigin: "https://same.example.dev",
+    }),
+  );
+});

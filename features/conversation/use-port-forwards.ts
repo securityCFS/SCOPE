@@ -14,6 +14,13 @@ export type DiscoveredRemotePort = {
   inProject: boolean;
 };
 
+export type PublicPortShare = {
+  token: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  mode: string;
+};
+
 export type ActivePortForward = {
   host: string;
   remotePort: number;
@@ -26,6 +33,7 @@ export type ActivePortForward = {
   auto: boolean;
   connectedAt: string | null;
   lastError: string | null;
+  publicShare?: PublicPortShare | null;
 };
 
 export type HostPortForwardsState = {
@@ -234,6 +242,60 @@ export function usePortForwards(
     [host, cwd],
   );
 
+  const sharePort = useCallback(
+    async (
+      remotePort: number,
+      ttlHours: number | null = 168,
+      rotate = false,
+    ): Promise<PublicPortShare | null> => {
+      if (!host) return null;
+      setBusyPort(remotePort);
+      setActionError("");
+      try {
+        const response = await fetch(bridgeUrl("/api/port-forwards/share"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host, remotePort, ttlHours, rotate }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "生成公网分享链接失败");
+        if (data.state) setState(data.state);
+        notifyPortForwardsChanged(host);
+        return data.share || null;
+      } catch (error) {
+        setActionError((error as Error).message);
+        return null;
+      } finally {
+        setBusyPort(null);
+      }
+    },
+    [host],
+  );
+
+  const unsharePort = useCallback(
+    async (remotePort: number) => {
+      if (!host) return;
+      setBusyPort(remotePort);
+      setActionError("");
+      try {
+        const response = await fetch(bridgeUrl("/api/port-forwards/unshare"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host, remotePort }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "撤销公网分享失败");
+        if (data.state) setState(data.state);
+        notifyPortForwardsChanged(host);
+      } catch (error) {
+        setActionError((error as Error).message);
+      } finally {
+        setBusyPort(null);
+      }
+    },
+    [host],
+  );
+
   const activeState = enabled && host && state?.host === host ? state : null;
 
   return {
@@ -249,5 +311,7 @@ export function usePortForwards(
     forwardPort,
     stopPort,
     setAutoForward,
+    sharePort,
+    unsharePort,
   };
 }

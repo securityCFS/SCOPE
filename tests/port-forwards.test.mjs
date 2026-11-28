@@ -454,3 +454,56 @@ test("resolveRemoteTargetHost supports IPv4, IPv6 loopback, interface IP, and wi
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("PortForwardManager opt-in public static share creates, rotates, expires, and auto-revokes tokens", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "scope-port-share-"));
+  const manager = new PortForwardManager({
+    stateDir: dir,
+    allowLocal: true,
+    getHost: () => null,
+    runSsh: async () => ({ code: 0, stdout: "", stderr: "" }),
+    discoverPorts: async () => [],
+    checkLocalPortFree: async () => true,
+    probeTcpListening: async (port) => port === 8787,
+  });
+
+  try {
+    await manager.load();
+    assert.throws(
+      () => manager.shareForward({ host: "@local", remotePort: 8787 }),
+      /请先开放或转发/,
+    );
+
+    await manager.forward({ host: "@local", remotePort: 8787, label: "Research Report" });
+    assert.equal(manager.state("@local").forwards[0].publicShare, null);
+
+    const created = manager.shareForward({ host: "@local", remotePort: 8787, ttlHours: 24 });
+    assert.equal(created.share.mode, "readonly-static");
+    assert.match(created.share.token, /^[A-Za-z0-9_-]{24,64}$/);
+    assert.ok(created.share.expiresAt);
+    assert.equal(created.forward.publicShare.token, created.share.token);
+
+    // Calling again without rotate keeps the same token and updates expiry
+    const updated = manager.shareForward({ host: "@local", remotePort: 8787, ttlHours: 0 });
+    assert.equal(updated.share.token, created.share.token);
+    assert.equal(updated.share.expiresAt, null);
+
+    // Rotate mints a brand-new unguessable token
+    const rotated = manager.shareForward({ host: "@local", remotePort: 8787, ttlHours: 168, rotate: true });
+    assert.notEqual(rotated.share.token, created.share.token);
+
+    // Explicit unshare clears the token immediately
+    const unshared = manager.unshareForward("@local", 8787);
+    assert.equal(unshared.forwards[0].publicShare, null);
+
+    // Re-share then stopForward auto-revokes public share
+    const reshared = manager.shareForward({ host: "@local", remotePort: 8787, ttlHours: 24 });
+    assert.ok(reshared.share.token);
+    const stopped = manager.stopForward("@local", 8787);
+    assert.equal(stopped.forwards.length, 0);
+  } finally {
+    manager.stop();
+    await manager.writes;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

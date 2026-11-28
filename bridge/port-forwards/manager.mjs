@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
@@ -10,6 +11,8 @@ export const BLOCKED_PROXY_PORTS = new Set([
 ]);
 const RESERVED_LOCAL_PORTS = new Set([2019, 3000, 4815, 4820, 4822, 4880]);
 const MAX_AUTO_FORWARDS_PER_HOST = 8;
+const DEFAULT_SHARE_TTL_HOURS = 168;
+const MAX_SHARE_TTL_HOURS = 24 * 365;
 
 function envPort(name) {
   const value = Number(process.env[name]);
@@ -260,6 +263,24 @@ export class PortForwardManager {
     return this.pickEphemeralPort();
   }
 
+  #activePublicShare(entry, nowMs = Date.now()) {
+    const share = entry?.publicShare;
+    if (!share || typeof share.token !== "string" || !share.token) return null;
+    if (share.expiresAt) {
+      const expMs = Date.parse(share.expiresAt);
+      if (!Number.isFinite(expMs) || expMs <= nowMs) {
+        entry.publicShare = null;
+        return null;
+      }
+    }
+    return {
+      token: share.token,
+      createdAt: share.createdAt || null,
+      expiresAt: share.expiresAt || null,
+      mode: "readonly-static",
+    };
+  }
+
   publicForward(entry) {
     return {
       host: entry.host,
@@ -273,6 +294,7 @@ export class PortForwardManager {
       auto: Boolean(entry.auto),
       connectedAt: entry.connectedAt || null,
       lastError: entry.lastError || null,
+      publicShare: this.#activePublicShare(entry),
     };
   }
 
@@ -655,6 +677,7 @@ export class PortForwardManager {
 
   #stopEntry(entry) {
     entry.manualStop = true;
+    entry.publicShare = null;
     if (entry.timer) {
       clearTimeout(entry.timer);
       entry.timer = null;
@@ -669,6 +692,76 @@ export class PortForwardManager {
         /* ignore */
       }
     }
+  }
+
+  shareForward({
+    host,
+    remotePort,
+    ttlHours = DEFAULT_SHARE_TTL_HOURS,
+    rotate = false,
+  }) {
+    this.#requireHost(host);
+    const parsedRemote = Number(remotePort);
+    if (!validRemotePort(parsedRemote)) {
+      throw new Error("端口必须是 1–65535 之间的整数");
+    }
+    const key = forwardKey(host, parsedRemote);
+    const entry = this.forwards.get(key);
+    if (!entry || entry.status !== "connected") {
+      throw new Error("请先开放或转发该端口，再生成公网文档分享链接");
+    }
+    if (this.blockedLocalPorts.has(entry.localPort)) {
+      throw new Error(`端口 ${entry.localPort} 为系统保留端口，禁止公网分享`);
+    }
+
+    const nowMs = Date.now();
+    let expiresAt = null;
+    if (ttlHours !== null && ttlHours !== "" && ttlHours !== "never") {
+      const parsedHours = Number(ttlHours);
+      if (Number.isFinite(parsedHours) && parsedHours > 0) {
+        const clampedHours = Math.min(
+          MAX_SHARE_TTL_HOURS,
+          Math.max(0.25, parsedHours),
+        );
+        expiresAt = new Date(nowMs + clampedHours * 3_600_000).toISOString();
+      } else if (parsedHours !== 0) {
+        expiresAt = new Date(
+          nowMs + DEFAULT_SHARE_TTL_HOURS * 3_600_000,
+        ).toISOString();
+      }
+    }
+
+    const existing = this.#activePublicShare(entry, nowMs);
+    const token =
+      existing && !rotate
+        ? existing.token
+        : randomBytes(24).toString("base64url");
+    entry.publicShare = {
+      token,
+      createdAt:
+        existing && !rotate
+          ? existing.createdAt
+          : new Date(nowMs).toISOString(),
+      expiresAt,
+      mode: "readonly-static",
+    };
+
+    return {
+      share: this.#activePublicShare(entry, nowMs),
+      forward: this.publicForward(entry),
+      state: this.state(host),
+    };
+  }
+
+  unshareForward(host, remotePort) {
+    this.#requireHost(host);
+    const parsedRemote = Number(remotePort);
+    const key = forwardKey(host, parsedRemote);
+    const entry = this.forwards.get(key);
+    if (entry) {
+      entry.publicShare = null;
+    }
+    return this.state(host);
   }
 
   stopForward(host, remotePort) {

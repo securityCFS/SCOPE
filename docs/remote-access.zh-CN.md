@@ -271,6 +271,36 @@ scope service install --with-gateway --with-cloudflared --tunnel scope-hub --por
 
 设置 `SCOPE_PORT_ORIGIN` 后，SCOPE 主域名不再执行任何被转发的内容：打开 `/scope-port/<port>/` 时，网关会签发一张 **60 秒有效的一次性票据** 并跳转到端口域名，由端口域名签发独立的 `scope_port` Cookie（`Path=/scope-port/`，12 小时）。端口域名 **只** 提供 `/scope-port/*`，没有 UI、没有 `/scope-api`、也没有登录入口，因此恶意页面最多只能影响其他被转发的页面。在 SCOPE 中退出登录或吊销设备会同时清空所有端口会话，重新从工作台打开端口即可。
 
+### 可选：将已允许的静态网站端口转换为公网只读文档链接
+
+如果你想把某个转发端口上的静态报告、交互式 HTML 论文展示页、MkDocs/VitePress 文档或实验图表直接分享给同事/导师（对方无需登录 Cloudflare Access），SCOPE 内置了**按端口手动授权的公网只读文档分享**能力，默认完全关闭，强烈推荐配合独立分享子域名（例如 `share.yourdomain.com`）使用：
+
+1. **默认零暴露**：只有你在 SCOPE 顶部 **端口** 弹窗中对某个已连接端口手动点击地球图标（**公网分享**）、选择有效期（`24 小时` / `7 天` / `手动撤销`）并确认后，才会生成 192 位不可预测的随机分享链接。
+2. **硬安全边界**：
+   - **独立分享域名隔离（`SCOPE_SHARE_ORIGIN=https://share.yourdomain.com`，强烈推荐）**：主控制台 `scope.yourdomain.com` 保持 100% 受 Cloudflare Access 与 `scope_private` 双重锁死；分享域名**仅**放行 `/s/<192位随机Token>/*`，访问 `/`、`/scope-api/*`、`/scope-auth` 或 `/scope-port/*` 一律返回 `404`。
+   - **严格只读静态模式**：仅允许 `GET` 与 `HEAD`（`POST`/`PUT`/`DELETE`/`PATCH` 一律 `405`），硬拒绝 WebSocket 升级与 `Service-Worker: script`（`403`），双向彻底剥离所有 `Cookie`、`Authorization` 与 `Set-Cookie`。
+   - **防搜索引擎收录与防 Token 泄漏**：所有响应自动附加 `X-Robots-Tag: noindex, nofollow, noarchive` 与 `Referrer-Policy: no-referrer`，避免被搜索引擎抓取，且在文档内点击外链不会通过 `Referer` 泄漏分享 Token。
+   - **一键立即撤销 & 停端口自动失效**：点击 **撤销** 或停止该端口转发，公网链接立即失效并返回 `404`。
+
+```sh
+# 一键写入 share.yourdomain.com 路由与网关 SCOPE_SHARE_ORIGIN 环境变量
+scope expose cloudflare --domain scope.yourdomain.com --share-domain share.yourdomain.com
+scope service install --with-gateway --with-cloudflared --tunnel scope-hub --share-origin https://share.yourdomain.com
+```
+
+#### Cloudflare 所需入站与出站规则清单
+
+| 方向 | 层级 | 精确规则 / 配置 |
+| --- | --- | --- |
+| **入站 (Inbound)** | DNS 记录 | 添加 CNAME：`share.yourdomain.com` → `<TUNNEL_ID>.cfargotunnel.com`（开启 **Proxied 小黄云**）。 |
+| **入站 (Inbound)** | Tunnel Ingress（`~/.cloudflared/config.yml`） | 在末尾 `http_status:404` 之前增加一条：`- hostname: share.yourdomain.com` → `service: http://127.0.0.1:4820`。 |
+| **入站 (Inbound)** | Cloudflare Zero Trust Access | 保持原有私有 Access 应用仅绑定 `scope.yourdomain.com`（及可选 `scope-ports.yourdomain.com`），**不要**把 `share.yourdomain.com` 纳入登录拦截（若使用了泛域名 `*.yourdomain.com` 应用，则单独为 `share.yourdomain.com/s/*` 添加一条 `Everyone → Bypass` 规则）。 |
+| **入站 (Inbound)** | Cloudflare WAF 自定义规则（免费版可用） | 动作选择 **Block**，表达式：`(http.host eq "share.yourdomain.com" and (not http.request.method in {"GET" "HEAD"} or not starts_with(http.request.uri.path, "/s/")))`。 |
+| **入站 (Inbound)** | Cloudflare WAF 限流规则（免费版可用） | 匹配 `http.host eq "share.yourdomain.com"`，例如单 IP 每 `10 秒` 超过 `60 次请求` → **Block**（防刷流量与暴力探测）。 |
+| **出站 (Outbound)** | 主机 / 云防火墙（GCP / AWS / UFW） | **无需开放任何入站端口**；仅需放行 `cloudflared` 到 Cloudflare 边缘节点的常规出站流量（**UDP/TCP 7844** QUIC 或回退 **TCP 443** HTTP/2）。 |
+
+> **单域名兜底方案（仅在无法新增子域名时使用）**：如果必须复用主域名（`https://scope.yourdomain.com/scope-share/<token>/`），可在网关设置 `SCOPE_ALLOW_SAME_ORIGIN_SHARE=1`，并在 Cloudflare Access 中单独新建一条严格限定路径 `scope.yourdomain.com/scope-share/*` 的 **Bypass** 应用（同时在 WAF 屏蔽 `/scope-share/` 的非 `GET/HEAD` 请求）。注意单域名模式下文档与控制台同源，仅建议用于你自己完全信任的静态 HTML/文档。
+
 ---
 
 ## 密钥轮换与常用运维命令

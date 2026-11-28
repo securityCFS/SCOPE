@@ -13,6 +13,8 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Globe,
+  Link2Off,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -74,6 +76,19 @@ export function PortForwardsPopover({
   );
   const [manualPort, setManualPort] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+  const [confirmSharePort, setConfirmSharePort] = useState<number | null>(null);
+  const [shareTtlHours, setShareTtlHours] = useState<number>(168);
+  const [shareConfig, setShareConfig] = useState<{
+    loaded: boolean;
+    shareOrigin: string | null;
+    sameOriginShareEnabled: boolean;
+    publicShareEnabled: boolean;
+  }>({
+    loaded: false,
+    shareOrigin: null,
+    sameOriginShareEnabled: false,
+    publicShareEnabled: false,
+  });
   const [desktopPos, setDesktopPos] = useState<{ top: number; right: number } | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -102,7 +117,36 @@ export function PortForwardsPopover({
     forwardPort,
     stopPort,
     setAutoForward,
+    sharePort,
+    unsharePort,
   } = usePortForwards(host, cwd, { open, allowLocal });
+
+  useEffect(() => {
+    if (!open || !isRemoteView || shareConfig.loaded) return;
+    let cancelled = false;
+    fetch("/scope-auth/session", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setShareConfig({
+          loaded: true,
+          shareOrigin:
+            typeof data?.shareOrigin === "string" && data.shareOrigin
+              ? data.shareOrigin.replace(/\/+$/, "")
+              : null,
+          sameOriginShareEnabled: Boolean(data?.sameOriginShareEnabled),
+          publicShareEnabled: Boolean(data?.publicShareEnabled),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setShareConfig((prev) => ({ ...prev, loaded: true }));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isRemoteView, shareConfig.loaded]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,6 +192,37 @@ export function PortForwardsPopover({
       pathAndQuery: "/",
       location: isRemoteView && typeof window !== "undefined" ? window.location : null,
     });
+
+  const resolvePublicShareUrl = (token: string) => {
+    if (shareConfig.shareOrigin) {
+      return `${shareConfig.shareOrigin}/s/${token}/`;
+    }
+    if (shareConfig.sameOriginShareEnabled && typeof window !== "undefined") {
+      return `${window.location.origin}/scope-share/${token}/`;
+    }
+    return null;
+  };
+
+  const formatShareExpiry = (expiresAt: string | null) => {
+    if (!expiresAt) return tr("手动撤销前有效", "Until revoked");
+    const parsed = new Date(expiresAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return tr("限时有效", "Time-limited");
+    }
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    const hh = String(parsed.getHours()).padStart(2, "0");
+    const min = String(parsed.getMinutes()).padStart(2, "0");
+    return tr(`有效期至 ${mm}/${dd} ${hh}:${min}`, `Expires ${mm}/${dd} ${hh}:${min}`);
+  };
+
+  const flashCopied = (key: string) => {
+    setCopiedKey(key);
+    setTimeout(
+      () => setCopiedKey((prev) => (prev === key ? "" : prev)),
+      1600,
+    );
+  };
 
   const openPortWithGesture = async (port: number, label?: string) => {
     const popup = window.open("about:blank", "_blank");
@@ -362,7 +437,13 @@ export function PortForwardsPopover({
                 {activeForwards.map((item) => {
                   const busy = busyPort === item.remotePort;
                   const copied = copiedKey === `${item.remotePort}`;
+                  const shareCopied = copiedKey === `share:${item.remotePort}`;
                   const accessUrl = resolveOpenUrl(item.localPort);
+                  const publicShare = item.publicShare || null;
+                  const publicUrl = publicShare?.token
+                    ? resolvePublicShareUrl(publicShare.token)
+                    : null;
+                  const confirmingShare = confirmSharePort === item.remotePort;
                   const mappingLabel = isRemoteView
                     ? item.localOnly
                       ? `localhost:${item.remotePort} → /scope-port/${item.localPort}/`
@@ -373,76 +454,247 @@ export function PortForwardsPopover({
                   return (
                     <div
                       key={item.remotePort}
-                      className="port-forwards-row is-active"
+                      className={`port-forwards-row is-active${publicShare || confirmingShare ? " has-share-panel" : ""}`}
                     >
-                      <div className="port-forwards-row-info">
-                        <div className="port-forwards-row-top">
-                          <span className="port-forwards-trigger-dot" />
-                          <span className="port-forwards-service">
-                            {item.label}
+                      <div className="port-forwards-row-main">
+                        <div className="port-forwards-row-info">
+                          <div className="port-forwards-row-top">
+                            <span className="port-forwards-trigger-dot" />
+                            <span className="port-forwards-service">
+                              {item.label}
+                            </span>
+                            {item.auto && (
+                              <span className="port-forwards-tag">
+                                {tr("自动", "Auto")}
+                              </span>
+                            )}
+                            {publicShare && (
+                              <span className="port-forwards-tag is-public">
+                                {tr("公网只读", "Public")}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="port-forwards-mapping"
+                            title={accessUrl}
+                          >
+                            {mappingLabel}
                           </span>
-                          {item.auto && (
-                            <span className="port-forwards-tag">
-                              {tr("自动", "Auto")}
+                        </div>
+                        <div className="port-forwards-row-actions">
+                          <a
+                            href={accessUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="port-forwards-icon-btn is-primary"
+                            style={{ textDecoration: "none" }}
+                            title={accessUrl}
+                          >
+                            <ExternalLink size={11} />
+                            {tr("打开", "Open")}
+                          </a>
+                          <button
+                            type="button"
+                            className="port-forwards-icon-btn"
+                            title={tr("复制访问地址", "Copy access URL")}
+                            onClick={async () => {
+                              if (await copyUrl(accessUrl)) {
+                                flashCopied(`${item.remotePort}`);
+                              }
+                            }}
+                          >
+                            {copied ? <Check size={11} /> : <Copy size={11} />}
+                          </button>
+                          {isRemoteView && !publicShare && (
+                            <button
+                              type="button"
+                              className={`port-forwards-icon-btn${confirmingShare ? " is-active-share" : ""}`}
+                              disabled={busy}
+                              title={tr(
+                                "将此静态站点转换为公网只读文档链接",
+                                "Publish as a public read-only static document link",
+                              )}
+                              onClick={() =>
+                                setConfirmSharePort((prev) =>
+                                  prev === item.remotePort ? null : item.remotePort,
+                                )
+                              }
+                            >
+                              <Globe size={11} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="port-forwards-icon-btn is-danger"
+                            disabled={busy}
+                            title={
+                              isLocal
+                                ? tr("关闭代理访问", "Revoke access")
+                                : tr("停止转发", "Stop forwarding")
+                            }
+                            onClick={() => {
+                              if (confirmSharePort === item.remotePort) {
+                                setConfirmSharePort(null);
+                              }
+                              void stopPort(item.remotePort);
+                            }}
+                          >
+                            {busy ? (
+                              <LoaderCircle size={11} className="is-spinning" />
+                            ) : (
+                              <Square size={10} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isRemoteView && confirmingShare && !publicShare && (
+                        <div className="port-forwards-share-panel">
+                          {shareConfig.publicShareEnabled ? (
+                            <>
+                              <p className="port-forwards-share-note">
+                                {tr(
+                                  "仅放行只读 GET/HEAD 静态文档，不传递登录态与 Cookie，可随时一键撤销。",
+                                  "Read-only GET/HEAD static access only. Zero cookies or auth headers forwarded; revocable anytime.",
+                                )}
+                              </p>
+                              <div className="port-forwards-share-controls">
+                                <div className="port-forwards-ttl-group" role="group" aria-label={tr("链接有效期", "Link expiry")}>
+                                  {[
+                                    { hours: 24, zh: "24 小时", en: "24h" },
+                                    { hours: 168, zh: "7 天", en: "7d" },
+                                    { hours: 0, zh: "手动撤销", en: "Manual" },
+                                  ].map((opt) => (
+                                    <button
+                                      key={opt.hours}
+                                      type="button"
+                                      className={`port-forwards-ttl-pill${shareTtlHours === opt.hours ? " is-selected" : ""}`}
+                                      onClick={() => setShareTtlHours(opt.hours)}
+                                    >
+                                      {tr(opt.zh, opt.en)}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="port-forwards-row-actions">
+                                  <button
+                                    type="button"
+                                    className="port-forwards-icon-btn is-primary"
+                                    disabled={busy}
+                                    onClick={async () => {
+                                      const created = await sharePort(
+                                        item.remotePort,
+                                        shareTtlHours,
+                                      );
+                                      if (created?.token) {
+                                        setConfirmSharePort(null);
+                                        const url = resolvePublicShareUrl(created.token);
+                                        if (url && (await copyUrl(url))) {
+                                          flashCopied(`share:${item.remotePort}`);
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    {busy ? (
+                                      <LoaderCircle size={11} className="is-spinning" />
+                                    ) : (
+                                      <Globe size={11} />
+                                    )}
+                                    {tr("生成并复制", "Publish & Copy")}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="port-forwards-icon-btn"
+                                    onClick={() => setConfirmSharePort(null)}
+                                  >
+                                    {tr("取消", "Cancel")}
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="port-forwards-share-note is-warn">
+                              {tr(
+                                "当前网关尚未开启公网文档分享：请为私有网关配置 SCOPE_SHARE_ORIGIN=https://share.你的域名 并在 Cloudflare 添加对应 Tunnel 路由后即可一键分享。",
+                                "Public document sharing is not enabled on this gateway yet. Set SCOPE_SHARE_ORIGIN=https://share.yourdomain.com and add its Cloudflare Tunnel route to enable one-click sharing.",
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {publicShare && (
+                        <div className="port-forwards-share-panel is-live">
+                          <div className="port-forwards-share-live-head">
+                            <span className="port-forwards-share-live-meta">
+                              <Globe size={11} />
+                              <span>{formatShareExpiry(publicShare.expiresAt)}</span>
+                            </span>
+                            <div className="port-forwards-row-actions">
+                              {publicUrl && (
+                                <>
+                                  <a
+                                    href={publicUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="port-forwards-icon-btn"
+                                    style={{ textDecoration: "none" }}
+                                    title={publicUrl}
+                                  >
+                                    <ExternalLink size={11} />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="port-forwards-icon-btn"
+                                    title={tr("复制公网只读文档链接", "Copy public share link")}
+                                    onClick={async () => {
+                                      if (await copyUrl(publicUrl)) {
+                                        flashCopied(`share:${item.remotePort}`);
+                                      }
+                                    }}
+                                  >
+                                    {shareCopied ? (
+                                      <>
+                                        <Check size={11} />
+                                        {tr("已复制", "Copied")}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={11} />
+                                        {tr("复制链接", "Copy link")}
+                                      </>
+                                    )}
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                className="port-forwards-icon-btn is-danger"
+                                disabled={busy}
+                                title={tr("立即撤销公网分享链接", "Revoke public share link")}
+                                onClick={() => void unsharePort(item.remotePort)}
+                              >
+                                <Link2Off size={11} />
+                                {tr("撤销", "Revoke")}
+                              </button>
+                            </div>
+                          </div>
+                          {publicUrl ? (
+                            <span
+                              className="port-forwards-share-url"
+                              title={publicUrl}
+                            >
+                              {publicUrl}
+                            </span>
+                          ) : (
+                            <span className="port-forwards-share-note is-warn">
+                              {tr(
+                                "请先在网关设置 SCOPE_SHARE_ORIGIN 后使用公网访问。",
+                                "Set SCOPE_SHARE_ORIGIN on your gateway to serve this share publicly.",
+                              )}
                             </span>
                           )}
                         </div>
-                        <span
-                          className="port-forwards-mapping"
-                          title={accessUrl}
-                        >
-                          {mappingLabel}
-                        </span>
-                      </div>
-                      <div className="port-forwards-row-actions">
-                        <a
-                          href={accessUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="port-forwards-icon-btn is-primary"
-                          style={{ textDecoration: "none" }}
-                          title={accessUrl}
-                        >
-                          <ExternalLink size={11} />
-                          {tr("打开", "Open")}
-                        </a>
-                        <button
-                          type="button"
-                          className="port-forwards-icon-btn"
-                          title={tr("复制访问地址", "Copy access URL")}
-                          onClick={async () => {
-                            if (await copyUrl(accessUrl)) {
-                              setCopiedKey(`${item.remotePort}`);
-                              setTimeout(
-                                () =>
-                                  setCopiedKey((prev) =>
-                                    prev === `${item.remotePort}` ? "" : prev,
-                                  ),
-                                1600,
-                              );
-                            }
-                          }}
-                        >
-                          {copied ? <Check size={11} /> : <Copy size={11} />}
-                        </button>
-                        <button
-                          type="button"
-                          className="port-forwards-icon-btn is-danger"
-                          disabled={busy}
-                          title={
-                            isLocal
-                              ? tr("关闭代理访问", "Revoke access")
-                              : tr("停止转发", "Stop forwarding")
-                          }
-                          onClick={() => void stopPort(item.remotePort)}
-                        >
-                          {busy ? (
-                            <LoaderCircle size={11} className="is-spinning" />
-                          ) : (
-                            <Square size={10} />
-                          )}
-                        </button>
-                      </div>
+                      )}
                     </div>
                   );
                 })}

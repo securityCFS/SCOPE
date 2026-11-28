@@ -65,25 +65,46 @@ export function buildCloudflaredConfig({
   credentialsFile,
   domain,
   portDomain = "",
+  shareDomain = "",
   gatewayPort = 4820,
 }) {
   if (!isValidDomain(domain)) {
     throw new Error(`Invalid domain name: ${domain}`);
   }
-  if (portDomain && !isValidDomain(portDomain)) {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const normalizedPortDomain = portDomain ? portDomain.trim().toLowerCase() : "";
+  const normalizedShareDomain = shareDomain ? shareDomain.trim().toLowerCase() : "";
+  if (normalizedPortDomain && !isValidDomain(normalizedPortDomain)) {
     throw new Error(`Invalid port domain name: ${portDomain}`);
   }
-  if (portDomain && portDomain.trim().toLowerCase() === domain.trim().toLowerCase()) {
+  if (normalizedPortDomain && normalizedPortDomain === normalizedDomain) {
     throw new Error("--port-domain must differ from --domain");
   }
+  if (normalizedShareDomain && !isValidDomain(normalizedShareDomain)) {
+    throw new Error(`Invalid share domain name: ${shareDomain}`);
+  }
+  if (normalizedShareDomain && normalizedShareDomain === normalizedDomain) {
+    throw new Error("--share-domain must differ from --domain");
+  }
+  if (
+    normalizedShareDomain &&
+    normalizedPortDomain &&
+    normalizedShareDomain === normalizedPortDomain
+  ) {
+    throw new Error("--share-domain must differ from --port-domain");
+  }
   const safePort = parsePortFlag(gatewayPort, 4820, "gateway-port");
-  const hostnames = [domain, ...(portDomain ? [portDomain] : [])];
+  const hostnames = [
+    normalizedDomain,
+    ...(normalizedPortDomain ? [normalizedPortDomain] : []),
+    ...(normalizedShareDomain ? [normalizedShareDomain] : []),
+  ];
   return [
     `tunnel: ${tunnelId}`,
     `credentials-file: ${credentialsFile}`,
     "ingress:",
     ...hostnames.flatMap((hostname) => [
-      `  - hostname: ${hostname.trim().toLowerCase()}`,
+      `  - hostname: ${hostname}`,
       `    service: http://127.0.0.1:${safePort}`,
     ]),
     "  - service: http_status:404",
@@ -112,8 +133,13 @@ export function renderSystemdUnits({
   pathEnv = process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
   workingDir = os.homedir(),
   portOrigin = "",
+  shareOrigin = "",
 }) {
   const safePortOrigin = portOrigin ? parsePortOrigin(portOrigin).origin : "";
+  const safeShareOrigin = shareOrigin ? parsePortOrigin(shareOrigin).origin : "";
+  if (safePortOrigin && safeShareOrigin && safePortOrigin === safeShareOrigin) {
+    throw new Error("--share-origin must differ from --port-origin");
+  }
   const safeUiPort = parsePortFlag(uiPort, 3000, "port");
   const safeBridgePort = parsePortFlag(bridgePort, 4815, "bridge-port");
   const safeGatewayPort = parsePortFlag(gatewayPort, 4820, "gateway-port");
@@ -159,6 +185,7 @@ export function renderSystemdUnits({
         "RestartSec=5",
         `Environment=PATH=${pathEnv}`,
         ...(safePortOrigin ? [`Environment=SCOPE_PORT_ORIGIN=${safePortOrigin}`] : []),
+        ...(safeShareOrigin ? [`Environment=SCOPE_SHARE_ORIGIN=${safeShareOrigin}`] : []),
         "",
         "[Install]",
         "WantedBy=default.target",
@@ -238,7 +265,7 @@ function checkLoopbackListening(port) {
   });
 }
 
-function printCloudflareAccessChecklist(domain, portDomain = "") {
+function printCloudflareAccessChecklist(domain, portDomain = "", shareDomain = "") {
   console.log("");
   console.log("[scope] Recommended: Enable Cloudflare Zero Trust Access (Double Auth)");
   console.log(`  1. Open Cloudflare Zero Trust -> Access -> Applications -> Add a Self-hosted application`);
@@ -252,6 +279,16 @@ function printCloudflareAccessChecklist(domain, portDomain = "") {
   if (portDomain) {
     console.log(`  6. Add ${portDomain} as a second public hostname of the SAME Access application,`);
     console.log(`     then verify: curl -sI https://${portDomain}/scope-port/1/   (should also return HTTP 302)`);
+  }
+  if (shareDomain) {
+    console.log("");
+    console.log(`[scope] Public Static Document Share Rules for ${shareDomain} (Opt-in Read-Only):`);
+    console.log(`  1. Zero Trust Access: do NOT include ${shareDomain} in your private Access app (or add a Bypass rule for ${shareDomain}/s/*).`);
+    console.log(`  2. Cloudflare WAF Custom Rule (Inbound): on Hostname eq "${shareDomain}", BLOCK if:`);
+    console.log(`     (http.host eq "${shareDomain}" and (not http.request.method in {"GET" "HEAD"} or not starts_with(http.request.uri.path, "/s/")))`);
+    console.log(`  3. Cloudflare WAF Rate Limit (Inbound): on Hostname eq "${shareDomain}", e.g. 60 requests / 10s per IP -> Block.`);
+    console.log(`  4. Outbound firewall: zero inbound server ports required (cloudflared uses outbound TCP/UDP 7844 or TCP 443 only).`);
+    console.log(`  5. Verify: curl -sI https://${shareDomain}/   (should return HTTP 404 with X-Robots-Tag: noindex, nofollow, noarchive)`);
   }
 }
 
@@ -423,6 +460,7 @@ async function runExposeTailscale(args) {
 async function runExposeCloudflare(args) {
   const domain = (readFlag(args, "--domain") || "").trim().toLowerCase();
   const portDomain = (readFlag(args, "--port-domain") || "").trim().toLowerCase();
+  const shareDomain = (readFlag(args, "--share-domain") || "").trim().toLowerCase();
   const tunnelName = (readFlag(args, "--tunnel") || "scope-hub").trim();
   const gatewayPort = parsePortFlag(readFlag(args, "--gateway-port"), 4820, "gateway-port");
   const dryRun = args.includes("--dry-run");
@@ -446,13 +484,23 @@ async function runExposeCloudflare(args) {
     console.error("[scope] Invalid --port-domain (expected a different hostname such as scope-ports.yourdomain.com).");
     process.exit(1);
   }
+  if (
+    shareDomain &&
+    (!isValidDomain(shareDomain) || shareDomain === domain || shareDomain === portDomain)
+  ) {
+    console.error("[scope] Invalid --share-domain (expected a distinct hostname such as share.yourdomain.com).");
+    process.exit(1);
+  }
   const portOriginFlag = portDomain ? ` --port-origin https://${portDomain}` : "";
+  const shareOriginFlag = shareDomain ? ` --share-origin https://${shareDomain}` : "";
+  const originFlags = `${portOriginFlag}${shareOriginFlag}`;
 
   const previewConfig = buildCloudflaredConfig({
     tunnelId: "<TUNNEL_ID>",
     credentialsFile: path.join(cloudflaredDir, "<TUNNEL_ID>.json"),
     domain,
     portDomain,
+    shareDomain,
     gatewayPort,
   });
 
@@ -464,20 +512,21 @@ async function runExposeCloudflare(args) {
     console.log(`     cloudflared tunnel create ${tunnelName}`);
     console.log(`     cloudflared tunnel route dns ${tunnelName} ${domain}`);
     if (portDomain) console.log(`     cloudflared tunnel route dns ${tunnelName} ${portDomain}`);
+    if (shareDomain) console.log(`     cloudflared tunnel route dns ${tunnelName} ${shareDomain}`);
     console.log(`  3. Write ${configPath} (0600):`);
     for (const line of previewConfig.trimEnd().split("\n")) {
       console.log(`     ${line}`);
     }
     console.log("  4. Start SCOPE + Private Gateway + Tunnel:");
     if (process.platform === "linux") {
-      console.log(`     scope service install --with-gateway --with-cloudflared --tunnel ${tunnelName} --gateway-port ${gatewayPort}${portOriginFlag}`);
+      console.log(`     scope service install --with-gateway --with-cloudflared --tunnel ${tunnelName} --gateway-port ${gatewayPort}${originFlags}`);
     } else {
-      console.log(`     scope start --gateway --gateway-port ${gatewayPort}${portOriginFlag}`);
+      console.log(`     scope start --gateway --gateway-port ${gatewayPort}${originFlags}`);
       console.log(`     cloudflared tunnel --config "${configPath}" run ${tunnelName}`);
     }
     console.log(`  5. Print a single-use login link:`);
     console.log(`     scope token --url https://${domain}`);
-    printCloudflareAccessChecklist(domain, portDomain);
+    printCloudflareAccessChecklist(domain, portDomain, shareDomain);
     return;
   }
 
@@ -547,6 +596,12 @@ async function runExposeCloudflare(args) {
       stdio: "inherit",
     });
   }
+  if (shareDomain) {
+    console.log(`[scope] Routing DNS ${shareDomain} -> tunnel ${tunnelName} (opt-in public static shares)...`);
+    execFileSync(cfBin, ["tunnel", "route", "dns", "--overwrite-dns", tunnelName, shareDomain], {
+      stdio: "inherit",
+    });
+  }
 
   await mkdir(path.dirname(configPath), { recursive: true });
   if (existsSync(configPath)) {
@@ -559,6 +614,7 @@ async function runExposeCloudflare(args) {
     credentialsFile,
     domain,
     portDomain,
+    shareDomain,
     gatewayPort,
   });
   await writeFile(configPath, yaml, { mode: 0o600 });
@@ -569,6 +625,7 @@ async function runExposeCloudflare(args) {
   console.log(`[scope] Cloudflare Tunnel configured!`);
   console.log(`  Domain:         https://${domain}`);
   if (portDomain) console.log(`  Port domain:    https://${portDomain} (isolated forwarded apps)`);
+  if (shareDomain) console.log(`  Share domain:   https://${shareDomain} (opt-in public read-only static docs)`);
   console.log(`  Tunnel:         ${tunnelName} (${match.id})`);
   console.log(`  Config file:    ${configPath} (0600)`);
   console.log(`  Gateway target: http://127.0.0.1:${gatewayPort} (${gatewayListening ? "listening" : "not running yet"})`);
@@ -576,15 +633,15 @@ async function runExposeCloudflare(args) {
   console.log("[scope] Next steps:");
   if (process.platform === "linux") {
     console.log(`  1. Install persistent systemd services:`);
-    console.log(`     scope service install --with-gateway --with-cloudflared --tunnel ${tunnelName} --gateway-port ${gatewayPort}${portOriginFlag}`);
+    console.log(`     scope service install --with-gateway --with-cloudflared --tunnel ${tunnelName} --gateway-port ${gatewayPort}${originFlags}`);
     console.log(`     loginctl enable-linger "$USER"`);
   } else {
-    console.log(`  1. Start SCOPE + Private Gateway: scope start --gateway --gateway-port ${gatewayPort}${portOriginFlag}`);
+    console.log(`  1. Start SCOPE + Private Gateway: scope start --gateway --gateway-port ${gatewayPort}${originFlags}`);
     console.log(`  2. Run tunnel: cloudflared tunnel --config "${configPath}" run ${tunnelName}`);
   }
   console.log(`  3. Print a single-use login link:`);
   console.log(`     scope token --url https://${domain}`);
-  printCloudflareAccessChecklist(domain, portDomain);
+  printCloudflareAccessChecklist(domain, portDomain, shareDomain);
 }
 
 async function runServiceCommand(args) {
@@ -598,6 +655,7 @@ async function runServiceCommand(args) {
   const gatewayPort = parsePortFlag(readFlag(rest, "--gateway-port"), 4820, "gateway-port");
   const tunnelName = (readFlag(rest, "--tunnel") || "scope-hub").trim();
   const portOrigin = readFlag(rest, "--port-origin") || "";
+  const shareOrigin = readFlag(rest, "--share-origin") || "";
   const stateDir = defaultStateDir(readFlag(rest, "--state-dir"));
   const cloudflaredConfig = path.resolve(
     readFlag(rest, "--cloudflared-config") ||
@@ -616,6 +674,7 @@ async function runServiceCommand(args) {
     cloudflaredConfig,
     tunnelName,
     portOrigin,
+    shareOrigin,
   });
 
   if (dryRun) {
@@ -757,7 +816,7 @@ async function main() {
       }
       console.error("[scope] Usage: scope expose <tailscale|cloudflare> [options]");
       console.error("  scope expose tailscale [--gateway-port 4820] [--https-port 443] [--off] [--dry-run]");
-      console.error("  scope expose cloudflare --domain <scope.yourdomain.com> [--port-domain <scope-ports.yourdomain.com>] [--tunnel scope-hub] [--gateway-port 4820] [--dry-run]");
+      console.error("  scope expose cloudflare --domain <scope.yourdomain.com> [--port-domain <scope-ports.yourdomain.com>] [--share-domain <share.yourdomain.com>] [--tunnel scope-hub] [--gateway-port 4820] [--dry-run]");
       process.exit(1);
     }
     if (command === "service") {

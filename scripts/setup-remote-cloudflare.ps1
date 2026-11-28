@@ -2,6 +2,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$Domain,
   [string]$PortDomain = "",
+  [string]$ShareDomain = "",
   [string]$Tunnel = "scope-hub",
   [int]$UiPort = 3000,
   [int]$BridgePort = 4815,
@@ -36,6 +37,9 @@ $ExposeArgs = @("expose", "cloudflare", "--domain", $Domain, "--tunnel", $Tunnel
 if ($PortDomain) {
   $ExposeArgs += @("--port-domain", $PortDomain)
 }
+if ($ShareDomain) {
+  $ExposeArgs += @("--share-domain", $ShareDomain)
+}
 if ($DryRun) {
   $ExposeArgs += "--dry-run"
   & scope @ExposeArgs
@@ -62,6 +66,9 @@ if (-not (Test-LocalStatus -Uri "http://127.0.0.1:$GatewayPort/" -Allowed @(401,
   Write-Host "[scope] Starting SCOPE + Private Gateway on 127.0.0.1..."
   if ($PortDomain) {
     $env:SCOPE_PORT_ORIGIN = "https://$PortDomain"
+  }
+  if ($ShareDomain) {
+    $env:SCOPE_SHARE_ORIGIN = "https://$ShareDomain"
   }
   Start-Process -FilePath "cmd.exe" `
     -ArgumentList @("/c", "scope", "start", "--gateway", "--port", "$UiPort", "--bridge-port", "$BridgePort", "--gateway-port", "$GatewayPort", "--state-dir", $StateDir) `

@@ -83,6 +83,44 @@ export function portForwardRoutes({
       return true;
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/port-forwards/share"
+    ) {
+      try {
+        const body = await readJsonBody(request);
+        const host = String(body?.host || "").trim();
+        const result = portForwards.shareForward({
+          host,
+          remotePort: body?.remotePort,
+          ttlHours:
+            body && Object.prototype.hasOwnProperty.call(body, "ttlHours")
+              ? body.ttlHours
+              : undefined,
+          rotate: Boolean(body?.rotate),
+        });
+        jsonResponse(response, 200, { ok: true, ...result });
+      } catch (error) {
+        jsonResponse(response, 400, { error: error.message });
+      }
+      return true;
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/port-forwards/unshare"
+    ) {
+      try {
+        const body = await readJsonBody(request);
+        const host = String(body?.host || "").trim();
+        const state = portForwards.unshareForward(host, body?.remotePort);
+        jsonResponse(response, 200, { ok: true, state });
+      } catch (error) {
+        jsonResponse(response, 400, { error: error.message });
+      }
+      return true;
+    }
+
     return false;
   };
 }

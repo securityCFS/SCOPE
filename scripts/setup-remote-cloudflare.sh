@@ -5,10 +5,11 @@ set -euo pipefail
 # Pair with Cloudflare Zero Trust Access (Emails-only Include allowlist) for double protection.
 #
 # Usage:
-#   bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com [--port-domain scope-ports.yourdomain.com] [--tunnel scope-hub] [--port 3000] [--bridge-port 4815] [--gateway-port 4820] [--dry-run]
+#   bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com [--port-domain scope-ports.yourdomain.com] [--share-domain share.yourdomain.com] [--tunnel scope-hub] [--port 3000] [--bridge-port 4815] [--gateway-port 4820] [--dry-run]
 
 DOMAIN=""
 PORT_DOMAIN=""
+SHARE_DOMAIN=""
 TUNNEL_NAME="scope-hub"
 UI_PORT="${SCOPE_UI_PORT:-3000}"
 BRIDGE_PORT="${SCOPE_BRIDGE_PORT:-4815}"
@@ -20,6 +21,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="$2"; shift 2 ;;
     --port-domain) PORT_DOMAIN="$2"; shift 2 ;;
+    --share-domain) SHARE_DOMAIN="$2"; shift 2 ;;
     --tunnel) TUNNEL_NAME="$2"; shift 2 ;;
     --port) UI_PORT="$2"; shift 2 ;;
     --bridge-port) BRIDGE_PORT="$2"; shift 2 ;;
@@ -27,7 +29,7 @@ while [ $# -gt 0 ]; do
     --state-dir) STATE_DIR="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     -h|--help)
-      echo "Usage: bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com [--port-domain scope-ports.yourdomain.com] [--tunnel scope-hub] [--port 3000] [--bridge-port 4815] [--gateway-port 4820] [--state-dir ~/.scope] [--dry-run]"
+      echo "Usage: bash scripts/setup-remote-cloudflare.sh --domain scope.yourdomain.com [--port-domain scope-ports.yourdomain.com] [--share-domain share.yourdomain.com] [--tunnel scope-hub] [--port 3000] [--bridge-port 4815] [--gateway-port 4820] [--state-dir ~/.scope] [--dry-run]"
       exit 0
       ;;
     *)
@@ -85,6 +87,10 @@ if [ -n "$PORT_DOMAIN" ]; then
   EXPOSE_ARGS+=(--port-domain "$PORT_DOMAIN")
   SERVICE_ARGS+=(--port-origin "https://${PORT_DOMAIN}")
 fi
+if [ -n "$SHARE_DOMAIN" ]; then
+  EXPOSE_ARGS+=(--share-domain "$SHARE_DOMAIN")
+  SERVICE_ARGS+=(--share-origin "https://${SHARE_DOMAIN}")
+fi
 
 if [ "$DRY_RUN" = "1" ]; then
   scope expose cloudflare "${EXPOSE_ARGS[@]}" --dry-run
@@ -104,6 +110,9 @@ else
   echo "[scope] systemd --user not available; starting SCOPE + cloudflared in background..."
   if [ -n "$PORT_DOMAIN" ]; then
     export SCOPE_PORT_ORIGIN="https://${PORT_DOMAIN}"
+  fi
+  if [ -n "$SHARE_DOMAIN" ]; then
+    export SCOPE_SHARE_ORIGIN="https://${SHARE_DOMAIN}"
   fi
   nohup scope start --gateway \
     --port "$UI_PORT" \
