@@ -26,7 +26,7 @@ jobs:
           rm -rf _site
           mkdir -p _site/assets
           cp -r site/* _site/
-          cp docs/assets/scope-preview-*.png docs/assets/scope-demo-*.gif _site/assets/
+          cp docs/assets/scope-preview-*.png docs/assets/scope-demo-*.gif docs/assets/scope-hero-*.png docs/assets/scope-arch-*.png docs/assets/scope-quickstart-*.png docs/assets/scope-video-thumb-*.png docs/assets/scope-promo-*.mp4 _site/assets/
           touch _site/.nojekyll
       - name: Push assembled site to gh-pages branch
         run: |

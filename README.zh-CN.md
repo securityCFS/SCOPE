@@ -1,16 +1,27 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
+  <a href="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-zh.png">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-zh.png" alt="SCOPE：纯本地托管、多端部署的 Agent 协同平台" width="32%" />
+  </a>
+  <a href="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-arch-zh.png">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-arch-zh.png" alt="SCOPE 架构图：不访问敏感数据，一台部署全网协同" width="32%" />
+  </a>
+  <a href="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-quickstart-zh.png">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-quickstart-zh.png" alt="SCOPE 快速上手：三步部署，全网 Agent 多端协同" width="32%" />
+  </a>
 </p>
 
 <h1 align="center">SCOPE</h1>
 
 <p align="center">
-  <strong>One monitor for all agent sessions.</strong><br/>
-  用一个本机优先的网页工作台，统一监控与驾驭本机及多台 Linux SSH GPU 服务器上的 <b>Codex</b>、<b>Claude Code</b> 与 <b>Antigravity (<code>agy</code>)</b> 会话。
+  <strong>纯本地托管、多端部署的 Agent 协同平台</strong><br/>
+  开源自托管、超轻量包体（约 13 MB）、不访问敏感数据。<br/>
+  托管 <b>CC</b>、<b>Codex</b> 与 <b>Antigravity (<code>agy</code>)</b>，完全管理部署机可连接的远程 Agent，支持多端协同。
 </p>
 
 <p align="center">
   <a href="https://github.com/securityCFS/SCOPE/blob/main/README.md">English</a> | <b>简体中文</b> |
+  <a href="https://securitycfs.github.io/SCOPE/">产品主页</a> |
+  <a href="https://securitycfs.github.io/SCOPE/video-zh.html">观看中文宣传片</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.zh-CN.md">手机端与远程部署（Tailscale / Cloudflare）</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.zh-CN.md">完备部署指南</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.zh-CN.md">插件接入指南</a>
@@ -21,11 +32,23 @@
   <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
   <img src="https://img.shields.io/badge/telemetry-zero-10b981.svg" alt="零遥测" />
-  <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="支持 Agent" />
+  <img src="https://img.shields.io/badge/agents-CC%20%7C%20Codex%20%7C%20Antigravity-6366f1.svg" alt="支持 Agent" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="本机回环监听" />
 </p>
 
 ---
+
+## 官方中文宣传视频（24 秒，1080p 实机演示）
+
+<p align="center">
+  <a href="https://securitycfs.github.io/SCOPE/video-zh.html">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-video-thumb-zh.png" alt="点击观看 SCOPE 官方中文宣传片（24 秒，1080p 实机演示）" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>点击上方视频封面即可在网页播放器直接观看 1080p 官方宣传片（<a href="https://securitycfs.github.io/SCOPE/video-zh.html">中文播放器</a> | <a href="https://securitycfs.github.io/SCOPE/video-en.html">English Video</a> | <a href="https://securitycfs.github.io/SCOPE/assets/scope-promo-zh.mp4">直链 MP4</a>）。</sub>
+</p>
 
 ## 实机交互体验演示
 
@@ -34,7 +57,7 @@
 </p>
 
 <p align="center">
-  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：富媒体渲染（表格、KaTeX 公式、内嵌图片与可播放视频、<code>file://</code> 跳转）→ Claude 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载 → 深色模式。</sub>
+  <sub>基于 <code>npm run preview:fixture</code> 隔离虚拟数据录制（零真实会话与隐私）：富媒体渲染（表格、KaTeX 公式、内嵌图片与可播放视频、<code>file://</code> 跳转）→ 后台子代理与审批卡片 → 三 Agent <code>/usage</code> 实时额度中心 → 4× A100 GPU 负载 → 深色模式。</sub>
 </p>
 
 | 浅色模式（表格、公式、图片与视频内嵌预览） | 深色模式（后台子代理实时追踪与交互审批） |
@@ -68,10 +91,6 @@ flowchart LR
 ---
 
 ## Agent 能力矩阵
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-agents-anime.jpg" alt="SCOPE 协同编排 Codex、Claude Code 与 Antigravity" width="92%" />
-</p>
 
 | 能力 | Codex | Claude Code | Antigravity (`agy`) | DSH |
 | --- | --- | --- | --- | --- |

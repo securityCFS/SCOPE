@@ -1,16 +1,21 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-anime.jpg" alt="SCOPE — One monitor for all agent sessions." width="100%" />
+  <a href="https://securitycfs.github.io/SCOPE/">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-hero-en.png" alt="SCOPE: Local-hosted, multi-device Agent collaboration platform for Codex, CC (Claude Code), and Antigravity" width="100%" />
+  </a>
 </p>
 
 <h1 align="center">SCOPE</h1>
 
 <p align="center">
-  <strong>One monitor for all agent sessions.</strong><br/>
-  Unify <b>Codex</b>, <b>Claude Code</b>, and <b>Antigravity (<code>agy</code>)</b> across your workstation and Linux SSH GPU servers in one local-first web workbench.
+  <strong>Local-hosted, multi-device Agent collaboration platform.</strong><br/>
+  Open-source self-hosted, 13 MB ultra-lightweight footprint, zero sensitive data access.<br/>
+  Unify <b>Codex</b>, <b>CC (Claude Code)</b>, and <b>Antigravity (<code>agy</code>)</b> across every remote host reachable from your deploy machine, with seamless multi-device collaboration.
 </p>
 
 <p align="center">
   <b>English</b> | <a href="https://github.com/securityCFS/SCOPE/blob/main/README.zh-CN.md">简体中文</a> |
+  <a href="https://securitycfs.github.io/SCOPE/">Official Site</a> |
+  <a href="https://securitycfs.github.io/SCOPE/video-en.html">Watch 30s Video</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/remote-access.md">Phone &amp; Remote Access (Tailscale / Cloudflare)</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/deployment.md">Deployment Guide</a> |
   <a href="https://github.com/securityCFS/SCOPE/blob/main/docs/plugin-protocol.md">Plugin Guide</a>
@@ -21,11 +26,23 @@
   <a href="https://github.com/securityCFS/SCOPE/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg" alt="Node.js >= 22.13" /></a>
   <img src="https://img.shields.io/badge/telemetry-zero-10b981.svg" alt="Zero Telemetry" />
-  <img src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
+  <img src="https://img.shields.io/badge/agents-Codex%20%7C%20CC%20%7C%20Antigravity-6366f1.svg" alt="Supported Agents" />
   <img src="https://img.shields.io/badge/bind-127.0.0.1%20loopback-0ea5e9.svg" alt="Local-first Loopback" />
 </p>
 
 ---
+
+## Official Walkthrough Video (30s, 1080p)
+
+<p align="center">
+  <a href="https://securitycfs.github.io/SCOPE/video-en.html">
+    <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-video-thumb-en.png" alt="Watch the official 30-second 1080p SCOPE walkthrough video" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Click the video card to watch the 1080p walkthrough in the web player (<a href="https://securitycfs.github.io/SCOPE/video-en.html">EN Player</a> | <a href="https://securitycfs.github.io/SCOPE/video-zh.html">中文宣传片</a> | <a href="https://securitycfs.github.io/SCOPE/assets/scope-promo-en.mp4">Direct MP4</a>).</sub>
+</p>
 
 ## Live Interactive Walkthrough
 
@@ -34,7 +51,7 @@
 </p>
 
 <p align="center">
-  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Rich media (GFM tables, KaTeX, inline image &amp; playable video, <code>file://</code> links) → Claude live background subagents &amp; approvals → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
+  <sub>Recorded from <code>SCOPE_PREVIEW_LOCALE=en npm run preview:fixture</code> (100% synthetic data): Rich media (GFM tables, KaTeX, inline image &amp; playable video, <code>file://</code> links) → live background subagents &amp; approvals → 3-agent <code>/usage</code> quota hub → 4× A100 GPU telemetry → Dark Mode.</sub>
 </p>
 
 | Light Mode (Tables, KaTeX, Inline Image & Video) | Dark Mode (Live Background Subagents & Approvals) |
@@ -68,10 +85,6 @@ flowchart LR
 ---
 
 ## Multi-Agent Support Matrix
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/securityCFS/SCOPE/main/docs/assets/scope-agents-anime.jpg" alt="SCOPE orchestrating Codex, Claude Code, and Antigravity across GPU clusters" width="92%" />
-</p>
 
 | Capability | Codex | Claude Code | Antigravity (`agy`) | DSH |
 | --- | --- | --- | --- | --- |
