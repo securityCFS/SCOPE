@@ -204,7 +204,11 @@ ${tipsHtml}
 export function rewriteProxyLocation(location, prefix, port, remotePort = port) {
   if (typeof location !== "string" || !location) return location;
   if (location.startsWith("/") && !location.startsWith("//")) {
-    if (location === prefix || location.startsWith(`${prefix}/`)) {
+    if (
+      location === prefix ||
+      location.startsWith(`${prefix}/`) ||
+      location.startsWith("/cdn-cgi/")
+    ) {
       return location;
     }
     return `${prefix}${location}`;
@@ -292,7 +296,7 @@ function buildProxyRuntimeShim(prefix, { allowWebSocket = true } = {}) {
   const wsPatch = allowWebSocket
     ? `var W=window.WebSocket;if(typeof W==="function"){var SW=function(u,p){var nu=typeof u==="string"?rw(u):u;return p!==undefined?new W(nu,p):new W(nu);};SW.prototype=W.prototype;SW.CONNECTING=W.CONNECTING;SW.OPEN=W.OPEN;SW.CLOSING=W.CLOSING;SW.CLOSED=W.CLOSED;window.WebSocket=SW;}var E=window.EventSource;if(typeof E==="function"){var SE=function(u,c){return new E(typeof u==="string"?rw(u):u,c);};SE.prototype=E.prototype;window.EventSource=SE;}`
     : "";
-  return `<script data-scope-port-shim>(function(){var P=${JSON.stringify(prefix)};function rw(u){if(typeof u!=="string"||!u)return u;if(u.indexOf(P+"/")===0||u===P)return u;if(u[0]==="/"&&u[1]!=="/")return P+u;try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.origin+P+x.pathname+x.search+x.hash;}if((x.protocol==="ws:"||x.protocol==="wss:")&&x.host===location.host&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P){return x.protocol+"//"+x.host+P+x.pathname+x.search+x.hash;}}catch(e){}return u;}var f=window.fetch;if(typeof f==="function"){window.fetch=function(i,n){if(typeof i==="string"){i=rw(i);}else if(i&&typeof Request!=="undefined"&&i instanceof Request){var ni=rw(i.url);if(ni!==i.url)i=new Request(ni,i);}return f.call(this,i,n);};}var X=window.XMLHttpRequest;if(X&&X.prototype&&X.prototype.open){var xo=X.prototype.open;X.prototype.open=function(m,u){var a=[].slice.call(arguments);if(typeof u==="string")a[1]=rw(u);return xo.apply(this,a);};}${wsPatch}})();</script>`;
+  return `<script data-scope-port-shim>(function(){var P=${JSON.stringify(prefix)};function rw(u){if(typeof u!=="string"||!u)return u;if(u.indexOf(P+"/")===0||u===P||u.indexOf("/cdn-cgi/")===0)return u;if(u[0]==="/"&&u[1]!=="/")return P+u;try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P&&x.pathname.indexOf("/cdn-cgi/")!==0){return x.origin+P+x.pathname+x.search+x.hash;}if((x.protocol==="ws:"||x.protocol==="wss:")&&x.host===location.host&&x.pathname.indexOf(P+"/")!==0&&x.pathname!==P&&x.pathname.indexOf("/cdn-cgi/")!==0){return x.protocol+"//"+x.host+P+x.pathname+x.search+x.hash;}}catch(e){}return u;}var f=window.fetch;if(typeof f==="function"){window.fetch=function(i,n){if(typeof i==="string"){i=rw(i);}else if(i&&typeof Request!=="undefined"&&i instanceof Request){var ni=rw(i.url);if(ni!==i.url)i=new Request(ni,i);}return f.call(this,i,n);};}var X=window.XMLHttpRequest;if(X&&X.prototype&&X.prototype.open){var xo=X.prototype.open;X.prototype.open=function(m,u){var a=[].slice.call(arguments);if(typeof u==="string")a[1]=rw(u);return xo.apply(this,a);};}${wsPatch}})();</script>`;
 }
 
 export function rewriteProxyHtml(
@@ -317,7 +321,7 @@ export function rewriteProxyHtml(
   }
   const escapedPrefix = escapeRegExp(prefix.replace(/^\//, ""));
   const attrRe = new RegExp(
-    `(\\b(?:href|src|action|poster)\\s*=\\s*)(["'])\\/(?!\\/|${escapedPrefix}\\/)`,
+    `(\\b(?:href|src|action|poster)\\s*=\\s*)(["'])\\/(?!\\/|cdn-cgi\\/|${escapedPrefix}\\/)`,
     "gi",
   );
   out = out.replace(attrRe, `$1$2${prefix}/`);
@@ -717,7 +721,15 @@ function proxyRequest(
     response.writeHead(502, { "Content-Type": "application/json" });
     response.end(JSON.stringify({ error: `Local service unavailable: ${error.message}` }));
   });
-  request.pipe(upstream);
+  const bodyless =
+    (request.method === "GET" || request.method === "HEAD") &&
+    !request.headers["content-length"] &&
+    !request.headers["transfer-encoding"];
+  if (bodyless) {
+    upstream.end();
+  } else {
+    request.pipe(upstream);
+  }
 }
 
 function upstreamHostHeaderForPort(target, remotePort) {
@@ -749,6 +761,18 @@ function sanitizePortProxyHeaders(
     (request.socket?.encrypted ? "https" : "http");
   if (!isUpgrade) {
     forwarded["accept-encoding"] = "identity";
+    for (const hop of [
+      "connection",
+      "keep-alive",
+      "proxy-authenticate",
+      "proxy-authorization",
+      "proxy-connection",
+      "te",
+      "trailer",
+      "upgrade",
+    ]) {
+      delete forwarded[hop];
+    }
   }
   if (request.headers.origin) {
     try {
@@ -779,6 +803,9 @@ function sanitizePortProxyHeaders(
 }
 
 function sendPortProxyUpstreamError(request, response, port, message) {
+  console.warn(
+    `[scope-port] 502 port=${port} method=${request.method || "GET"} path=${request.url || "/"}: ${message}`,
+  );
   if (acceptsHtml(request)) {
     sendPortProxyDiagnosticHtml(response, 502, {
       title: `端口 ${port} 的服务未能返回有效 HTTP 响应`,
@@ -821,6 +848,10 @@ function proxyPortRequest(
       const headers = { ...upstreamResponse.headers };
       delete headers["access-control-allow-origin"];
       delete headers["access-control-allow-credentials"];
+      delete headers.connection;
+      delete headers["keep-alive"];
+      delete headers["proxy-connection"];
+      delete headers.upgrade;
       for (const name of PORT_PROXY_STRIPPED_RESPONSE_HEADERS) delete headers[name];
       const statusCode = upstreamResponse.statusCode || 502;
       if (
@@ -918,7 +949,15 @@ function proxyPortRequest(
       `Proxied local service unavailable: ${error.message}`,
     );
   });
-  request.pipe(upstream);
+  const bodyless =
+    (request.method === "GET" || request.method === "HEAD") &&
+    !request.headers["content-length"] &&
+    !request.headers["transfer-encoding"];
+  if (bodyless) {
+    upstream.end();
+  } else {
+    request.pipe(upstream);
+  }
 }
 
 function sendPublicShareUpstreamError(request, response, message) {
@@ -982,6 +1021,10 @@ function proxyPublicShareRequest(
       delete headers["access-control-allow-origin"];
       delete headers["access-control-allow-credentials"];
       delete headers["www-authenticate"];
+      delete headers.connection;
+      delete headers["keep-alive"];
+      delete headers["proxy-connection"];
+      delete headers.upgrade;
       for (const name of PORT_PROXY_STRIPPED_RESPONSE_HEADERS) delete headers[name];
       const statusCode = upstreamResponse.statusCode || 502;
       if (

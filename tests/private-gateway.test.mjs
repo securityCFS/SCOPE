@@ -904,6 +904,10 @@ test("port proxy rewrites CSS urls, remapped remotePort redirects, runtime shim,
     "/scope-port/13000/dashboard",
   );
   assert.equal(
+    rewritePortProxyLocation("/cdn-cgi/access/logout", 8787),
+    "/cdn-cgi/access/logout",
+  );
+  assert.equal(
     rewritePortProxyCss(
       "body{background:url('/img/bg.png');font:url(/fonts/a.woff2);keep:url(data:image/png;base64,AAA);ext:url(//cdn.example.com/x.png);done:url(/scope-port/8787/ok.png)}",
       8787,
@@ -912,11 +916,14 @@ test("port proxy rewrites CSS urls, remapped remotePort redirects, runtime shim,
   );
 
   const withShim = rewritePortProxyHtml(
-    '<html><head><title>SPA</title><style>.x{background:url("/bg.svg")}</style></head><body><script src="/app.js"></script></body></html>',
+    '<html><head><title>SPA</title><style>.x{background:url("/bg.svg")}</style></head><body><script src="/cdn-cgi/scripts/beacon.js"></script><script src="/app.js"></script></body></html>',
     5173,
   );
   assert.match(withShim, /<base href="\/scope-port\/5173\/"><title>SPA<\/title>/);
   assert.match(withShim, /url\("\/scope-port\/5173\/bg\.svg"\)/);
+  assert.match(withShim, /src="\/cdn-cgi\/scripts\/beacon\.js"/);
+  assert.match(withShim, /src="\/scope-port\/5173\/app\.js"/);
+  assert.match(withShim, /\/cdn-cgi\//);
   assert.match(withShim, /data-scope-port-shim/);
   assert.equal(
     rewritePortProxyHtml("<html><head></head><body></body></html>", 5173, {

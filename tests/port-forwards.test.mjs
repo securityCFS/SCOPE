@@ -70,6 +70,24 @@ test("remotePortTargetFromMarkdownHref detects loopback HTTP(S) URLs and ignores
       rawHost: "[::1]",
     },
   );
+  assert.deepEqual(
+    remotePortTargetFromMarkdownHref("http://127.0.0.1:18900/**（已避开"),
+    {
+      port: 18900,
+      protocol: "http:",
+      pathAndQuery: "/",
+      rawHost: "127.0.0.1",
+    },
+  );
+  assert.deepEqual(
+    remotePortTargetFromMarkdownHref("http://127.0.0.1:18900/**%EF%BC%88%E5%B7%B2%E9%81%BF%E5%BC%80"),
+    {
+      port: 18900,
+      protocol: "http:",
+      pathAndQuery: "/",
+      rawHost: "127.0.0.1",
+    },
+  );
   assert.equal(remotePortTargetFromMarkdownHref("https://github.com/securityCFS/SCOPE"), null);
   assert.equal(remotePortTargetFromMarkdownHref("file:///workspace/app.py#L12"), null);
 });
@@ -378,6 +396,14 @@ test("filterDiscoveredPorts keeps user servers in antigravity-cli directories, f
       pid: 9003,
       procName: "antigravity-language-server",
       cmdline: "/usr/bin/antigravity-language-server --port 39991",
+      cwd: "/home/dev",
+    },
+    {
+      port: 5901,
+      bind: "127.0.0.1",
+      pid: 9004,
+      procName: "Xtigervnc",
+      cmdline: "/usr/bin/Xtigervnc :1 -rfbport 5901",
       cwd: "/home/dev",
     },
   ]);

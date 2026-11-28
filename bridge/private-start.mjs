@@ -33,8 +33,15 @@ if (shareOrigin) {
   );
 }
 
+let stopping = false;
 function stop() {
+  if (stopping) return;
+  stopping = true;
   server.close(() => process.exit(0));
+  server.closeIdleConnections?.();
+  server.closeAllConnections?.();
+  const forceExit = setTimeout(() => process.exit(0), 1_500);
+  forceExit.unref?.();
 }
 
 process.on("SIGINT", stop);

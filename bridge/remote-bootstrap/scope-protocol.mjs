@@ -37,6 +37,7 @@ export function buildScopeProtocolBlock({ operatorName = "" } = {}) {
     "   - Videos (`.mp4`, `.webm`, `.m4v`, `.ogv`, `.mov`): `![Caption](file:///abs/path/to/video.mp4)` or `[Caption](file:///abs/path/to/video.mp4)`",
     "   - Do not wrap visual asset paths solely in backticks when the user should inspect the rendered image or video.",
     "4. **Clickable File & Line Links**: Reference source files, configs, and logs as clickable Markdown links using `file://` or absolute paths with optional line anchors, e.g. `[train.py](file:///abs/path/to/train.py#L42-L68)` or `[train.py](/abs/path/to/train.py:42)`.",
+    "5. **Background Preview / Static HTTP Servers**: When launching a local web server (e.g. `python3 -m http.server`) for the user to inspect in SCOPE, always detach stdin/stdout/stderr (`nohup python3 -m http.server <port> --bind 127.0.0.1 --directory <dir> </dev/null >/dev/null 2>&1 &`) so closing the agent terminal never causes `EIO`/`502` errors, and surround `http://127.0.0.1:<port>/` with spaces or Markdown link syntax `[Preview](http://127.0.0.1:<port>/)` (never glue `**` or CJK text directly onto the URL).",
     SCOPE_PROTOCOL_END,
   );
   return lines.join("\n");

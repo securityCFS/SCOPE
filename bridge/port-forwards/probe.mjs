@@ -34,6 +34,7 @@ const IGNORED_PROC_PATTERNS = [
   /^(?:qq|weixin|wechat)(?:\.exe)?$/i,
   /^language_server/i,
   /^zerotier/i,
+  /^(?:Xtigervnc|Xvnc|x11vnc)$/i,
   /^(?:System|Idle|svchost|lsass|services|wininit|spoolsv|MsMpEng|SearchHost|Dashlane|OneDrive|WUDFHost|vmms|AppleMobileDeviceService)(?:\.exe)?$/i,
 ];
 
